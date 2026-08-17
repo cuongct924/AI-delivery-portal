@@ -1,0 +1,52 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: hello-golden-path
+  title: "Hello Golden Path (test)"
+  description: >
+    Template thử nghiệm đầu tiên — chưa gọi MLflow thật, chỉ log ra thông tin
+    để hiểu cơ chế Scaffolder trước khi viết Custom Action thật.
+  tags:
+    - mlops
+    - test
+spec:
+  owner: user:guest
+  type: service
+
+  parameters:
+    - title: Nhập thông tin model giả
+      required:
+        - modelName
+        - modelVersion
+      properties:
+        modelName:
+          title: Tên model
+          type: string
+          description: Ví dụ "fraud-detection"
+        modelVersion:
+          title: Version
+          type: string
+          description: Ví dụ "v1.0.0"
+
+  steps:
+    - id: log-info
+      name: "Log thông tin (giả lập bước check policy)"
+      action: debug:log
+      input:
+        message: "Chuẩn bị deploy model ${{ parameters.modelName }} version ${{ parameters.modelVersion }}"
+
+    - id: log-done
+      name: "Log hoàn tất (giả lập bước deploy)"
+      action: debug:log
+      input:
+        message: "Đã 'deploy' xong ${{ parameters.modelName }}:${{ parameters.modelVersion }} (đây là bước giả — sẽ thay bằng gọi HTTP tới FastAPI ở tuần 3-4)"
+
+  output:
+    text:
+      - title: Kết quả
+        content: |
+          Golden path test hoàn tất cho model **${{ parameters.modelName }}**
+          version **${{ parameters.modelVersion }}**.
+
+          Bước tiếp theo (tuần 2-3): thay `debug:log` bằng 1 Custom Action thật
+          gọi sang FastAPI backend, rồi FastAPI gọi Adapter tới MLflow.

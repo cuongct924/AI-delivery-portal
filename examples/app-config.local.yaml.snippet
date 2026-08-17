@@ -1,0 +1,20 @@
+# Copy đoạn dưới vào app-config.local.yaml (nằm ở gốc app Backstage bạn vừa tạo).
+# File app-config.local.yaml không commit lên Git (đã có trong .gitignore mặc định
+# của Backstage) — dùng cho config máy cá nhân, khác app-config.yaml (config chung).
+
+catalog:
+  locations:
+    # Trỏ tới entity mẫu — nếu chạy local, dùng đường dẫn file trực tiếp:
+    - type: file
+      target: ../ai-delivery-portal-labs/examples/catalog/model-entity.yaml
+      rules:
+        - allow: [Component]
+
+    # Trỏ tới template mẫu:
+    - type: file
+      target: ../ai-delivery-portal-labs/examples/templates/hello-golden-path/template.yaml
+      rules:
+        - allow: [Template]
+
+# Ghi chú: type "file" chỉ dùng tốt cho local dev. Khi tích hợp thật với Viettel,
+# nên đổi sang "url" trỏ tới Git repo nội bộ để Catalog tự sync định kỳ.
