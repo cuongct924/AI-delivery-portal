@@ -1,0 +1,154 @@
+# CI pipeline for AI Delivery Portal — GitHub Actions port of .gitlab-ci.yaml.
+#
+# The repo is hosted on GitHub, so this is the pipeline that actually runs.
+# .gitlab-ci.yaml is kept alongside it as reference (and in case CI ever runs
+# through GitLab's "CI/CD for external repositories" against this same repo)
+# — keep the two in sync job-for-job; see .gitlab-ci.yaml for the original
+# per-job rationale comments.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Security — shift-left: secrets + IaC misconfig run early, fast, every push
+  # ---------------------------------------------------------------------
+  security-gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks scans git history, not just the working tree
+      - run: docker run --rm -v "${{ github.workspace }}:/repo" -w /repo
+          zricethezav/gitleaks:v8.30.1 detect --source . --redact -v
+
+  security-checkov:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker run --rm -v "${{ github.workspace }}:/repo" -w /repo
+          bridgecrew/checkov:3.3.9 --directory . --framework dockerfile,argo_workflows,github_actions
+          --skip-path node_modules --skip-path .venv --skip-path packages --skip-path plugins
+          --compact --quiet
+
+  # ---------------------------------------------------------------------
+  # Python — ruff (lint + format), pyright (types), pytest (tests + coverage)
+  # ---------------------------------------------------------------------
+  python-checks:
+    needs: [security-gitleaks, security-checkov]
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.12-slim
+    steps:
+      - uses: actions/checkout@v4
+      # NOTE: skipped under `act` — python:3.12-slim has no node for JS
+      # actions, and act can't auto-inject one like real runners (nektos/act#107).
+      - uses: actions/cache@v4
+        if: ${{ !env.ACT }}
+        with:
+          path: .cache/pip
+          key: pip-${{ hashFiles('dev.lock.txt') }}
+      - run: apt-get update -qq && apt-get install -y --no-install-recommends make
+      - run: |
+          python3.12 -m venv .venv
+          .venv/bin/pip install --upgrade pip -q
+          .venv/bin/pip install -r dev.lock.txt -q
+        env:
+          PIP_CACHE_DIR: ${{ github.workspace }}/.cache/pip
+      - run: .venv/bin/ruff check .
+      - run: .venv/bin/ruff format --check .
+      - run: .venv/bin/pyright
+      - run: .venv/bin/pytest --cov-report=xml --junitxml=report.xml
+      # NOTE: same act/node limitation as the cache step above.
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && !env.ACT }}
+        with:
+          name: python-test-results
+          path: |
+            report.xml
+            coverage.xml
+
+  # ---------------------------------------------------------------------
+  # TypeScript — Portal (packages/app-backstage, packages/backend, plugins/*)
+  # ---------------------------------------------------------------------
+  frontend-checks:
+    needs: [security-gitleaks, security-checkov]
+    runs-on: ubuntu-latest
+    container:
+      image: node:22-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - run: apt-get update -qq && apt-get install -y --no-install-recommends libsqlite3-dev
+      - uses: actions/cache@v4
+        with:
+          path: .yarn/cache
+          key: yarn-${{ hashFiles('yarn.lock') }}
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: yarn tsc
+      - run: yarn lint:all
+
+  # ---------------------------------------------------------------------
+  # Docker — build all 4 service images, then Trivy-scan each.
+  # --ignore-unfixed: don't fail on upstream CVEs with no patch available yet
+  # (e.g. perl-base in python:3.12-slim) — only on CVEs we can actually act
+  # on. See docs/architecture.md for the one currently-tracked exception
+  # (cryptography, pinned below 50 by mlflow itself).
+  #
+  # NOTE: packages/backend/Dockerfile (the Backstage backend image) is not
+  # built here yet — it needs a full `yarn build:backend` first and hasn't
+  # been wired into this pipeline yet.
+  # ---------------------------------------------------------------------
+  docker-build-and-scan:
+    needs: [python-checks, frontend-checks]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+      - name: Set image tag vars
+        run: |
+          echo "SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)" >> "$GITHUB_ENV"
+          echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+      - name: Build images
+        run: |
+          docker build -t orchestration-api:$SHORT_SHA -f services/orchestration-api/Dockerfile services/orchestration-api
+          docker build -t mlops-server:$SHORT_SHA -f agents/mcp-servers/mlops-server/Dockerfile .
+          docker build -t k8s-server:$SHORT_SHA -f agents/mcp-servers/k8s-server/Dockerfile .
+          docker build -t metrics-server:$SHORT_SHA -f agents/mcp-servers/metrics-server/Dockerfile .
+      - name: Trivy scan
+        run: |
+          for img in orchestration-api mlops-server k8s-server metrics-server; do
+            echo "=== Trivy scan: $img ==="
+            trivy image --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 "$img:$SHORT_SHA"
+          done
+      - name: Log in to GHCR
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push images
+        if: github.ref == 'refs/heads/main'
+        run: |
+          for img in orchestration-api mlops-server k8s-server metrics-server; do
+            docker tag "$img:$SHORT_SHA" "ghcr.io/$REPO_LC/$img:$SHORT_SHA"
+            docker tag "$img:$SHORT_SHA" "ghcr.io/$REPO_LC/$img:latest"
+            docker push "ghcr.io/$REPO_LC/$img:$SHORT_SHA"
+            docker push "ghcr.io/$REPO_LC/$img:latest"
+          done
