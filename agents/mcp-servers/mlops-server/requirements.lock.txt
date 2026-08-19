@@ -212,7 +212,7 @@ pydantic==2.13.4
     #   mcp-types
     #   mlflow-skinny
     #   mlflow-tracing
-pydantic-core==2.46.4
+pydantic-core==2.48.0
     # via pydantic
 pygments==2.21.0
     # via rich
