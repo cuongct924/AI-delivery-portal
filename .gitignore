@@ -1,7 +1,23 @@
 node_modules/
 dist-types/
-.yarn/
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
 *.local.yaml
+*-credentials.yaml
+.pnp.*
+.nvmrc
+dist
+logs
+*.log
+coverage
+e2e-test-report/
+.cache/
+*.session.sql
+site
 
 # Python
 __pycache__/
@@ -10,6 +26,11 @@ __pycache__/
 venv/
 *.egg-info/
 .pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
 
 # OS/editor
