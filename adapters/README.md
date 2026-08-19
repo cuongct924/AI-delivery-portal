@@ -1,35 +1,29 @@
-# Adapters (chưa code — placeholder cho tuần 2-5)
+# adapters
 
-Thư mục này sẽ chứa các Adapter Python theo Adapter Pattern đã thiết kế:
+Python adapters following the Adapter Pattern — every adapter implements one
+of the shared contracts in `interfaces.py`, so that `agents/` and
+`services/orchestration-api/` can switch from Mock/MLflow/KServe to Viettel's
+real system just by adding one new class.
 
 ```
 adapters/
-├── interfaces.py          # IModelRegistryAdapter, IInferenceAdapter, ...
-├── mlflow_adapter.py       # implement bằng MLflow SDK (mock/thật)
-├── viettel_adapter.py      # implement khi có API thật của Viettel (tuần 4-5)
-├── factory.py               # AdapterFactory — chọn đúng class theo config
-└── mock/
-    └── mock_registry_adapter.py  # trả data giả cố định, dùng khi demo offline
+├── interfaces.py          # IModelRegistryAdapter, IInferenceAdapter, IWorkflowAdapter,
+│                           # IVectorStoreAdapter, ILLMGatewayAdapter
+├── mlflow_adapter.py       # IModelRegistryAdapter — MLflow SDK, connects to the mlflow service in docker-compose.yml
+├── kserve_adapter.py       # IInferenceAdapter — deploy/query InferenceService on K8s
+├── argo_adapter.py         # IWorkflowAdapter — trigger/track Argo Workflows (Golden Path #1)
+├── vector_db_adapter.py    # IVectorStoreAdapter — Qdrant, powers RAG
+├── llm_gateway_adapter.py  # ILLMGatewayAdapter — LiteLLM Proxy (rate limit/API key)
+└── viettel_adapter.py      # IModelRegistryAdapter — stub raising NotImplementedError, pending mentor input (playbook section 10)
 ```
 
-## Nguyên tắc khi bắt đầu code (tuần 2-3)
+- `mlflow_adapter.py` reads `MLFLOW_TRACKING_URI` (defaults to `http://localhost:5000`).
+- `kserve_adapter.py` needs a real kubeconfig — only usable from the infrastructure phase (week 8+).
+- `argo_adapter.py` reads `ARGO_SERVER_URL` (defaults to `http://localhost:2746`), calls
+  the WorkflowTemplate in `infra/argo-workflows/`.
+- `vector_db_adapter.py` reads `QDRANT_URL` (defaults to `http://localhost:6333`), spun up
+  via `docker compose up` — see `infra/vector-dbs/`.
+- `llm_gateway_adapter.py` reads `LITELLM_GATEWAY_URL`/`LITELLM_MASTER_KEY`, spun up
+  via `docker compose up` — see `infra/llm-gateways/`.
 
-1. Viết `interfaces.py` TRƯỚC — định nghĩa contract, chưa cần implement.
-2. Viết `mlflow_adapter.py` — dùng MLflow đã dựng ở `scripts/setup-mlflow.sh`.
-3. Chỉ viết `viettel_adapter.py` SAU KHI mentor xác nhận thông tin hệ thống
-   thật (xem checklist hỏi mentor trong playbook mục 10).
-
-## Ví dụ interface (tham khảo, không phải code thật)
-
-```python
-from abc import ABC, abstractmethod
-
-class IModelRegistryAdapter(ABC):
-    @abstractmethod
-    def register_model(self, name: str, version: str, artifact_uri: str) -> dict:
-        ...
-
-    @abstractmethod
-    def list_models(self, project: str | None = None) -> list[dict]:
-        ...
-```
+Install shared dependencies: `pip install -r adapters/requirements.txt`.
