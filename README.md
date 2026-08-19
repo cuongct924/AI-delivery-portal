@@ -1,73 +1,75 @@
-# AI Delivery Portal — Labs
+# AI Delivery Portal
 
-Repo khởi động cho đề tài **AI Delivery Portal** (Viettel Digital Talent 2026 — Track Cloud).
+Repository for the **AI Delivery Portal** project (Viettel Digital Talent 2026 — Cloud Track).
 
-Repo này KHÔNG chứa app Backstage đã build sẵn (vì Backstage cần chạy `create-app`
-tương tác trên máy bạn với Node.js/Yarn thật). Thay vào đó, nó chứa:
+Official structure: Portal (Backstage) + Orchestration API (FastAPI) + AI Agent/MCP
++ Adapter layer + GitOps infrastructure — all in one repo (the Backstage app has
+been merged into `packages/`, no longer split into a separate repo/folder like
+the initial "labs" stage).
 
-- Hướng dẫn setup ngày 1 (`docs/day1-checklist.md`)
-- Example config sẵn sàng copy vào app Backstage sau khi tạo (`examples/`)
-- Khung thư mục cho phần backend Adapter (Python) sẽ code ở tuần 2-5 (`adapters/`)
-- Ghi chú kiến trúc/roadmap tổng thể (`docs/architecture.md`)
-
-## Cấu trúc thư mục
+## Directory structure
 
 ```
 AI-delivery-portal/
-├── README.md                          ← file này
-├── docs/
-│   ├── day1-checklist.md              ← checklist làm ngày mai, từng bước
-│   ├── architecture.md                ← sơ đồ kiến trúc tổng thể (nhắc lại để tham chiếu)
-│   └── roadmap.md                     ← lộ trình 12 tuần, đánh dấu tiến độ
-├── examples/
-│   ├── templates/hello-golden-path/
-│   │   └── template.yaml              ← Software Template thử nghiệm đầu tiên
-│   ├── catalog/
-│   │   └── model-entity.yaml          ← ví dụ entity "model" trong Catalog
-│   └── app-config.local.yaml.snippet  ← đoạn config cần thêm vào app-config.local.yaml
-├── adapters/                          ← (rỗng, sẽ code tuần 2-5)
-│   └── README.md                      ← giải thích kiến trúc Adapter Pattern sẽ code ở đây
-├── plugins-workspace/                 ← nơi để symlink/copy các custom plugin sau này
-│   └── README.md
-└── scripts/
-    ├── setup-backstage.sh             ← script chạy create-app + gợi ý bước tiếp theo
-    └── setup-mlflow.sh                ← script dựng MLflow bằng Docker
+├── packages/            ← Portal (Backstage) — app-backstage (React/TS UI) + backend
+├── plugins/              ← Backstage plugins — prompt-registry (Prompt version UI)
+├── services/             ← orchestration-api — FastAPI BFF, MCP client, auth, evaluations
+├── agents/               ← AI Agent & MCP — mcp-servers/, skills/, prompts/
+├── adapters/             ← Adapter Pattern — MLflow, KServe, Argo, Qdrant, LiteLLM, Viettel (stub)
+├── infra/                ← GitOps infra — monitoring/vector-dbs/llm-gateways (active); helm-charts/argocd/opa-policies (week 8+)
+├── examples/             ← sample Catalog entity + Software Template
+├── scripts/              ← run-mcp-local.sh
+├── docs/                 ← architecture, roadmap, playbook
+├── app-config.yaml       ← shared Backstage config (catalog, scaffolder, auth, proxy...)
+├── docker-compose.yml    ← full local stack (mlflow, keycloak, prometheus, qdrant, litellm, orchestration-api, MCP servers)
+└── README.md
 ```
 
-## Cách dùng (ngày 1)
+See [`docs/architecture.md`](docs/architecture.md) for the full component breakdown and design rationale.
+
+## Usage
 
 ```bash
-git clone <repo-này>   # hoặc giải nén nếu tải file zip
-cd ai-delivery-portal-labs
-cat docs/day1-checklist.md      # đọc checklist trước
-bash scripts/setup-backstage.sh # tạo app Backstage thật (chạy ngoài repo này, sinh ra thư mục riêng)
-bash scripts/setup-mlflow.sh    # dựng MLflow qua Docker
+yarn install && yarn start      # run the Backstage Portal (packages/app-backstage + packages/backend)
+yarn tsc                        # type check the whole TS workspace
+yarn lint                       # lint — only files changed vs origin/master (fast, day-to-day)
+yarn lint:all                   # lint — whole repo (what CI runs)
+yarn fix                        # auto-fix what's fixable
+yarn workspace <name> add <pkg> # add a dependency to one workspace (packages/app-backstage, backend, plugins/prompt-registry...)
+cp .env.example .env            # fill in ANTHROPIC_API_KEY before running orchestration-api/litellm
+docker compose up               # run the whole stack: mlflow, keycloak, prometheus, qdrant, litellm,
+                                 # orchestration-api, mlops/k8s/metrics MCP servers
+bash scripts/run-mcp-local.sh mlops   # or: run a single MCP server standalone, no Docker needed
+
+make install    # create a Python 3.12 .venv, install ruff + pyright + pytest + every service's requirements.txt
+make lint       # ruff check .
+make format     # ruff format .
+make typecheck  # pyright
+make test       # pytest (tests/)
+make check      # lint + typecheck + test
 ```
 
-Sau khi `setup-backstage.sh` chạy xong, bạn sẽ có 1 thư mục app Backstage riêng
-(ví dụ `ai-delivery-portal-app/`) nằm CẠNH repo lab này. Đây chính là hạt giống
-để sau này đổi tên/merge thành repo chính thức `ai-delivery-portal`.
+- Portal UI: `http://localhost:3000` & Backend: `http://localhost:7007`
+- Catalog is preconfigured in [`app-config.yaml`](app-config.yaml) to read [`examples/catalog/model-entity.yaml`](examples/catalog/model-entity.yaml) and the [`hello-golden-path`](examples/templates/hello-golden-path/template.yaml) template
+- **Prompt Registry** (sidebar page, from [`plugins/prompt-registry/`](plugins/prompt-registry/)) reads data through the `/orchestration-api` proxy — [`orchestration-api`](services/orchestration-api/) must be running (`docker compose up` or local `uvicorn`) for data to appear
 
-## Lộ trình mở rộng thành repo chính thức
+### Test CI locally
 
+[`act`](https://github.com/nektos/act) runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml) itself, on your machine, before you push:
+
+```bash
+# For MacOS only
+brew install act
+echo "--container-architecture linux/amd64" >> ~/.actrc   # Apple Silicon: match the amd64 GitHub-hosted runner
+
+act -l                                                      # list jobs, sanity-check the workflow parses
+act pull_request --container-architecture linux/amd64       # run the full pipeline (skips the GHCR push step — needs main branch)
+act pull_request -j python-checks                           # run a single job: python-checks example
 ```
-Giai đoạn hiện tại (labs)          Giai đoạn sau (ai-delivery-portal)
-──────────────────────────         ────────────────────────────────────
-examples/templates/         →      packages/app-backstage/examples/templates/
-adapters/ (rỗng)             →      services/orchestration-api/adapters/
-docs/                        →      docs/ (giữ nguyên, cập nhật dần)
-scripts/                     →      infra/scripts/
-                              +      services/orchestration-api/  (FastAPI, tuần 4+)
-                              +      infra/helm-charts/            (tuần 8+)
-                              +      infra/argocd/                 (tuần 8+)
-                              +      infra/opa-policies/            (tuần 8+)
-```
 
-Không cần tạo trước các thư mục ở cột phải — chỉ tạo khi thật sự bắt đầu code phần đó
-(tránh thư mục rỗng vô nghĩa gây rối repo).
+## Reference
 
-## Tham chiếu
-
-Toàn bộ quyết định thiết kế (golden path, tech stack, benchmark, câu hỏi hỏi mentor...)
-được tổng hợp trong sổ tay riêng — nên đặt cạnh repo này để tham chiếu song song:
-`playbook-ai-delivery-portal.md`
+All design decisions (golden path, tech stack, benchmarks, questions for the
+mentor...) are compiled in a separate notebook — keep it alongside this repo
+for reference:
+[`docs/playbook-ai-delivery-portal.md`](docs/playbook-ai-delivery-portal.md)
