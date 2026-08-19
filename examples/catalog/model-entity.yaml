@@ -1,22 +1,22 @@
-# Entity giả lập 1 "model" trong Software Catalog.
-# Dùng kind Component mặc định trước (đơn giản, chạy được ngay).
-# Tuần 4+ có thể cân nhắc định nghĩa custom kind "Model" riêng nếu cần field
-# đặc thù MLOps (accuracy, dataset_version...) mà Component không có sẵn.
+# A mock entity representing a "model" in the Software Catalog.
+# Uses the default Component kind for now (simple, works right away).
+# From week 4+ consider defining a custom "Model" kind if MLOps-specific
+# fields are needed (accuracy, dataset_version...) that Component doesn't have.
 
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   name: fraud-detection-model
-  description: "Model demo cho AI Delivery Portal (dữ liệu giả để test Catalog)"
+  description: "Demo model for the AI Delivery Portal (fake data for testing the Catalog)"
   tags:
     - ml-model
     - mlops
     - demo
   annotations:
-    # Sau này có thể thêm link trỏ thẳng sang MLflow UI cho đúng version này
+    # Could later add a link straight to the MLflow UI for this specific version
     # backstage.io/techdocs-ref: dir:.
 spec:
   type: service
   lifecycle: experimental
   owner: user:guest
-  # Gợi ý mở rộng tuần sau: thêm field dependsOn nếu model phụ thuộc dataset/feature-store entity khác
+  # Suggested extension for later: add a dependsOn field if the model depends on other dataset/feature-store entities

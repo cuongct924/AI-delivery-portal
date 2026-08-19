@@ -4,8 +4,8 @@ metadata:
   name: hello-golden-path
   title: "Hello Golden Path (test)"
   description: >
-    Template thử nghiệm đầu tiên — chưa gọi MLflow thật, chỉ log ra thông tin
-    để hiểu cơ chế Scaffolder trước khi viết Custom Action thật.
+    First test template — doesn't call real MLflow yet, just logs information
+    to understand how the Scaffolder mechanism works before writing a real Custom Action.
   tags:
     - mlops
     - test
@@ -14,39 +14,39 @@ spec:
   type: service
 
   parameters:
-    - title: Nhập thông tin model giả
+    - title: Enter fake model information
       required:
         - modelName
         - modelVersion
       properties:
         modelName:
-          title: Tên model
+          title: Model name
           type: string
-          description: Ví dụ "fraud-detection"
+          description: E.g. "fraud-detection"
         modelVersion:
           title: Version
           type: string
-          description: Ví dụ "v1.0.0"
+          description: E.g. "v1.0.0"
 
   steps:
     - id: log-info
-      name: "Log thông tin (giả lập bước check policy)"
+      name: "Log info (mock policy-check step)"
       action: debug:log
       input:
-        message: "Chuẩn bị deploy model ${{ parameters.modelName }} version ${{ parameters.modelVersion }}"
+        message: "Preparing to deploy model ${{ parameters.modelName }} version ${{ parameters.modelVersion }}"
 
     - id: log-done
-      name: "Log hoàn tất (giả lập bước deploy)"
+      name: "Log completion (mock deploy step)"
       action: debug:log
       input:
-        message: "Đã 'deploy' xong ${{ parameters.modelName }}:${{ parameters.modelVersion }} (đây là bước giả — sẽ thay bằng gọi HTTP tới FastAPI ở tuần 3-4)"
+        message: "Finished 'deploying' ${{ parameters.modelName }}:${{ parameters.modelVersion }} (this is a mock step — will be replaced with an HTTP call to FastAPI in week 3-4)"
 
   output:
     text:
-      - title: Kết quả
+      - title: Result
         content: |
-          Golden path test hoàn tất cho model **${{ parameters.modelName }}**
+          Golden path test complete for model **${{ parameters.modelName }}**
           version **${{ parameters.modelVersion }}**.
 
-          Bước tiếp theo (tuần 2-3): thay `debug:log` bằng 1 Custom Action thật
-          gọi sang FastAPI backend, rồi FastAPI gọi Adapter tới MLflow.
+          Next step (week 2-3): replace `debug:log` with a real Custom Action
+          that calls the FastAPI backend, which then calls the Adapter to MLflow.
