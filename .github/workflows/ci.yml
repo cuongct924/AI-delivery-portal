@@ -71,7 +71,7 @@ jobs:
       - run: .venv/bin/pyright
       - run: .venv/bin/pytest --cov-report=xml --junitxml=report.xml
       # NOTE: same act/node limitation as the cache step above.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ always() && !env.ACT }}
         with:
           name: python-test-results
