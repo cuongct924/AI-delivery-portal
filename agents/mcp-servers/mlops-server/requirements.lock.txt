@@ -181,7 +181,7 @@ packaging==26.3
     #   mlflow-skinny
     #   mlflow-tracing
     #   skops
-pandas==2.3.3
+pandas==3.0.5
     # via mlflow
 pillow==12.3.0
     # via matplotlib
