@@ -1,0 +1,45 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.3
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  # Runs from the project's own .venv (needs every service's dependencies
+  # installed to resolve imports correctly) — not a pre-commit-managed env.
+  - repo: local
+    hooks:
+      - id: pyright
+        name: pyright
+        entry: .venv/bin/pyright
+        language: system
+        types: [python]
+        pass_filenames: false
+
+  # Runs from the natively-installed CLI (`brew install gitleaks`) instead of
+  # the Docker image CI uses — pulling/starting a container on every commit
+  # would be too slow for a pre-commit hook. Scans only staged changes
+  # (`protect --staged`), unlike the CI job (`detect`, full git history) —
+  # pre-commit only needs to catch what's about to be committed.
+  - repo: local
+    hooks:
+      - id: gitleaks
+        name: gitleaks
+        entry: gitleaks protect --staged --redact -v
+        language: system
+        pass_filenames: false
+
+  # Runs from the natively-installed CLI (`brew install checkov` or
+  # `pip install checkov`) — same framework/skip-path as the CI job
+  # (security:checkov in .gitlab-ci.yaml / .github/workflows/ci.yml) so
+  # local and CI catch the same things.
+  - repo: local
+    hooks:
+      - id: checkov
+        name: checkov
+        entry: checkov --directory . --framework dockerfile,argo_workflows,github_actions
+          --skip-path node_modules --skip-path .venv --skip-path packages --skip-path plugins
+          --compact --quiet
+        language: system
+        pass_filenames: false

@@ -1,0 +1,56 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [
+    "packages",
+    "plugins",
+    "node_modules",
+    "dist-types",
+    ".yarn",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Depends()/Query()/Path() in default args is a standard FastAPI pattern
+# (dependency injection), not an actual mutable-default-argument bug.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path"]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "services/orchestration-api"]
+testpaths = ["tests"]
+addopts = "--cov --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["adapters", "agents", "services/orchestration-api"]
+branch = true
+
+[tool.coverage.report]
+skip_empty = true
+exclude_lines = ["pragma: no cover", "if __name__ == .__main__.:"]
+# Coverage is low right now because most modules (adapters, MCP servers, auth)
+# are still stubs with no business logic to test yet — see docs/roadmap.md.
+# Raise this once real logic lands instead of chasing a number early.
+# fail_under = 80
+
+[tool.pyright]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+include = ["adapters", "agents", "services/orchestration-api", "tests"]
+exclude = [
+    "**/__pycache__",
+    "**/node_modules",
+    "**/.*",
+    "packages",
+    "plugins",
+    ".venv",
+    "dist-types",
+    ".yarn",
+]
+# extraPaths mirrors pytest's `pythonpath` above — services/orchestration-api's
+# own modules (core, routers, auth, evaluations) are imported unqualified from
+# inside that service, same as at runtime (uvicorn runs with cwd there).
+extraPaths = ["services/orchestration-api"]
+typeCheckingMode = "standard"
