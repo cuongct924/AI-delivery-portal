@@ -1,0 +1,1 @@
+export { PromptRegistryPage } from './PromptRegistryPage';
