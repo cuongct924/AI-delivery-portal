@@ -1,41 +1,43 @@
-# Kiến trúc tổng thể (tham chiếu nhanh)
+# Overall architecture (quick reference)
 
-Chi tiết đầy đủ nằm ở `playbook-ai-delivery-portal.md` (mục 4-6). File này chỉ
-tóm tắt để tra cứu nhanh khi code.
+The full details live in `playbook-ai-delivery-portal.md` (sections 4-6). This
+file is just a summary for quick lookup while coding.
 
 ```
 ┌────────────────────────────────────────────┐
-│         Portal UI (Backstage)                 │  ← packages/app, packages/backend
+│         Portal UI (Backstage)                 │  ← packages/app-backstage, packages/backend
 ├────────────────────────────────────────────┤
-│   BFF / Orchestration API (FastAPI)            │  ← services/orchestration-api/ (tuần 4+)
+│   BFF / Orchestration API (FastAPI)            │  ← services/orchestration-api/ (week 4+)
 │   - Auth (Keycloak) - Golden Path Engine        │
 │   - Workflow trigger (Argo Workflows)           │
 ├───┬────────┬────────┬────────┬────────────┤
-│Registry│Experiment│Inference│Notebook│      ← adapters/ (interface chung)
+│Registry│Experiment│Inference│Notebook│      ← adapters/ (shared interface)
 │Adapter │ Adapter  │ Adapter │Adapter │
 ├───┴────────┴────────┴────────┴────────────┤
-│ MLflow │ MLflow   │ KServe/ │Kubeflow│      ← backend thật/mock
+│ MLflow │ MLflow   │ KServe/ │Kubeflow│      ← real/mock backend
 │Registry│ Tracking │BentoML  │Notebook│
 └────────────────────────────────────────────┘
    Cross-cutting: OPA (policy) | Prometheus/Grafana | ArgoCD + Helm
 ```
 
-## Nguyên tắc bất biến (đừng vi phạm khi code)
+## Invariant principles (don't violate these when coding)
 
-1. **Custom Scaffolder Action trong Backstage KHÔNG tự chứa logic nghiệp vụ** —
-   nó chỉ gọi HTTP sang FastAPI Backend. Toàn bộ Adapter/Factory/Chain of
-   Responsibility nằm ở Python (`services/orchestration-api/` khi tạo).
-2. **Mọi Adapter implement chung 1 interface** (`IModelRegistryAdapter`,
-   `IInferenceAdapter`...) — để đổi từ Mock sang Adapter thật của Viettel chỉ
-   cần thêm 1 class mới, không sửa code đã có.
-3. **2 Golden Path lõi**: Train→Track→Register, Register→Deploy. Không thêm
-   golden path thứ 3 trừ khi 2 cái đầu đã ổn định (xem `roadmap.md`).
+1. **The Custom Scaffolder Action in Backstage does NOT contain business
+   logic itself** — it only makes an HTTP call to the FastAPI Backend. All
+   Adapter/Factory/Chain of Responsibility logic lives in Python
+   (`services/orchestration-api/` once created).
+2. **Every Adapter implements the same shared interface**
+   (`IModelRegistryAdapter`, `IInferenceAdapter`...) — so switching from Mock
+   to Viettel's real Adapter only requires adding one new class, without
+   touching existing code.
+3. **2 core Golden Paths**: Train→Track→Register, Register→Deploy. Do not add
+   a third golden path unless the first two are already stable (see `roadmap.md`).
 
-## Design pattern — nơi áp dụng
+## Design patterns — where they're applied
 
-| Pattern | Ở đâu |
+| Pattern | Where |
 |---|---|
-| Adapter | `adapters/*.py` — kết nối MLflow/KServe/hệ thống thật |
-| Factory | `adapters/factory.py` — chọn đúng Adapter theo config |
-| Template Method | Bản thân Backstage Scaffolder (`template.yaml` steps) — không cần tự code |
-| Chain of Responsibility | `services/orchestration-api/policies/` — chuỗi policy check (OPA hoặc validation tay) |
+| Adapter | `adapters/*.py` — connects to MLflow/KServe/the real system |
+| Factory | `adapters/factory.py` — picks the right Adapter based on config |
+| Template Method | The Backstage Scaffolder itself (`template.yaml` steps) — no custom code needed |
+| Chain of Responsibility | `services/orchestration-api/policies/` — policy-check chain (OPA or manual validation) |
