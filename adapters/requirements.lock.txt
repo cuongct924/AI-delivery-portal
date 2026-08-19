@@ -187,7 +187,7 @@ pandas==2.3.3
     # via mlflow
 pillow==12.3.0
     # via matplotlib
-portalocker==3.2.0
+portalocker==4.1.0
     # via qdrant-client
 prettytable==3.18.0
     # via skops
