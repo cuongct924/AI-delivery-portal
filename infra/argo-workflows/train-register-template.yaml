@@ -1,0 +1,54 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: train-register-golden-path
+  namespace: default
+spec:
+  entrypoint: train-and-register
+  # Non-default ServiceAccount with least-privilege RBAC — create it alongside
+  # this template when the real infra is provisioned (see infra/opa-policies/).
+  serviceAccountName: train-register-workflow
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  arguments:
+    parameters:
+      - name: model-name
+      - name: dataset-uri
+  templates:
+    - name: train-and-register
+      dag:
+        tasks:
+          - name: train
+            template: train-step
+            arguments:
+              parameters:
+                - name: dataset-uri
+                  value: '{{workflow.parameters.dataset-uri}}'
+          - name: register
+            template: register-step
+            dependencies: [train]
+            arguments:
+              parameters:
+                - name: model-name
+                  value: '{{workflow.parameters.model-name}}'
+
+    - name: train-step
+      inputs:
+        parameters:
+          - name: dataset-uri
+      container:
+        image: python:3.12-slim
+        command: [python, -c]
+        args:
+          - "print('TODO: train model, log the run to MLflow via adapters/mlflow_adapter.py')"
+
+    - name: register-step
+      inputs:
+        parameters:
+          - name: model-name
+      container:
+        image: python:3.12-slim
+        command: [python, -c]
+        args:
+          - "print('TODO: call orchestration-api to register the model via MlflowAdapter')"

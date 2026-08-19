@@ -1,0 +1,13 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: ai-delivery-portal
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # KServe/Knative ingress will need this once installed (week 8+).
+      - containerPort: 80
+        hostPort: 8080
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 8443
+        protocol: TCP

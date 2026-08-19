@@ -1,0 +1,109 @@
+services:
+  # Image tags below are pinned to specific verified releases (checked against
+  # the real registries — ghcr.io/quay.io/Docker Hub — not guessed) instead of
+  # `latest`, so `docker compose up` is reproducible run to run.
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.15.1  # matches mlflow==3.15.1 in the Python lock files
+    container_name: ai-delivery-portal-mlflow
+    command: mlflow server --host 0.0.0.0 --port 5000
+    ports:
+      - "5000:5000"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.2
+    container_name: ai-delivery-portal-keycloak
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "8080:8080"
+
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    container_name: ai-delivery-portal-prometheus
+    volumes:
+      - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:13.2.0
+    container_name: ai-delivery-portal-grafana
+    volumes:
+      - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    ports:
+      - "3001:3000"  # host 3001 — Backstage's dev server already owns 3000
+    depends_on:
+      - prometheus
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.0  # matches qdrant-client==1.19.0 in the Python lock files
+    container_name: ai-delivery-portal-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-v1.66.0-stable
+    container_name: ai-delivery-portal-litellm
+    command: --config /app/config.yaml --port 4000
+    volumes:
+      - ./infra/llm-gateways/litellm-config.yaml:/app/config.yaml:ro
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-local-dev}
+    ports:
+      - "4000:4000"
+
+  orchestration-api:
+    build:
+      context: ./services/orchestration-api
+    container_name: ai-delivery-portal-orchestration-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      AUTH_ENABLED: "true"
+      KEYCLOAK_URL: http://keycloak:8080
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      LITELLM_GATEWAY_URL: http://litellm:4000
+      QDRANT_URL: http://qdrant:6333
+    depends_on:
+      - mlflow
+      - keycloak
+      - litellm
+      - qdrant
+
+  mlops-mcp-server:
+    build:
+      context: .
+      dockerfile: agents/mcp-servers/mlops-server/Dockerfile
+    container_name: ai-delivery-portal-mlops-mcp-server
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    depends_on:
+      - mlflow
+
+  k8s-mcp-server:
+    build:
+      context: .
+      dockerfile: agents/mcp-servers/k8s-server/Dockerfile
+    container_name: ai-delivery-portal-k8s-mcp-server
+
+  metrics-mcp-server:
+    build:
+      context: .
+      dockerfile: agents/mcp-servers/metrics-server/Dockerfile
+    container_name: ai-delivery-portal-metrics-mcp-server
+    environment:
+      PROMETHEUS_URL: http://prometheus:9090
+    depends_on:
+      - prometheus

@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: orchestration-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['orchestration-api:8000']
+
+  # Add a real target once KServe/BentoML expose /metrics (week 8+)
+  # - job_name: kserve-inference
+  #   static_configs:
+  #     - targets: ['<inference-service>:8080']
