@@ -1,6 +1,13 @@
 # AI Delivery Portal
 
-Repository for the **AI Delivery Portal** project (Viettel Digital Talent 2026 — Cloud Track).
+**A CI/CD Portal and Internal Developer Platform for MLOps/LLMOps**
+
+Repository for the **AI Delivery Portal** project (Viettel Digital Talent 2026 — Cloud Track - Phase 02).
+
+An MLOps platform built as an Internal Developer Platform (IDP) for AI/ML workloads:
+
+- Acts as the **DevEx and orchestration layer** on top of the AI platform ecosystem — Model Registry, Model Experiments, AI Inference, AI Notebooks
+- Provides **golden paths** so developers and ML engineers can ship standard MLOps/LLMOps workflows without hand-rolling infrastructure each time
 
 Official structure: Portal (Backstage) + Orchestration API (FastAPI) + AI Agent/MCP
 + Adapter layer + GitOps infrastructure — all in one repo (the Backstage app has
