@@ -18,6 +18,9 @@ adapters/
 ```
 
 - `mlflow_adapter.py` reads `MLFLOW_TRACKING_URI` (defaults to `http://localhost:5000`).
+  `register_model()` accepts an optional `dataset_version` (the DVC md5 hash from
+  the dataset's `.dvc` file, see `../data/`) and stores it as a model version tag
+  — the caller resolves the hash, this adapter just passes it through.
 - `kserve_adapter.py` needs a real kubeconfig — only usable from the infrastructure phase (week 8+).
 - `argo_adapter.py` reads `ARGO_SERVER_URL` (defaults to `http://localhost:2746`), calls
   the WorkflowTemplate in `infra/argo-workflows/`.

@@ -50,6 +50,17 @@ services:
       - "6333:6333"
       - "6334:6334"
 
+  minio:
+    image: minio/minio:RELEASE.2025-04-08T15-41-24Z
+    container_name: ai-delivery-portal-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+    ports:
+      - "9000:9000"  # S3 API — DVC remote (.dvc/config) points here for local dev
+      - "9001:9001"  # web console
+
   litellm:
     image: ghcr.io/berriai/litellm:main-v1.66.0-stable
     container_name: ai-delivery-portal-litellm

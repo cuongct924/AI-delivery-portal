@@ -10,7 +10,13 @@ from abc import ABC, abstractmethod
 
 class IModelRegistryAdapter(ABC):
     @abstractmethod
-    def register_model(self, name: str, version: str, artifact_uri: str) -> dict: ...
+    def register_model(
+        self,
+        name: str,
+        version: str,
+        artifact_uri: str,
+        dataset_version: str | None = None,
+    ) -> dict: ...
 
     @abstractmethod
     def list_models(self, project: str | None = None) -> list[dict]: ...

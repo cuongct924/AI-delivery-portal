@@ -24,6 +24,7 @@ AI-delivery-portal/
 ├── agents/               ← AI Agent & MCP — mcp-servers/, skills/, prompts/
 ├── adapters/             ← Adapter Pattern — MLflow, KServe, Argo, Qdrant, LiteLLM, Viettel (stub)
 ├── infra/                ← GitOps infra — monitoring/vector-dbs/llm-gateways (active); helm-charts/argocd/opa-policies (week 8+)
+├── data/                 ← datasets versioned with DVC (S3-compatible remote, see data/README.md)
 ├── examples/             ← sample Catalog entity + Software Template
 ├── scripts/              ← run-mcp-local.sh
 ├── docs/                 ← architecture, roadmap, playbook
