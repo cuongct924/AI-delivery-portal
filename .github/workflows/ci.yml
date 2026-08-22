@@ -1,10 +1,4 @@
-# CI pipeline for AI Delivery Portal — GitHub Actions port of .gitlab-ci.yaml.
-#
-# The repo is hosted on GitHub, so this is the pipeline that actually runs.
-# .gitlab-ci.yaml is kept alongside it as reference (and in case CI ever runs
-# through GitLab's "CI/CD for external repositories" against this same repo)
-# — keep the two in sync job-for-job; see .gitlab-ci.yaml for the original
-# per-job rationale comments.
+# CI pipeline for AI Delivery Portal.
 
 name: CI
 

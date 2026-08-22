@@ -32,8 +32,8 @@ repos:
 
   # Runs from the natively-installed CLI (`brew install checkov` or
   # `pip install checkov`) — same framework/skip-path as the CI job
-  # (security:checkov in .gitlab-ci.yaml / .github/workflows/ci.yml) so
-  # local and CI catch the same things.
+  # (security-checkov in .github/workflows/ci.yml) so local and CI catch
+  # the same things.
   - repo: local
     hooks:
       - id: checkov

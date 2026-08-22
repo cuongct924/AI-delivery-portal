@@ -63,12 +63,10 @@ docs/                 architecture, roadmap, playbook
 
 ## Workflow
 
-- Repo is hosted on **GitHub**. `.github/workflows/ci.yml` is the pipeline
-  that actually runs; `.gitlab-ci.yaml` is kept only as reference (job-for-job
-  mirror) — **update both together** when changing a CI job.
+- Repo is hosted on **GitHub**; CI runs via `.github/workflows/ci.yml`.
 - Adding a new Python service: add its `requirements.txt` path to `Makefile`'s
   `SERVICE_REQS`, run `make lock`, add it to `docker-compose.yml`, and add a
-  build+scan block to both `ci.yml` and `.gitlab-ci.yaml`.
+  build+scan block to `ci.yml`.
 - Adding a Catalog entity/template: add it to `app-config.yaml`
   `catalog.locations` **and** to `app-config.production.yaml` (different
   relative path — `../../examples/...` vs `./examples/...`, not synced
