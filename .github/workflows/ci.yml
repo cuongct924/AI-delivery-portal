@@ -127,12 +127,9 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
-      # Official action instead of `curl | sh` from a script URL.
+      # Pinned release tarball, not `curl | sh` from a script URL.
       - name: Install Trivy
-        uses: aquasecurity/setup-trivy@v0.2.6
-        with:
-          version: v0.74.0
-          cache: true
+        run: curl -sSfL https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.tar.gz | sudo tar -xz -C /usr/local/bin trivy
       - name: Set image tag vars
         run: |
           echo "SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)" >> "$GITHUB_ENV"
