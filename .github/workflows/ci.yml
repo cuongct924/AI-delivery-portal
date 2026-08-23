@@ -63,6 +63,18 @@ jobs:
           .venv/bin/pip install -r dev.lock.txt -q
         env:
           PIP_CACHE_DIR: ${{ github.workspace }}/.cache/pip
+      # Guard against Dependabot (or a human) editing a *.lock.txt/dev.lock.txt
+      # by hand without a full `uv pip compile` re-resolution — this is what
+      # let `pandas==3.0.5` (violates mlflow's own `pandas<3`) slip into
+      # adapters/requirements.lock.txt undetected, since dev.lock.txt (what
+      # this job actually installs from) was never touched by that PR.
+      - run: make lock
+      - run: |
+          if ! git diff --exit-code --quiet; then
+            echo "::error::Lock files are out of date with their requirements.txt — run 'make lock' locally, review the diff, and commit the result."
+            git diff --stat
+            exit 1
+          fi
       - run: .venv/bin/ruff check .
       - run: .venv/bin/ruff format --check .
       - run: .venv/bin/pyright
