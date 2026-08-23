@@ -56,7 +56,11 @@ jobs:
       # libatomic1 — pyright-python downloads its own prebuilt Node.js binary
       # on first run, which needs libatomic.so.1; python:3.12-slim doesn't
       # ship it by default.
-      - run: apt-get update -qq && apt-get install -y --no-install-recommends make libatomic1
+      # git — python:3.12-slim doesn't ship it either; actions/checkout above
+      # works without it (the runner checks the repo out on the host and
+      # mounts it in), but the `make lock` drift-check below shells out to
+      # `git diff` itself, inside this container.
+      - run: apt-get update -qq && apt-get install -y --no-install-recommends make libatomic1 git
       - run: |
           python3.12 -m venv .venv
           .venv/bin/pip install --upgrade pip -q
