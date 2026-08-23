@@ -34,7 +34,7 @@ annotated-types==0.8.0
     # via pydantic
 anthropic==0.122.0
     # via -r services/orchestration-api/requirements.txt
-antlr4-python3-runtime==4.9.3
+antlr4-python3-runtime==4.13.2
     # via
     #   hydra-core
     #   omegaconf
