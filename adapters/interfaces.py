@@ -1,8 +1,8 @@
 """Shared contract for every Adapter — implemented via the Adapter Pattern.
 
-Principle: switching from Mock/MLflow to Viettel's real system only requires
-adding one new class that implements this interface, without touching code
-that already depends on the interface.
+Principle: switching from Mock/MLflow to a real self-hosted backend only
+requires adding one new class that implements this interface, without
+touching code that already depends on the interface.
 """
 
 from abc import ABC, abstractmethod
@@ -10,7 +10,13 @@ from abc import ABC, abstractmethod
 
 class IModelRegistryAdapter(ABC):
     @abstractmethod
-    def register_model(self, name: str, version: str, artifact_uri: str) -> dict: ...
+    def register_model(
+        self,
+        name: str,
+        version: str,
+        artifact_uri: str,
+        dataset_version: str | None = None,
+    ) -> dict: ...
 
     @abstractmethod
     def list_models(self, project: str | None = None) -> list[dict]: ...

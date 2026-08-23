@@ -10,32 +10,50 @@ updates:
         patterns:
           - "@backstage/*"
 
-  # Python — each service resolves its own requirements.txt independently
-  # (see Makefile SERVICE_REQS), so each needs its own entry here too.
+  # Python — each service resolves its own requirements.txt (see Makefile SERVICE_REQS).
+  # NOTE: major bumps excluded — Dependabot edits *.lock.txt without re-resolving.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "pip"
     directory: "/adapters"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "pip"
     directory: "/services/orchestration-api"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "pip"
     directory: "/agents/mcp-servers/mlops-server"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "pip"
     directory: "/agents/mcp-servers/k8s-server"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "pip"
     directory: "/agents/mcp-servers/metrics-server"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # Docker — base images in each Dockerfile, plus docker-compose.yml at root
   # (Dependabot's "docker" ecosystem covers both when directory is given).

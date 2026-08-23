@@ -1,10 +1,4 @@
-# CI pipeline for AI Delivery Portal — GitHub Actions port of .gitlab-ci.yaml.
-#
-# The repo is hosted on GitHub, so this is the pipeline that actually runs.
-# .gitlab-ci.yaml is kept alongside it as reference (and in case CI ever runs
-# through GitLab's "CI/CD for external repositories" against this same repo)
-# — keep the two in sync job-for-job; see .gitlab-ci.yaml for the original
-# per-job rationale comments.
+# CI pipeline for AI Delivery Portal.
 
 name: CI
 
@@ -48,29 +42,38 @@ jobs:
   python-checks:
     needs: [security-gitleaks, security-checkov]
     runs-on: ubuntu-latest
-    container:
-      image: python:3.12-slim
     steps:
       - uses: actions/checkout@v4
-      # NOTE: skipped under `act` — python:3.12-slim has no node for JS
-      # actions, and act can't auto-inject one like real runners (nektos/act#107).
+      # NOTE: plain ubuntu-latest, not a python:3.12-slim container — that
+      # image's missing git/libatomic1 caused repeated CI failures.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: actions/cache@v4
         if: ${{ !env.ACT }}
         with:
           path: .cache/pip
           key: pip-${{ hashFiles('dev.lock.txt') }}
-      - run: apt-get update -qq && apt-get install -y --no-install-recommends make
+      # libatomic1: pyright's bundled Node.js needs it; not always preinstalled.
+      - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libatomic1
       - run: |
           python3.12 -m venv .venv
           .venv/bin/pip install --upgrade pip -q
           .venv/bin/pip install -r dev.lock.txt -q
         env:
           PIP_CACHE_DIR: ${{ github.workspace }}/.cache/pip
+      # NOTE: catches lock files edited by hand instead of via `make lock`.
+      - run: make lock
+      - run: |
+          if ! git diff --exit-code --quiet; then
+            echo "::error::Lock files are out of date with their requirements.txt — run 'make lock' locally, review the diff, and commit the result."
+            git diff --stat
+            exit 1
+          fi
       - run: .venv/bin/ruff check .
       - run: .venv/bin/ruff format --check .
       - run: .venv/bin/pyright
       - run: .venv/bin/pytest --cov-report=xml --junitxml=report.xml
-      # NOTE: same act/node limitation as the cache step above.
       - uses: actions/upload-artifact@v4
         if: ${{ always() && !env.ACT }}
         with:

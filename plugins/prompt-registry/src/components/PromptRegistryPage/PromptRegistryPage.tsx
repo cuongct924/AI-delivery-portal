@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { discoveryApiRef, fetchApiRef, useApi } from '@backstage/core-plugin-api';
 import {
   Page,
   Header,
@@ -29,20 +30,23 @@ const columns: TableColumn<PromptVersion>[] = [
 ];
 
 export const PromptRegistryPage = () => {
+  const discoveryApi = useApi(discoveryApiRef);
+  const { fetch } = useApi(fetchApiRef);
   const [prompts, setPrompts] = useState<PromptVersion[] | null>(null);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    // Calls through the Backstage backend proxy (see app-config.yaml -> proxy.endpoints)
-    // pointing to services/orchestration-api's GET /prompts.
-    fetch('/api/proxy/orchestration-api/prompts')
+    // NOTE: a relative fetch() would hit the wrong origin and skip auth.
+    discoveryApi
+      .getBaseUrl('proxy')
+      .then(proxyUrl => fetch(`${proxyUrl}/orchestration-api/prompts`))
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
       .then(setPrompts)
       .catch(setError);
-  }, []);
+  }, [discoveryApi, fetch]);
 
   return (
     <Page themeId="tool">

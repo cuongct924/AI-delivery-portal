@@ -43,11 +43,13 @@ install: venv
 ## Regenerates dev.lock.txt (merged, local-venv-only) and every service's own
 ## requirements.lock.txt (what its Dockerfile installs from) after you edit a
 ## requirements.txt. Review the diff, then commit the *.lock.txt files too.
+## Pinned to linux/x86_64 (--python-platform) to match the Docker images and
+## GitHub Actions runners, regardless of what OS/arch `make lock` runs on.
 lock: venv
-	$(UV) pip compile $(SERVICE_REQS) --python-version 3.12 -o dev.lock.txt
+	$(UV) pip compile $(SERVICE_REQS) --python-version 3.12 --python-platform x86_64-unknown-linux-gnu -o dev.lock.txt
 	@for f in $(SERVICE_REQS); do \
 		echo "Locking $$f..."; \
-		$(UV) pip compile "$$f" --python-version 3.12 -o "$${f%.txt}.lock.txt"; \
+		$(UV) pip compile "$$f" --python-version 3.12 --python-platform x86_64-unknown-linux-gnu -o "$${f%.txt}.lock.txt"; \
 	done
 
 hooks:

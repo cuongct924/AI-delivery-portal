@@ -1,0 +1,6 @@
+# See docs/architecture.md#known-cve-exceptions before adding to this file.
+
+# cryptography HIGH CVE, fixed upstream in 50.0.0 — but mlflow==3.15.1 pins
+# cryptography<50 itself, so mlops-server can't take the fix without
+# breaking mlflow. Re-check when mlflow relaxes that constraint.
+CVE-2026-69247

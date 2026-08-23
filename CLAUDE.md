@@ -55,7 +55,7 @@ packages/            Portal (Backstage) — app-backstage (React/TS UI) + backen
 plugins/              Backstage plugins — prompt-registry (Prompt version UI)
 services/             orchestration-api — FastAPI BFF, MCP client, auth, evaluations
 agents/               AI Agent & MCP — mcp-servers/, skills/, prompts/
-adapters/             Adapter Pattern — MLflow, KServe, Argo, Qdrant, LiteLLM, Viettel (stub)
+adapters/             Adapter Pattern — MLflow, KServe, Argo, Qdrant, LiteLLM
 infra/                GitOps infra — monitoring/vector-dbs/llm-gateways (active); helm-charts/argocd/opa-policies (week 8+)
 examples/             sample Catalog entity + Software Template (wired into app-config.yaml)
 docs/                 architecture, roadmap, playbook
@@ -63,12 +63,10 @@ docs/                 architecture, roadmap, playbook
 
 ## Workflow
 
-- Repo is hosted on **GitHub**. `.github/workflows/ci.yml` is the pipeline
-  that actually runs; `.gitlab-ci.yaml` is kept only as reference (job-for-job
-  mirror) — **update both together** when changing a CI job.
+- Repo is hosted on **GitHub**; CI runs via `.github/workflows/ci.yml`.
 - Adding a new Python service: add its `requirements.txt` path to `Makefile`'s
   `SERVICE_REQS`, run `make lock`, add it to `docker-compose.yml`, and add a
-  build+scan block to both `ci.yml` and `.gitlab-ci.yaml`.
+  build+scan block to `ci.yml`.
 - Adding a Catalog entity/template: add it to `app-config.yaml`
   `catalog.locations` **and** to `app-config.production.yaml` (different
   relative path — `../../examples/...` vs `./examples/...`, not synced

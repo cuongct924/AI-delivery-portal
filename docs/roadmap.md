@@ -8,8 +8,9 @@ Copied from the playbook, used to tick off progress directly in the repo (commit
 - [ ] **Week 2-3** — Full lab setup: Mock Inference (FastAPI), write the
       `IModelRegistryAdapter` interface + `MLflowRegistryAdapter`. First
       Custom Scaffolder Action that calls real MLflow.
-- [ ] **Week 4-5** — Write the real Adapter for Viettel's system (if access
-      is granted). Set up `services/orchestration-api/` (FastAPI).
+- [ ] **Week 4-5** — Write the self-hosted Adapters for Model Catalog and
+      Feature Store (local-first, no external system). Set up
+      `services/orchestration-api/` (FastAPI).
 - [ ] **Week 6-7** — Golden Path #1: Train → Track → Register (Argo Workflows).
 - [ ] **Week 8-9** — Golden Path #2: Register → Deploy (Helm + ArgoCD + policy
       check — OPA if time allows, manual validation otherwise).

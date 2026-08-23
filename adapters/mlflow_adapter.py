@@ -16,8 +16,22 @@ class MlflowAdapter(IModelRegistryAdapter):
         mlflow.set_tracking_uri(self.tracking_uri)
         self.client = MlflowClient(tracking_uri=self.tracking_uri)
 
-    def register_model(self, name: str, version: str, artifact_uri: str) -> dict:
+    def register_model(
+        self,
+        name: str,
+        version: str,
+        artifact_uri: str,
+        dataset_version: str | None = None,
+    ) -> dict:
         result = mlflow.register_model(model_uri=artifact_uri, name=name)
+        if dataset_version is not None:
+            # DVC md5 hash — just a fingerprint tag, no DVC pull needed.
+            self.client.set_model_version_tag(
+                name=result.name,
+                version=result.version,
+                key="dataset_version",
+                value=dataset_version,
+            )
         return {"name": result.name, "version": result.version}
 
     def list_models(self, project: str | None = None) -> list[dict]:
