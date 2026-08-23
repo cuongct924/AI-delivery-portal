@@ -351,7 +351,7 @@ multidict==6.7.1
     #   aiobotocore
     #   aiohttp
     #   yarl
-narwhals==2.24.0
+narwhals==2.25.0
     # via scikit-learn
 networkx==3.6.1
     # via dvc
