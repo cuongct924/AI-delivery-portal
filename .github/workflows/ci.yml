@@ -42,23 +42,20 @@ jobs:
   python-checks:
     needs: [security-gitleaks, security-checkov]
     runs-on: ubuntu-latest
-    container:
-      image: python:3.12-slim
     steps:
-      # NOTE: must run before checkout — python:3.12-slim has no git, so
-      # actions/checkout falls back to a non-git tarball download otherwise,
-      # leaving no .git dir for the `make lock` drift-check below.
-      - run: apt-get update -qq && apt-get install -y --no-install-recommends git
       - uses: actions/checkout@v4
-      # NOTE: skipped under `act` — python:3.12-slim has no node for JS
-      # actions, and act can't auto-inject one like real runners (nektos/act#107).
+      # NOTE: plain ubuntu-latest, not a python:3.12-slim container — that
+      # image's missing git/libatomic1 caused repeated CI failures.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: actions/cache@v4
         if: ${{ !env.ACT }}
         with:
           path: .cache/pip
           key: pip-${{ hashFiles('dev.lock.txt') }}
-      # libatomic1: pyright's bundled Node.js needs it.
-      - run: apt-get install -y --no-install-recommends make libatomic1
+      # libatomic1: pyright's bundled Node.js needs it; not always preinstalled.
+      - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libatomic1
       - run: |
           python3.12 -m venv .venv
           .venv/bin/pip install --upgrade pip -q
@@ -77,7 +74,6 @@ jobs:
       - run: .venv/bin/ruff format --check .
       - run: .venv/bin/pyright
       - run: .venv/bin/pytest --cov-report=xml --junitxml=report.xml
-      # NOTE: same act/node limitation as the cache step above.
       - uses: actions/upload-artifact@v4
         if: ${{ always() && !env.ACT }}
         with:
