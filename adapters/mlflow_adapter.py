@@ -25,9 +25,7 @@ class MlflowAdapter(IModelRegistryAdapter):
     ) -> dict:
         result = mlflow.register_model(model_uri=artifact_uri, name=name)
         if dataset_version is not None:
-            # The DVC md5 hash (from the tracked <dataset>.dvc file) fingerprints
-            # the exact dataset that trained this version — not the dataset
-            # itself, so this stays a cheap metadata write, no DVC pull needed here.
+            # DVC md5 hash — just a fingerprint tag, no DVC pull needed.
             self.client.set_model_version_tag(
                 name=result.name,
                 version=result.version,

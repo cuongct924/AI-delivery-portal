@@ -37,8 +37,7 @@ class KServeAdapter(IInferenceAdapter):
                 }
             },
         }
-        # cast: the client can theoretically return other types when async_req=True,
-        # but we never pass that, so the response is always a dict here.
+        # cast: only non-dict when async_req=True, which we never pass.
         return cast(
             dict,
             self.api.create_namespaced_custom_object(GROUP, VERSION, self.namespace, PLURAL, body),

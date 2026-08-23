@@ -10,13 +10,8 @@ updates:
         patterns:
           - "@backstage/*"
 
-  # Python — each service resolves its own requirements.txt independently
-  # (see Makefile SERVICE_REQS), so each needs its own entry here too.
-  # Major version bumps are excluded on purpose: Dependabot edits *.lock.txt
-  # in place rather than re-running a full `uv pip compile` resolution, which
-  # let pandas==3.0.5 (violates mlflow's own `pandas<3`) slip through
-  # unnoticed once — major upgrades need a human running `make lock` and
-  # reviewing the diff instead.
+  # Python — each service resolves its own requirements.txt (see Makefile SERVICE_REQS).
+  # NOTE: major bumps excluded — Dependabot edits *.lock.txt without re-resolving.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:

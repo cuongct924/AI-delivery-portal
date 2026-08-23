@@ -1,7 +1,5 @@
 services:
-  # Image tags below are pinned to specific verified releases (checked against
-  # the real registries — ghcr.io/quay.io/Docker Hub — not guessed) instead of
-  # `latest`, so `docker compose up` is reproducible run to run.
+  # Image tags pinned to verified releases, not `latest`, for reproducible builds.
   mlflow:
     image: ghcr.io/mlflow/mlflow:v3.15.1  # matches mlflow==3.15.1 in the Python lock files
     container_name: ai-delivery-portal-mlflow

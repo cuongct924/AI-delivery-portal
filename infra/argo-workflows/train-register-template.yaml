@@ -5,8 +5,7 @@ metadata:
   namespace: default
 spec:
   entrypoint: train-and-register
-  # Non-default ServiceAccount with least-privilege RBAC — create it alongside
-  # this template when the real infra is provisioned (see infra/opa-policies/).
+  # Least-privilege ServiceAccount — provision alongside this template.
   serviceAccountName: train-register-workflow
   securityContext:
     runAsNonRoot: true

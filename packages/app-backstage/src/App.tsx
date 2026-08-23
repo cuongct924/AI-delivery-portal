@@ -18,8 +18,7 @@ import {
 } from '@roadiehq/backstage-plugin-prometheus';
 import { litellmPlugin, LitellmPage } from '@cakecrusher/plugin-litellm';
 
-// Legacy plugins (no /alpha export yet) converted for the new frontend system —
-// see docs/architecture.md and https://backstage.io/docs/frontend-system/building-apps/plugin-conversion/
+// Legacy plugins (no /alpha export) converted for the new frontend system.
 const convertedPrometheusPlugin = convertLegacyPlugin(
   backstagePluginPrometheusPlugin,
   {
