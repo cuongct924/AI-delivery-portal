@@ -53,7 +53,10 @@ jobs:
         with:
           path: .cache/pip
           key: pip-${{ hashFiles('dev.lock.txt') }}
-      - run: apt-get update -qq && apt-get install -y --no-install-recommends make
+      # libatomic1 — pyright-python downloads its own prebuilt Node.js binary
+      # on first run, which needs libatomic.so.1; python:3.12-slim doesn't
+      # ship it by default.
+      - run: apt-get update -qq && apt-get install -y --no-install-recommends make libatomic1
       - run: |
           python3.12 -m venv .venv
           .venv/bin/pip install --upgrade pip -q
