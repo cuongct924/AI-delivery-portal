@@ -256,12 +256,6 @@ catalog:
     - type: file
       target: ../../examples/entities.yaml
 
-    # Local example template
-    - type: file
-      target: ../../examples/template/template.yaml
-      rules:
-        - allow: [Template]
-
     # AI Delivery Portal — sample entity for the Model Registry
     - type: file
       target: ../../examples/catalog/model-entity.yaml
