@@ -58,3 +58,13 @@ class ILLMGatewayAdapter(ABC):
 
     @abstractmethod
     def list_models(self) -> list[dict]: ...
+
+
+class IFeatureStoreAdapter(ABC):
+    @abstractmethod
+    def get_offline_features(
+        self, entity_ids: list[str], feature_names: list[str], dataset_version: str | None = None
+    ) -> list[dict]: ...
+
+    @abstractmethod
+    def get_online_features(self, entity_id: str, feature_names: list[str]) -> dict: ...
