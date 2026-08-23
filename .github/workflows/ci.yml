@@ -45,6 +45,10 @@ jobs:
     container:
       image: python:3.12-slim
     steps:
+      # NOTE: must run before checkout — python:3.12-slim has no git, so
+      # actions/checkout falls back to a non-git tarball download otherwise,
+      # leaving no .git dir for the `make lock` drift-check below.
+      - run: apt-get update -qq && apt-get install -y --no-install-recommends git
       - uses: actions/checkout@v4
       # NOTE: skipped under `act` — python:3.12-slim has no node for JS
       # actions, and act can't auto-inject one like real runners (nektos/act#107).
@@ -53,25 +57,15 @@ jobs:
         with:
           path: .cache/pip
           key: pip-${{ hashFiles('dev.lock.txt') }}
-      # libatomic1 — pyright-python downloads its own prebuilt Node.js binary
-      # on first run, which needs libatomic.so.1; python:3.12-slim doesn't
-      # ship it by default.
-      # git — python:3.12-slim doesn't ship it either; actions/checkout above
-      # works without it (the runner checks the repo out on the host and
-      # mounts it in), but the `make lock` drift-check below shells out to
-      # `git diff` itself, inside this container.
-      - run: apt-get update -qq && apt-get install -y --no-install-recommends make libatomic1 git
+      # libatomic1: pyright's bundled Node.js needs it.
+      - run: apt-get install -y --no-install-recommends make libatomic1
       - run: |
           python3.12 -m venv .venv
           .venv/bin/pip install --upgrade pip -q
           .venv/bin/pip install -r dev.lock.txt -q
         env:
           PIP_CACHE_DIR: ${{ github.workspace }}/.cache/pip
-      # Guard against Dependabot (or a human) editing a *.lock.txt/dev.lock.txt
-      # by hand without a full `uv pip compile` re-resolution — this is what
-      # let `pandas==3.0.5` (violates mlflow's own `pandas<3`) slip into
-      # adapters/requirements.lock.txt undetected, since dev.lock.txt (what
-      # this job actually installs from) was never touched by that PR.
+      # NOTE: catches lock files edited by hand instead of via `make lock`.
       - run: make lock
       - run: |
           if ! git diff --exit-code --quiet; then
