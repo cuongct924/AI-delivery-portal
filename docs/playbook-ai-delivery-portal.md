@@ -1,353 +1,363 @@
-# REFERENCE PLAYBOOK
-## AI Delivery Portal — Internal Developer Platform for MLOps/LLMOps
-### Viettel Digital Talent 2026 · Cloud Track · Phase 2
+# SỔ TAY THAM CHIẾU (v3)
+## AI Delivery Portal — GitOps for Model (MLOps/LLMOps)
+### Viettel Digital Talent 2026 · Track Cloud · Phase 2 — Cường
+### Repo song song: netCI Delivery Platform (Hiếu) — Phase 1
+
+> **Thay đổi lớn nhất so với bản trước**: đề tài đã được mentor CHÍNH THỨC tách thành 2 sản phẩm chạy song song, dùng chung 1 bức tranh lớn nhưng KHÁC repo, khác người bảo vệ. Sổ tay này viết lại toàn bộ phần định vị/kiến trúc/scope cho đúng ranh giới mới. Các phần Temporal/Kusion/Crossplane/tự vận hành Jenkins đã được đánh giá lại và HẠ CẤP xuống "đã cân nhắc, không thuộc phạm vi của Cường" — không xóa để giữ lại lý do quyết định.
 
 ---
 
-## 0. COMPASS — 3 CORE QUESTIONS TO USE THROUGHOUT THE JOURNEY
+## 0. LA BÀN — 4 CÂU HỎI CỐT LÕI (giữ nguyên, dùng xuyên suốt)
 
-Whenever unsure "should I build this feature", "should I prioritize this" — come back to these 3 questions:
+1. **Việc gì lặp lại thường xuyên nhất?** (Frequency)
+2. **Việc gì dễ sai nhất?** (Error-proneness)
+3. **Việc gì có rủi ro cao nhất nếu làm sai?** (Impact/Blast radius)
+4. **Thiết kế này có dễ expose thành tool cho agent sau này không?** (Agent-readiness) — áp dụng từ Tuần 1, gần như miễn phí (chỉ là kỷ luật thiết kế API rõ ràng)
 
-1. **What happens most often?** (Frequency) — the more it repeats, the higher the ROI of automating it.
-2. **What's most error-prone?** (Error-proneness) — the more prone to manual mistakes, the more it needs a policy/template to prevent them upfront.
-3. **What carries the highest risk if done wrong?** (Impact/Blast radius) — the bigger the impact (production, many teams), the tighter the control gate needs to be.
-
-### Priority matrix (use for every design decision)
-
+### Ma trận ưu tiên
 ```
-                    Low risk                 High risk
-High frequency │  Light automation        │  TOP PRIORITY
-               │  (e.g. logging an        │  (e.g. deploying to
-               │  experiment)              │  production)
-───────────────┼──────────────────────────┼───────────────────────────
-Low frequency  │  Lowest priority          │  Stretch goal, worth
-               │  (e.g. notebook setup)    │  doing if time remains
-               │                           │  (e.g. rollback)
+                    Rủi ro thấp              Rủi ro cao
+Tần suất cao   │  Tự động hóa nhẹ nhàng  │  ƯU TIÊN SỐ 1
+Tần suất thấp  │  Ưu tiên thấp nhất       │  Stretch goal
 ```
 
-**Principle**: always prioritize the "high frequency × high risk" cell first — this is where the golden path creates the most value and is easiest to measure (benchmark).
+### Câu hỏi lọc thứ 5 — MỚI, dùng khi phân vai với Hiếu
+5. **"Việc này là NGHIỆP VỤ đặc thù MLOps (của mình) hay CƠ CHẾ HẠ TẦNG TỔNG QUÁT (của netCI)?"** — mọi tính năng mới trước khi code phải trả lời được câu này. Nếu là cơ chế tổng quát (multi-cluster, ephemeral agent, IaC Jenkins, ký artifact...) → KHÔNG tự làm, gọi API netCI qua Adapter.
 
 ---
 
-## 1. PROJECT POSITIONING — THE CORE STORY
-
-> *"Viettel's AI Platform already has strong capabilities (Registry, Experiment, Inference, Notebook), but lacks a standardized connecting layer. The Portal doesn't replace these systems — it's a DevEx/orchestration layer sitting on top, turning a fragmented, manual, error-prone process into an automated, safe, measurable golden path."*
-
-### Why this project is "better" than it first seems
-
-- This isn't just "building a CI/CD portal" — it's **Platform Engineering applied to the MLOps domain**, a field that's very hot right now.
-- High real-world value: exactly what leadership needs → if done well, the product has a real chance of being used, not just shelved after the defense.
-- Enough technical depth if tapped correctly: design patterns, adapter architecture, policy-as-code, MLOps/LLMOps domain knowledge.
-
-### Core knowledge structure (4 pillars, not 2)
+## 1. ĐỊNH VỊ ĐỀ TÀI — BỨC TRANH 2 SẢN PHẨM
 
 ```
-1. Software Engineering       → foundation (design patterns, API design)
-2. Platform Engineering/DevOps → MAIN BODY (IDP, Golden Path, K8s, GitOps)
-3. DevSecOps                  → one facet within it (policy-as-code, OPA)
-4. MLOps/LLMOps domain        → the part that makes this project DISTINCTIVE, can't be skipped
+┌─────────────────────────────────────────────┐
+│  Phase 1 — netCI Delivery Platform (Hiếu)         │
+│  = NỀN TẢNG CI/CD GENERIC, dùng cho MỌI project      │
+│  - Pipeline-as-Code (Jenkins Shared Library, form UI) │
+│  - Jenkins config quản lý bằng Git (IaC, tái lập được) │
+│  - Ephemeral agent (Jenkins Kubernetes Plugin) cô lập  │
+│    theo project, thay workspace dùng chung              │
+│  - Deploy đa hạ tầng (Systemd/Docker/K8s) qua Ansible +  │
+│    Helm, có Dev/Staging/Prod, approval, audit             │
+│  - Vận hành đa cụm Jenkins, SBOM, ký artifact, dashboard   │
+│    DORA                                                     │
+└──────────────────────┬────────────────────────┘
+                        │ Cường GỌI VÀO qua API/Adapter
+                        │ (netci_adapter.py) — KHÔNG tự dựng
+                        │ Jenkins, KHÔNG tự học multi-cluster/SBOM
+                        ▼
+┌─────────────────────────────────────────────┐
+│  Phase 2 — GitOps for Model / AI Delivery Portal   │
+│  (Cường — CHÍNH BẠN)                                 │
+│  = LỚP NGHIỆP VỤ đặc thù MLOps/LLMOps                  │
+│  - Backstage UI + Adapter Pattern tích hợp 4 sản phẩm   │
+│    AI Platform (Registry/Experiment/Inference/Notebook)  │
+│  - Golden Path #1: Train→Track→Register                  │
+│  - Golden Path #2: Register→Deploy (quyết định GÌ được    │
+│    phép lên Git — Evaluate Gate, không phải cơ chế sync)   │
+│  - Vòng lặp Monitor→Drift→Retrain (đặc thù ML, netCI       │
+│    generic không có khái niệm này)                           │
+│  - Agent-ready: MCP servers + Skills                          │
+└─────────────────────────────────────────────┘
 ```
 
----
+### Câu chuyện định vị (dùng khi bảo vệ)
 
-## 2. GOLDEN PATH — FOUNDATIONAL CONCEPT
+> *"netCI (Hiếu) là ĐỘNG CƠ — cơ chế CI/CD kỹ thuật tổng quát, dùng được cho bất kỳ loại project nào. AI Delivery Portal / GitOps for Model (em) là BỘ NÃO cho riêng domain MLOps — quyết định model nào đủ điều kiện lên Git (Evaluate Gate), theo dõi vòng đời model sau khi deploy (Drift→Retrain) — những khái niệm không tồn tại trong CI/CD generic. Em không tự xây lại cơ chế deploy/agent/multi-cluster — em TIÊU THỤ nó qua Adapter Pattern, đúng kiến trúc đã thiết kế từ đầu."*
 
-### Definition
+### Vì sao KHÔNG nên thấy phần của mình "ít" — đã phân tích kỹ, kết luận:
 
-> **Golden Path = a pre-paved, easiest-to-follow road, standardized with best practices, for completing a recurring task — making "doing it right" the easiest choice, without force.**
+Nếu netCI làm hẳn "GitOps" ở mức cơ chế (ArgoCD sync, Helm templating generic), phần của Cường **KHÔNG BỊ MẤT GIÁ TRỊ** — vì GitOps generic (Cường/netCI làm) khác hoàn toàn "GitOps for Model" (đặc thù):
 
-### Where it fits in the bigger picture
-
-```
-Internal Developer Platform (IDP)   ← philosophy/goal ("self-service for devs")
-        └── Golden Path             ← how it's realized (the standard path)
-                └── Backstage        ← the specific tool used to build it
-```
-
-### 6 foundational principles (universal, applies to every company)
-
-1. **"Paved road, not the only road"** — a recommendation, not an absolute mandate.
-2. **Reduces cognitive load** — the system "remembers" best practices for you, devs don't need to memorize everything.
-3. **Self-service** — devs can act immediately, without waiting on someone else.
-4. **Starts from a real pain point** — not from "we have a cool tool, let's shove it in".
-5. **Measurable** — has metrics: adoption rate, time saved, fewer errors.
-6. **A living product** — needs maintenance, periodic updates, not built once and abandoned.
-
-### What differs between companies (no single universal template)
-
-| Factor | Impact on Golden Path design |
+| GitOps thông thường (netCI) | GitOps for Model (Cường — giữ lại) |
 |---|---|
-| Existing infrastructure | The golden path must anchor to real infrastructure, not copy another company's template verbatim |
-| Scale/maturity | A large organization (like Viettel) → needs more gates/governance |
-| Culture | Viettel (telecom, needs stability) → prioritizes safety over raw speed |
-| Workload type | MLOps has its own specifics, different from typical DevOps (see section 3) |
-
-**→ For Viettel**: the golden path should have clear policy gates, full audit trails, and **leave an escape hatch** for edge cases (not force 100% of work through the Portal).
+| Deploy dựa trên image version, replicas, resource limit | Deploy dựa trên **model version + accuracy threshold + dataset lineage** |
+| Policy: security scan, resource limit (mọi app) | Policy ĐẶC THÙ: **model đã qua Evaluate Gate (LLM-as-judge) chưa** |
+| Rollback: quay lại version code | Rollback: quay lại **version MODEL**, kèm Canary dựa trên accuracy thực tế |
+| Không có khái niệm "model xuống cấp" | **Drift→Retrain loop** — vòng lặp riêng của ML, netCI generic không có |
 
 ---
 
-## 3. THE MODEL LIFECYCLE — DIRECTLY SHAPES THE DESIGN
+## 2. GOLDEN PATH — KHÁI NIỆM NỀN TẢNG (giữ nguyên, đã kiểm chứng đúng qua repo)
+
+> **Golden Path = con đường được trải sẵn, dễ đi nhất, đã chuẩn hóa best-practice — "làm đúng" là lựa chọn dễ nhất, không ép buộc tuyệt đối.**
+
+```
+Internal Developer Platform (IDP)   ← triết lý ("dev tự phục vụ")
+        └── Golden Path             ← cách hiện thực hóa
+                └── Backstage        ← công cụ cụ thể để build
+```
+
+### 6 nguyên tắc nền tảng
+1. "Paved road, not the only road" — khuyến nghị, không ép buộc tuyệt đối
+2. Giảm cognitive load — hệ thống "nhớ hộ" best-practice
+3. Self-service — dev tự làm được ngay
+4. Bắt đầu từ pain point thật
+5. Đo lường được (adoption, thời gian, số lỗi giảm)
+6. Là sản phẩm sống, cần bảo trì
+
+### Nguyên tắc UX bổ sung — MỚI (theo yêu cầu mentor cho riêng lớp thực thi)
+
+> **"Ở 1 cái Portal, không phải Jenkins/netCI. Chỉ dùng lõi Jenkins/netCI nếu Dev chủ động muốn xem chi tiết."**
+
+- Dev KHÔNG BAO GIỜ cần mở UI gốc của netCI/Jenkins để thao tác.
+- Trạng thái/log phải **nhúng (embed) trực tiếp** trong Portal — không dùng deep-link đưa Dev rời khỏi Portal.
+- Log chi tiết (console output gốc) vẫn xem được, nhưng **qua giao diện Portal**, không chuyển hẳn sang domain khác.
+- Áp dụng: `netci_adapter.get_console_log_stream()` nhúng log ngay trong trang Catalog.
+
+---
+
+## 3. VÒNG ĐỜI MODEL — ẢNH HƯỞNG THIẾT KẾ (giữ nguyên, đã hiện thực hóa trong repo)
 
 ```
 Train → Experiment → Evaluate → Register → Deploy → Monitor → Retrain ─┐
-  ↑                                                                    │
+  ↑                                                                      │
   └──────────────────────────────────────────────────────────────────┘
-        (a loop, NOT a straight line like typical CI/CD)
 ```
 
-### Mapping table: Domain Knowledge → Design decisions
-
-| Domain Knowledge | Golden Path affected | Concrete design change |
+| Domain Knowledge | Golden Path bị ảnh hưởng | Trạng thái trong repo |
 |---|---|---|
-| Model versioning ≠ Code versioning | #1 Register | Needed metadata: `git_commit_hash` + `dataset_version` + `hyperparameters`, not just the model file |
-| Data lineage | #1 Register | Add `data_source_uri`, `data_snapshot_id` fields |
-| Evaluate is a hidden gate (not among the 4 systems listed in the brief) | Between #1 and Register | A self-discovered insight — emphasize this during the defense |
-| Model drift | #2 Deploy → Monitor | Dashboard needs distribution/drift metrics, not just uptime |
-| A/B testing a model | #2 Deploy | Support Canary/Shadow deploy, not just simple Blue-Green |
-| Prompt versioning (LLMOps) | Registry extension | A Prompt Registry separate from the Model Registry |
-| RAG (LLMOps) | Overall architecture | Add a Vector DB if going deep on LLM |
-| Evaluating LLM text output | Evaluate gate | Needs LLM-as-judge, not a simple accuracy threshold |
+| Model versioning ≠ Code versioning | #1 Register — metadata cần git_commit_hash + dataset_version + hyperparameters | ✅ `dataset_version` (DVC md5, `data/*.dvc`) ghi vào `mlflow_adapter.py::register_model()`; `git_commit_hash`/`hyperparameters` còn thiếu |
+| Evaluate là gate ẩn — insight tự phát hiện | Giữa Experiment và Register | ✅ `evaluations/gate.py` + `evaluations/llm_judge.py` (LLM-as-judge, KHÔNG chỉ threshold đơn giản) |
+| Adversarial/Red-team testing (LLMOps, ch.13 sách MLPE) | Mở rộng Evaluate Gate — chặn model/prompt "bẻ được" (jailbreak) trước khi lên Git | ⚠️ Chưa có — cần thêm bộ test tấn công vào `gate.py`, xem mục 7 |
+| Model drift | Deploy → Monitor | ✅ `agents/skills/evaluate_drift.py` |
+| Prompt versioning (LLMOps) | Registry mở rộng | ✅ `plugins/prompt-registry/` (Backstage plugin riêng) |
+| RAG (LLMOps) | Kiến trúc tổng thể | ✅ `adapters/vector_db_adapter.py` (Qdrant) |
+| LLM Gateway (multi-model, cost tracking) | LLMOps mở rộng | ✅ `adapters/llm_gateway_adapter.py` (LiteLLM) |
 
-### Sample answer for "How is your golden path different from regular CI/CD?"
+### LLMOps — CHUYỂN TỪ "roadmap only" SANG "ACTIVE SCOPE" (đã xác nhận nhu cầu thật)
 
-> *"Regular CI/CD is linear, serving code. The MLOps golden path has to correctly model the cyclical nature and its specific gates — especially Evaluate (checking model quality before promotion) and Retrain (closing the loop when a model degrades) — concepts that don't exist in typical software CI/CD."*
+Đã xác nhận với Viettel: **đang serving Qwen cho nhiều team, có dịch vụ fine-tune riêng, có người theo dõi chi phí token/API**. Đây không còn là giả định — Vector DB Adapter + LLM Gateway Adapter + Prompt Registry Plugin đã lên trong repo là đúng hướng, **giữ nguyên, không cắt**.
 
 ---
 
-## 4. SYSTEM ARCHITECTURE
+## 4. KIẾN TRÚC HỆ THỐNG (đối chiếu đúng repo thật)
 
 ```
-┌────────────────────────────────────────────┐
-│         Portal UI (Backstage)                 │
-├────────────────────────────────────────────┤
-│   BFF / Orchestration API (FastAPI)            │
-│   - Auth (Keycloak) - Golden Path Engine        │
-│   - Workflow trigger (Argo Workflows)           │
-├───┬────────┬────────┬────────┬────────────┤
-│Registry│Experiment│Inference│Notebook│      Adapter Layer
-│Adapter │ Adapter  │ Adapter │Adapter │      (shared interface)
-├───┴────────┴────────┴────────┴────────────┤
-│ MLflow │ MLflow   │ KServe/ │Kubeflow│      Real/mock backend
-│Registry│ Tracking │BentoML  │Notebook│      (swappable without touching the Portal)
-└────────────────────────────────────────────┘
-   Cross-cutting: OPA (policy) | Prometheus/Grafana (observability)
-                  | ArgoCD + Helm (GitOps CD)
+┌────────────────────────────────────────────────────┐
+│         Portal UI (Backstage) — packages/app-backstage │
+│         + plugins/prompt-registry                        │
+├────────────────────────────────────────────────────┤
+│   Orchestration API (FastAPI) — services/orchestration-api│
+│   - auth/keycloak.py   - evaluations/gate.py + llm_judge  │
+│   - routers/chat.py, prompts.py                            │
+├───┬────────┬────────┬────────┬────────┬────────┬──┤
+│Registry│Inference│Workflow│VectorDB│LLM GW │netCI │ Adapter
+│(MLflow)│(KServe) │(Argo)  │(Qdrant)│(LiteLLM)│(GỌI VÀO│ Layer
+│        │         │        │        │        │Hiếu — │
+│        │         │        │        │        │MOCK trước│
+└────┴────────┴────────┴────────┴────────┴────────┴──┘
+   Cross-cutting: Prometheus/Grafana | Keycloak
+   agents/mcp-servers/: mlops, k8s, metrics (3 server, xem cảnh báo mục 7)
 ```
 
-### The single most important design principle
-
-**The Adapter Pattern is the backbone**: each subsystem goes through one shared interface → mock it first, plug in the real system later, without modifying the Portal.
+### Adapter Pattern — nguyên tắc bất biến (đã có code thật, giữ nguyên 100%)
 
 ```python
+# adapters/interfaces.py — đã implement đúng trong repo
 class IModelRegistryAdapter(ABC):
-    def register_model(self, name, version, artifact_uri) -> ModelInfo: ...
-    def list_models(self, project) -> List[ModelInfo]: ...
+    def register_model(...) -> dict: ...
+    def list_models(...) -> list[dict]: ...
+    def get_model_metrics(...) -> dict: ...
 
+class IInferenceAdapter(ABC): ...
+class IWorkflowAdapter(ABC): ...
+class IVectorStoreAdapter(ABC): ...
+class ILLMGatewayAdapter(ABC): ...
 
-class MLflowRegistryAdapter(IModelRegistryAdapter): ...  # mock/real if Viettel uses MLflow
-
-
-class ViettelRegistryAdapter(IModelRegistryAdapter): ...  # write this once real info is available
+# CẦN THÊM (còn thiếu trong repo — việc tiếp theo):
+class ICIExecutorAdapter(ABC):
+    """Gọi vào netCI (Hiếu) để trigger/theo dõi pipeline generic.
+    Giữ MOCK cho tới khi Hiếu có API thật — KHÔNG chờ Hiếu để tiếp
+    tục phát triển Golden Path."""
+    def trigger_job(self, job_config) -> JobHandle: ...
+    def get_job_status(self, job_handle) -> JobStatus: ...
+    def get_console_log_stream(self, job_handle): ...
 ```
 
 ---
 
-## 5. TECH STACK — CROSS-CHECKED AGAINST GOVERNANCE (avoid misstatements when questioned)
+## 5. TECH STACK — ĐÃ SOÁT LẠI THEO REPO THẬT + RANH GIỚI VỚI HIẾU
 
-| Layer | Technology | Foundation |
+| Layer | Công nghệ (repo thật) | Ai sở hữu |
 |---|---|---|
-| Portal UI | **Backstage** | ✅ CNCF Graduated |
-| Orchestration API | FastAPI (Python) | Independent |
-| Golden path template | Backstage Software Templates | (part of Backstage) |
-| Auth | Keycloak | Independent (Red Hat), not CNCF |
-| Model Registry + Experiment | **MLflow** | LF AI & Data Foundation (NOT CNCF) |
-| Inference | **KServe** (or the lighter BentoML) | LF AI & Data Foundation |
-| Notebook | Kubeflow Notebooks / JupyterHub | LF AI & Data / independent |
-| CI | GitLab CI | Independent |
-| CD/GitOps | **ArgoCD** | ✅ CNCF Graduated |
-| Packaging | **Helm** | ✅ CNCF Graduated |
-| Policy | **OPA** | ✅ CNCF Graduated |
-| Observability | Prometheus (✅ CNCF) + Grafana/Loki (❌ not CNCF, Grafana Labs) | Mixed |
+| Portal UI | Backstage (`packages/app-backstage`, `packages/backend`) | ✅ Cường |
+| Orchestration API | FastAPI (`services/orchestration-api`) | ✅ Cường |
+| Auth | Keycloak | ✅ Cường (dùng cho Portal), netCI có thể có auth riêng cho Jenkins |
+| Model Registry + Experiment | MLflow | ✅ Cường |
+| Inference | KServe | ✅ Cường |
+| Pipeline Golden Path #1 | **Argo Workflows** (`infra/argo-workflows/train-register-template.yaml`) | ✅ Cường — ĐÂY LÀ QUYẾT ĐỊNH CHỐT LẠI: Cường tự orchestrate phần train/evaluate (đặc thù ML), KHÔNG cần Jenkins trực tiếp cho việc này |
+| Vector DB (RAG) | Qdrant | ✅ Cường |
+| LLM Gateway | LiteLLM | ✅ Cường |
+| CI/CD generic, multi-cluster, IaC Jenkins, ephemeral agent | **Jenkins** (qua netCI) | ❌ **Hiếu** — Cường chỉ gọi qua `netci_adapter.py` |
+| Deploy đa hạ tầng (Systemd/Docker/K8s qua Ansible) | **netCI Deploy Engine** | ❌ **Hiếu** — Cường gọi vào khi cần deploy thật lên hạ tầng ngoài K8s |
+| GitOps sync cơ chế (ArgoCD, Helm packaging cho KServe) | Cường tự phát triển trước (Canary theo accuracy — đặc thù ML, không chỉ health check generic); tích hợp/bàn giao vào netCI Deploy Engine sau khi ổn định | ✅ Cường (đã chốt — xem mục 9) |
+| Policy (model-specific: Evaluate Gate) | Custom logic + LLM-as-judge | ✅ Cường |
+| Policy (generic: resource limit, security scan) | OPA (nếu netCI cung cấp) hoặc tự làm nhẹ | ⚠️ Cần hỏi Hiếu |
+| Observability | Prometheus + Grafana | ✅ Cường |
+| Agentic Interface | MCP (3 server: mlops/k8s/metrics), Skills | ✅ Cường (xem cảnh báo scope mục 7) |
 
-**Standard talking point for presentations**: *"We prioritize CNCF projects for the infrastructure/platform layer (Backstage, ArgoCD, Helm, OPA, Prometheus), combined with industry-standard MLOps projects under the LF AI & Data Foundation (MLflow, Kubeflow, KServe) — the entire stack is open-source, avoiding vendor lock-in."*
+### Công nghệ ĐÃ CÂN NHẮC nhưng KHÔNG đưa vào stack — lý do giữ lại để nhớ
 
-### Languages used
-
-| Language | Used for |
-|---|---|
-| Python | Backend/API, Adapters, benchmark scripts |
-| TypeScript/React | Backstage custom plugin |
-| YAML | K8s manifests, Helm, Argo Workflow, Backstage Template |
-| Rego | Writing OPA policy rules (learn separately, 1-2 days) |
-| Bash | Utility scripts |
+| Công nghệ | Vì sao từng cân nhắc | Vì sao KHÔNG dùng |
+|---|---|---|
+| Crossplane | Kiến trúc "control plane vạn năng", CNCF Graduated 10/2025 | Chồng lấn ArgoCD/Helm, effort học không tương xứng; nhắc ở Roadmap |
+| Temporal | Giải quyết đúng vấn đề "chờ Approve lâu, không mất trạng thái" (durable workflow) | Sau khi rõ ranh giới với Hiếu: đây là bài toán tầng orchestration TỔNG QUÁT, nếu cần "chờ lâu" nên hỏi netCI có hỗ trợ không, KHÔNG tự dựng Temporal riêng |
+| Kusion | Hỗ trợ deploy cả K8s lẫn non-K8s (systemd/Ansible) | Đây CHÍNH LÀ phạm vi "netCI Deploy Engine (Ansible/Helm đa hạ tầng)" của Hiếu — không cần Cường tự làm |
+| Jenkins (tự vận hành trực tiếp) | Ban đầu tưởng phải tự học Kubernetes Plugin, Shared Library | Sau khi phân vai rõ: Jenkins hoàn toàn thuộc netCI (Hiếu), Cường chỉ gọi API |
+| Semantic Caching (Redis) | Tối ưu chi phí gọi LLM (ch.13 sách MLPE, Cost optimization) | Cơ chế tối ưu generic, không phải nghiệp vụ MLOps đặc thù; `chat.py` còn là stub — chưa có RAG thật để đo nhu cầu cache. Làm sau khi RAG chạy thật và có số liệu request trùng lặp |
+| NeMo Guardrails (sidecar K8s) | Input/output filter an toàn cho LLM (ch.13 sách MLPE, Governance) | Kiến trúc hạ tầng tổng quát, cùng nhóm với OPA ("⚠️ Cần hỏi Hiếu" ở bảng trên); nếu cần chặn PII/từ khóa cấm, chỉ nên viết 1 hàm filter nhỏ ngay trong `chat.py` — không dựng sidecar lúc Golden Path #2 chưa xong |
 
 ---
 
-## 6. DESIGN PATTERNS — THE 4 TO USE (don't cram in all 8)
+## 6. DESIGN PATTERN — ĐÃ HIỆN THỰC HÓA TRONG REPO
 
-| Pattern | Where it's applied | Why it's "worth mentioning" in the defense |
+| Pattern | Áp dụng ở đâu (file thật) | Trạng thái |
 |---|---|---|
-| **Adapter** | Connects MLflow/KServe/the real systems | The core — lets backends be swapped without touching the Portal |
-| **Template Method** | Defines the standard Golden Path skeleton, allows per-step overrides | Matches EXACTLY the "standard but customizable path" nature of a Golden Path |
-| **Chain of Responsibility** | Policy-check chain (OPA): resource limit → security scan → evaluation-passed | Matches the mechanism for enforcing several sequential conditions |
-| **Factory** | Picks the right Adapter based on config | Pairs naturally with Adapter, easy to extend |
-
-*(Facade, Strategy, Observer, Builder are secondary patterns — know them well enough to use where appropriate, no need to list all of them in the defense)*
+| **Adapter** | `adapters/interfaces.py` + 6 implementation | ✅ Đã code |
+| **Template Method** | Backstage Scaffolder (`examples/templates/hello-golden-path/`) | ✅ Đã có |
+| **Chain of Responsibility** | `evaluations/gate.py` (safety/correctness/relevance thresholds nối tiếp) | ✅ Đã code, cần mở rộng thêm netCI policy khi có |
+| **Factory** | Chọn Adapter theo config (mock vs thật) | ⚠️ Cần rà lại — kiểm tra có factory rõ ràng chưa hay đang hardcode |
 
 ---
 
-## 7. SCOPE — HOW MUCH GOLDEN PATH TO BUILD
+## 7. SCOPE — CẢNH BÁO THỰC TẾ (dựa trên soát repo)
 
-### Decision: 2 core golden paths + 1 stretch goal
+### Đã hoàn thành / đang tốt
+- Adapter Pattern đầy đủ 6 interface, code sạch, đúng docstring chuẩn
+- Evaluate Gate dùng LLM-as-judge (không chỉ threshold đơn giản) — điểm cộng lớn khi bảo vệ
+- Golden Path #1 có Argo Workflows template thật
+- LLMOps active scope (Vector DB, LLM Gateway, Prompt Registry) — đúng vì đã xác nhận nhu cầu thật
 
-| # | Golden Path | Role | Investment |
+### CẢNH BÁO — 3 điểm cần tự kiểm tra ngay
+
+1. **3 MCP server đã tồn tại (mlops/k8s/metrics), vượt khuyến nghị "1 proof-of-concept"** — mục 4.5 (bản trước) khuyến nghị chỉ 1 MCP tool nhẹ ở tuần cuối. Cần tự hỏi: có đang dành quá nhiều thời gian cho phần Agent-ready thay vì củng cố Golden Path #2 (phần lõi, quan trọng nhất theo ma trận ưu tiên) chưa?
+   → **Hành động**: kiểm tra Golden Path #2 (Register→Deploy) đã chạy end-to-end demo được chưa. Nếu CHƯA, tạm dừng mở rộng MCP, dồn lực hoàn thiện Golden Path #2 trước.
+
+2. **Evaluate Gate (`evaluations/gate.py`) mới chấm safety/correctness/relevance theo rubric, chưa có test đối kháng (adversarial/red-team)** — theo chương 13 sách *Machine Learning Platform Engineering*, đây là bước bắt buộc trước khi gắn nhãn "Production" cho 1 phiên bản model/prompt. Vì Gate là lõi của Golden Path #2 (ưu tiên số 1), đây là việc CỦNG CỐ lõi, không phải mở rộng phạm vi mới — nên làm trước phần LLMOps khác (caching, guardrails...).
+   → **Hành động**: thêm một bộ prompt jailbreak nhỏ (5-10 câu tấn công mẫu) vào `gate.py`, chạy trước khi cho phép chuyển trạng thái "Production".
+
+3. **`infra/opa-policies/`, `infra/helm-charts/`, `infra/argocd/` mới chỉ có README** ("week 8+") — đây là phần thực thi Golden Path #2 thật. **Đã chốt (mục 9): Cường tự phát triển GitOps sync (ArgoCD+Helm cho KServe) trước, không chờ netCI** — rủi ro phụ thuộc Hiếu ở hạng mục này đã được loại bỏ; việc còn lại thuần là effort tự làm, không phải rủi ro lịch trình người khác.
+
+### Scope chốt lại
+
+| # | Hạng mục | Vai trò | Trạng thái |
 |---|---|---|---|
-| 1 | **Train → Track → Register** | Standardizes the input side, addresses "high frequency" | Moderate |
-| 2 | **Register → Deploy** | Addresses both "most error-prone" + "highest risk" | **Deepest — the focus** |
-| 3 (stretch) | Rollback/Promote version | Adds onto #2, doesn't need to be its own path | If time allows (week 10-11) |
-
-**Why not do more**: Claude Code helps code faster, but does NOT shorten the time needed for design, real integration, testing, and benchmarking — that's the real bottleneck, not writing code.
-
-**Notebook**: only integrate at the minimum level (a redirect link), does NOT need its own golden path — far lower value than the two above.
+| 1 | Golden Path #1 (Train→Track→Register, Argo Workflows) | Lõi | Có nền, cần hoàn thiện |
+| 2 | Golden Path #2 (Register→Deploy, Evaluate Gate → ArgoCD/Helm hoặc netCI) | **Lõi — ưu tiên số 1 hiện tại** | Chưa hoàn thiện (infra/* mới README) |
+| 3 | LLMOps active (Vector DB, LLM Gateway, Prompt Registry) | Lõi mở rộng, đã xác nhận nhu cầu thật | Có nền tảng adapter |
+| 4 | MCP + Skills | Stretch — ĐANG VƯỢT SCOPE, cần rà soát | 3 server đã có, cân nhắc rút gọn còn 1 |
+| 5 | `netci_adapter.py` (mock) | Chuẩn bị sẵn sàng gọi Hiếu | **CẦN LÀM NGAY — còn thiếu file này** |
 
 ---
 
-## 8. 12-WEEK ROADMAP
+## 8. RANH GIỚI VỚI HIẾU — REPO, API CONTRACT, RỦI RO PHỤ THUỘC
 
-| Week | Content |
+### Repo: TÁCH RIÊNG, không chung monorepo
+
+| Lý do | Giải thích |
 |---|---|
-| 1 | Ask the mentor questions (see checklist in section 10). Read up on Golden Path/IDP/Backstage concepts BEFORE coding. Basic Backstage test-drive |
-| 2-3 | Lab setup: MLflow, fake GPU/mock inference, write Adapter interface + Mock Adapter |
-| 4-5 | Write the real Adapter if access is granted; write the BFF API (FastAPI) in parallel |
-| 6-7 | Golden Path #1: Train → Track → Register (Argo Workflows) |
-| 8-9 | Golden Path #2: Register → Deploy (Helm template + ArgoCD + OPA policy) |
-| 10 | Observability dashboard, start benchmarking; stretch: Rollback |
-| 11 | Finalize the report, slides, record a backup demo video, write a production roadmap |
-| 12 | Practice presentation with the mentor, revise, prepare for Q&A |
+| Chấm điểm độc lập | 2 người bảo vệ 2 đồ án riêng, cần git history tách bạch |
+| Stack khác nhau | netCI: Groovy/Ansible/Helm là chính; AI Delivery Portal: Python/TypeScript |
+| Đúng Adapter Pattern | Gọi qua API buộc ranh giới rõ ràng, tránh "tiện thì import thẳng code nội bộ" |
+
+### Cách giao tiếp — API Contract nhẹ (không cần repo thứ 3 nếu thấy cồng kềnh)
+- Thống nhất OpenAPI spec hoặc chí ít danh sách endpoint + request/response mẫu cho: `trigger_job`, `get_job_status`, `get_console_log_stream`.
+- Mỗi bên tự giữ bản mô tả kỳ vọng trong repo của mình, review chéo định kỳ.
+
+### Rủi ro phụ thuộc — cách xử lý
+- **`netci_adapter.py` PHẢI ở dạng mock hoàn chỉnh cho tới khi Hiếu có API thật** — tuyệt đối không để tiến độ Golden Path #2 phụ thuộc vào tiến độ netCI (Hiếu có khối lượng SRE nặng: multi-cluster, SBOM, ký artifact — rủi ro chậm cao hơn).
+- Đây chính là lý do Adapter Pattern được chọn từ đầu — không phải chỉ cho MLflow/KServe, mà cho CẢ hệ thống anh em (netCI) cũng áp dụng cùng nguyên tắc.
+
+### Điều kiện để hỗ trợ Hiếu (nếu dư thời gian) — 3 điều kiện, đủ CẢ 3 mới hành động
+1. Golden Path #1 + #2 của MÌNH đã chạy ổn định, demo/benchmark được.
+2. Có quỹ thời gian dư THỰC SỰ (nhiều tuần, không phải vài buổi rảnh).
+3. Hiếu XÁC NHẬN cần hỗ trợ — không tự đoán.
+
+Nếu đủ điều kiện: chỉ hỗ trợ đúng **điểm giao thoa** (API contract, làm early-tester cho API của Hiếu) — KHÔNG học lại toàn bộ mảng SRE sâu (multi-cluster ops, SBOM) vì không tương xứng effort/lợi ích.
 
 ---
 
-## 9. BENCHMARKS — HOW TO PROVE VALUE WITH DATA
+## 9. CÂU HỎI CÒN MỞ — CẦN HỎI HIẾU/MENTOR SỚM
 
-### General principles
-1. Have a clear baseline (manual / default).
-2. Measure under the same conditions.
-3. At least 3 kinds of metrics: effectiveness, savings, experience.
-4. Visual charts, not just tables of numbers.
-
-### Benchmark suite for the Portal (self-measurable, no need to wait for real users)
-
-| How to measure | Example figures |
-|---|---|
-| Manual steps vs. through the Portal (self-measured, repeated multiple times) | "Manual deploy: 25 min/12 steps → via Portal: 3 min/2 steps, an 88% reduction" |
-| Fault injection (deliberately introduce common config errors) | "20 error scenarios: manually, 14/20 slip through to production; via the golden path, 18/20 are blocked" |
-| Standardization coverage | "70% of manual touchpoints eliminated thanks to the golden path" |
-| Small A/B with colleagues (if possible) | Average completion time, a small sample is still valuable at an internship scale |
-| System performance | API latency, orchestration layer throughput |
-
-**Presentation note**: emphasize "measured repeatedly, across many scenarios" rather than trying to claim "large scale" — a small sample is still convincing if repeated under control.
+- [x] Cơ chế GitOps sync (ArgoCD+Helm) cho việc deploy MODEL lên KServe — **CHỐT: Cường tự phát triển trước** (vì có yêu cầu đặc thù: Canary theo accuracy, không chỉ health check generic), sau đó mới tích hợp/bàn giao chung vào netCI Delivery Platform khi cả 2 bên sẵn sàng.
+- [ ] OPA (resource limit, security scan generic) — netCI có cung cấp sẵn không, hay Cường tự làm nhẹ riêng cho scope của mình?
+- [ ] netCI có endpoint nào để lấy console log stream nhúng vào Portal không (đúng yêu cầu UX "không rời khỏi Portal")?
+- [ ] Nếu Golden Path #2 cần "chờ Approve lâu" (durable wait) — netCI/Jenkins có cơ chế nào hỗ trợ, hay đây là bài toán Cường tự xử lý ở tầng Orchestration API riêng (không cần Temporal, có thể chỉ cần lưu trạng thái "pending approval" vào DB + webhook)?
 
 ---
 
-## 10. CHECKLIST OF QUESTIONS FOR THE MENTOR (do this in week 1)
+## 10. CHECKLIST HỎI MENTOR (còn hiệu lực, bổ sung ở mục 9)
 
-- [ ] What does the current AI Platform run on — self-built, or MLflow/Kubeflow/Seldon?
-- [ ] What's currently serving inference — KServe, Seldon, Triton, or custom?
-- [ ] Is there an internal API/SDK the Portal can call into? Can a service account be granted?
-- [ ] What does current auth use (SSO/LDAP/Keycloak)?
-- [ ] On average, how long does the team currently take to deploy a model? (→ a golden number for the problem-statement slide)
-- [ ] Have there been incidents caused by lack of standardization/missing health checks?
-- [ ] Is there a clear rollback process, or is it handled manually?
-- [ ] Is a dedicated lab cluster available for dev/test?
-- [ ] Does Viettel have a real internal need for LLM/chatbot use cases right now? (decides whether to go deep on LLMOps)
-
-**Principle**: even getting just 1-2 real numbers/stories means the gap is no longer an assumption — it's a problem confirmed by an insider. This is the difference between a defense that "sounds reasonable" and one that's genuinely convincing.
+- [x] AI Platform hiện tại dùng nền tảng gì — ĐÃ XÁC NHẬN có Qwen serving, fine-tune, cost tracking
+- [ ] Team hiện mất trung bình bao lâu để deploy 1 model? (số liệu vàng cho slide vấn đề — vẫn cần lấy)
+- [ ] Có từng xảy ra sự cố do thiếu chuẩn hóa/thiếu healthcheck không?
+- [ ] Có quy trình rollback rõ ràng chưa?
+- [ ] Có được cấp cluster lab riêng để dev/test không?
 
 ---
 
-## 11. DEFENSE SLIDE STRUCTURE (15-18 slides)
+## 11. BỐ CỤC SLIDE BẢO VỆ — CẬP NHẬT KHUNG 2 SẢN PHẨM
 
 ```
-Part 1 — Introduction & Problem (3 slides)
-  1. Cover slide
-  2. Current AI Platform context
-  3. ⭐ The real problem (pain point backed by data) — THE MOST IMPORTANT SLIDE
-
-Part 2 — Solution & Architecture (5-6 slides)
-  4. Solution overview (before/after)
-  5. System architecture
-  6. Technology Justification (CNCF/LF AI & Data)
-  7. Golden Path #1
-  8. Golden Path #2 (the focus)
-  9. Adapter Pattern / extensibility
-
-Part 3 — Demo & Results (4-5 slides)
-  10. Demo (live + backup video)
-  11. Time/step-count benchmark
-  12. Blocked-error-count benchmark
-  13. Observability dashboard
-
-Part 4 — Evaluation (2 slides)
-  14. Current limitations (proactively state them, shows honesty)
-  15. Lessons learned
-
-Part 5 — Vision (2 slides)
-  16. ⭐ Roadmap to Production — THE 2ND MOST IMPORTANT SLIDE
-  17. Conclusion
+1. Trang bìa (ghi rõ: Phase 2 — GitOps for Model, song song với netCI của Hiếu)
+2. Bối cảnh AI Platform + vị trí trong bức tranh 2 sản phẩm (sơ đồ mục 1)
+3. ⭐ Vấn đề thật (pain point — bổ sung số liệu Qwen/fine-tune nếu có)
+4. Giải pháp tổng quan — nhấn: "netCI là động cơ, mình là bộ não MLOps"
+5. Kiến trúc hệ thống (sơ đồ mục 4, có nhánh Agent Interface — MCP)
+6. Adapter Pattern — minh chứng bằng code thật (interfaces.py)
+7. Golden Path #1 (Argo Workflows)
+8. Golden Path #2 (trọng tâm) — Evaluate Gate LLM-as-judge, GitOps sync
+9. LLMOps active: Vector DB + LLM Gateway + Prompt Registry (case thật: Qwen)
+10. Demo (live + video backup)
+11. Benchmark thời gian/số bước
+12. Dashboard observability
+13. (nếu MCP ổn định) Demo agent gọi Golden Path qua MCP
+14. Giới hạn hiện tại — nêu rõ phần phụ thuộc netCI đang mock
+15. Roadmap Production — bao gồm Crossplane/Temporal/Kusion như hướng tương lai (không phải hiện tại)
+16. Kết luận
 ```
 
-**The 2 slides that decide "standing out"**: Slide 3 (The real problem) and Slide 16 (Production roadmap) — these are the two places that show practical/business thinking, not just pure technical work, which is exactly what helps you stand out for a full-time offer.
+---
+
+## 12. CÂU TRẢ LỜI MẪU CHO CÂU HỎI KHÓ
+
+**Q: "Sao không tự làm Jenkins/CI-CD, lại đi gọi qua netCI của người khác?"**
+> "Việc chuẩn hóa CI/CD generic (multi-cluster Jenkins, ephemeral agent, SBOM) là bài toán hạ tầng tổng quát — Adapter Pattern của em cho phép tách biệt rõ: em tập trung vào NGHIỆP VỤ đặc thù MLOps (Evaluate Gate, Drift→Retrain) là nơi tạo giá trị khác biệt, còn cơ chế thực thi generic thì tái sử dụng, tránh trùng lặp công sức với đề tài netCI đang chạy song song."
+
+**Q: "Nếu netCI của Hiếu chưa xong, Portal của em có chạy được không?"**
+> "Có — `netci_adapter.py` được thiết kế mock hoàn chỉnh ngay từ đầu, đúng nguyên tắc Adapter Pattern đã áp dụng cho mọi hệ thống con khác. Golden Path của em không phụ thuộc tiến độ netCI để phát triển và demo."
+
+**Q: "Golden path của em dừng ở Deploy, model xuống cấp thì sao?"**
+> "Em đã có `agents/skills/evaluate_drift.py` làm nền cho vòng lặp Retrain — phần trigger tự động nằm trong roadmap, nhưng cơ chế phát hiện drift đã có sẵn."
+
+**Q: "Sao lại thêm MCP/Agent, đề bài đâu có yêu cầu?"**
+> "Orchestration API thiết kế theo Facade Pattern — thêm kênh truy cập cho AI Agent gần như không phát sinh rủi ro kiến trúc. Đây là minh chứng cho việc thiết kế Adapter/Facade từ đầu là đúng đắn, đón đầu xu hướng Agentic Platform Engineering."
 
 ---
 
-## 12. SAMPLE ANSWERS FOR TOUGH QUESTIONS
+## 13. TÀI LIỆU HỌC — GIỮ NGUYÊN, BỔ SUNG
 
-**Q: "Why not just use the existing Backstage/MLflow/Kueue as-is, why build your own?"**
-> "I'm not rewriting these systems — the Portal is a DevEx/orchestration layer on top, using proven CNCF/LF AI & Data projects already validated at large-scale production. My value lies in designing golden paths that fit Viettel's specific MLOps needs, integrating them into one standardized flow with policy enforcement, and benchmarks that prove the impact — something using each tool in isolation doesn't give you on its own."
-
-**Q: "Your golden path stops at Deploy — what happens when the model degrades?"**
-> "I designed the Monitor dashboard as the foundation for the Retrain loop — given the 3-month timeframe, the automatic retrain-trigger piece is in the proposed roadmap (slide 16), but the current architecture is already built to extend, since the Adapter pattern lets a new step be plugged in without breaking the design."
-
-**Q: "Can you actually measure objective benchmarks — is a small sample reliable?"**
-> "I benchmark two ways: (1) self-measured, repeating the same scenario multiple times (manual vs. via the Portal) for reliability through repetition, and (2) fault-injection with controlled error scenarios — neither depends on having a large number of real users, which fits the 3-month timeframe."
+- MLOps Zoomcamp, Made With ML, Full Stack Deep Learning (LLMOps module) — như bản trước
+- *Introducing MLOps*, *Practical MLOps*, *Building Machine Learning Pipelines*
+- `mlflow.org/docs`, `kserve.github.io`, `backstage.io/docs`
+- MCP specification (`modelcontextprotocol.io`) — đọc kỹ hơn vì đã có 3 server thật trong repo, cần đảm bảo đúng chuẩn
+- **MỚI**: Đọc kỹ tài liệu bàn giao/API của netCI khi Hiếu có bản đầu tiên — ưu tiên hơn đọc thêm về Temporal/Kusion (đã hạ cấp khỏi scope)
 
 ---
 
-## 13. LEARNING RESOURCES — A CURATED LIST (no need to read everything, pick by phase)
+## 14. NGUYÊN TẮC GHI NHỚ TỔNG QUÁT
 
-### Courses (priority, hands-on heavy)
-- **MLOps Zoomcamp** (DataTalks.Club) — free, 3 months, uses the exact MLflow/Docker/Prometheus/Grafana/GitHub Actions stack — closest match to this project.
-- **Made With ML** — free, teaches building an end-to-end ML system (tracking, testing, serving, monitoring).
-- **Full Stack Deep Learning — LLM Bootcamp** — the "LLMOps: Deployment and Learning in Production" module, use if going deep on LLMOps.
-
-### Books
-- *Introducing MLOps* (Mark Treveil & Dataiku Team) — intro-level, enterprise context (fits Viettel).
-- *Practical MLOps* — hands-on CI/CD for ML, infrastructure, monitoring.
-- *Building Machine Learning Pipelines* (Hapke & Nelson) — deep dive on pipelines/orchestration.
-
-### Technical documentation
-- `mlflow.org/docs` — read "Model Registry" + "Tracking" carefully before writing the Adapter.
-- `kserve.github.io/website` — the "InferenceService" concept.
-- `backstage.io/docs/overview/what-is-backstage` — read "Concepts" before coding.
-- The original **"Golden Paths" — Spotify Engineering** blog post (read the original, where the concept originated).
-- `platformengineering.org` — Platform Engineering definitions & case studies.
-
-### Academic papers (cite for the Related Work section, no need to implement)
-- *Themis: Fair and Efficient GPU Cluster Scheduling* (NSDI 2020) — if you want to cross-reference fairness.
-- (Mainly a reference point for large-scale MLOps systems thinking — not required for the Portal project, more relevant to the Scheduler side if applicable.)
+1. Luôn quay lại **5 câu hỏi cốt lõi** (mục 0, đã thêm câu hỏi ranh giới với netCI)
+2. Chiều sâu > chiều rộng — **Golden Path #2 là ưu tiên số 1 hiện tại**, không mở rộng MCP thêm cho tới khi #2 xong
+3. Mọi thiết kế phải có lý do — kể cả lý do KHÔNG dùng 1 công nghệ (Temporal/Kusion/Crossplane) cũng cần ghi lại, không chỉ lý do có dùng
+4. Chủ động nêu giới hạn — đặc biệt phần đang mock chờ netCI
+5. Số liệu thật từ Viettel > giả định — đã có 1 phần (Qwen), còn thiếu số liệu thời gian deploy
+6. **Adapter Pattern là bảo hiểm — áp dụng cho CẢ hệ thống anh em (netCI), không chỉ hệ thống AI Platform**
+7. Nghĩ như Platform Engineer thật — golden path giải quyết pain point thật, đo lường được, có đường tới production
+8. Agent-ready là triết lý thiết kế, nhưng **không được lấn át việc hoàn thiện Golden Path lõi** — 3 MCP server hiện tại là tín hiệu cần tự kiểm tra lại ưu tiên
+9. **MỚI — Ranh giới rõ với đội nhóm**: trước khi code bất kỳ tính năng "nghe hay" nào, hỏi câu lọc #5 (mục 0) — đây là nghiệp vụ của mình hay hạ tầng tổng quát của người khác?
+10. **MỚI — Chỉ giúp đồng đội khi đủ 3 điều kiện** (mục 8) — đừng để tinh thần nhiệt tình phá vỡ kỷ luật scope của chính mình
 
 ---
 
-## 14. OVERALL GUIDING PRINCIPLES (apply to every decision over the 3 months)
-
-1. **Always come back to the 3 core questions** (section 0) when unsure what to do first.
-2. **Depth > breadth** — 2 golden paths done thoroughly beats 4 done superficially.
-3. **Every design decision needs a reason** — don't pick a technology/pattern "because it looks cool", always be able to answer "why this one".
-4. **Proactively state limitations** rather than let the committee find them — shows honesty, professionalism.
-5. **Real numbers from Viettel > assumed numbers** — spend time asking the mentor as early as possible.
-6. **The Adapter Pattern is insurance** — designed to switch from mock to real without rewriting anything.
-7. **Don't just do a school project — think like a real Platform Engineer**: the golden path must solve a real pain point, be measurable, and have a path to production.
-
----
-
-*This playbook should be reviewed at the end of each major phase (after week 3, week 7, week 10) to adjust based on what actually comes up while working with the mentor and Viettel's real systems.*
+*Cập nhật lần 3, sau khi: (a) mentor phân Phase rõ ràng giữa Cường (GitOps for Model) và Hiếu (netCI); (b) soát trực tiếp repo thật `AI-delivery-portal`. Review tiếp theo nên làm ngay sau khi: Golden Path #2 chạy end-to-end lần đầu, VÀ sau buổi thống nhất API contract với Hiếu.*
