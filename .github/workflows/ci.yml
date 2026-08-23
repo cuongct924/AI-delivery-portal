@@ -6,6 +6,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,6 +21,7 @@ jobs:
   # ---------------------------------------------------------------------
   security-gitleaks:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,6 +31,7 @@ jobs:
 
   security-checkov:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - run: docker run --rm -v "${{ github.workspace }}:/repo" -w /repo
@@ -42,6 +45,7 @@ jobs:
   python-checks:
     needs: [security-gitleaks, security-checkov]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       # NOTE: plain ubuntu-latest, not a python:3.12-slim container — that
@@ -88,6 +92,7 @@ jobs:
   frontend-checks:
     needs: [security-gitleaks, security-checkov]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     container:
       image: node:22-bookworm
     steps:
@@ -116,13 +121,18 @@ jobs:
   docker-build-and-scan:
     needs: [python-checks, frontend-checks]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
+      # Official action instead of `curl | sh` from a script URL.
       - name: Install Trivy
-        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+        uses: aquasecurity/setup-trivy@v0.2.6
+        with:
+          version: v0.74.0
+          cache: true
       - name: Set image tag vars
         run: |
           echo "SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)" >> "$GITHUB_ENV"

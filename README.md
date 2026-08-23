@@ -10,9 +10,7 @@ An MLOps platform built as an Internal Developer Platform (IDP) for AI/ML worklo
 - Provides **golden paths** so developers and ML engineers can ship standard MLOps/LLMOps workflows without hand-rolling infrastructure each time
 
 Official structure: Portal (Backstage) + Orchestration API (FastAPI) + AI Agent/MCP
-+ Adapter layer + GitOps infrastructure — all in one repo (the Backstage app has
-been merged into `packages/`, no longer split into a separate repo/folder like
-the initial "labs" stage).
++ Adapter layer + GitOps infrastructure.
 
 ## Directory structure
 
