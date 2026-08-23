@@ -151,6 +151,72 @@ proxy:
       target: 'http://localhost:8000'
       changeOrigin: true
 
+    # infra/monitoring — prometheus service in docker-compose.yml
+    '/prometheus/api':
+      target: 'http://localhost:9090/api/v1/'
+      changeOrigin: true
+
+    # infra/monitoring — grafana service in docker-compose.yml (anonymous
+    # viewer access enabled locally, no auth header needed)
+    '/grafana/api':
+      target: 'http://localhost:3001'
+      changeOrigin: true
+
+prometheus:
+  proxyPath: /prometheus/api
+  uiUrl: http://localhost:9090
+
+grafana:
+  domain: http://localhost:3001
+  proxyPath: /grafana/api
+  unifiedAlerting: true
+
+# placeholder — infra/argocd is a stub, see roadmap.md Week 8-9
+argocd:
+  username: ${ARGOCD_USERNAME}
+  password: ${ARGOCD_PASSWORD}
+  appLocatorMethods:
+    - type: config
+      instances:
+        - name: local
+          url: https://localhost:8080
+
+app:
+  # @cakecrusher/plugin-litellm — key management UI for the LiteLLM gateway
+  # already running in docker-compose.yml (see adapters/llm_gateway_adapter.py)
+  litellm:
+    apiKey: ${LITELLM_MASTER_KEY}
+    baseUrl: ${LITELLM_GATEWAY_URL}
+    budgetRequired: false
+
+# @backstage-community/plugin-mcp-chat(-backend) — chat UI wired to the
+# LiteLLM gateway and the 3 MCP servers in agents/mcp-servers/
+mcpChat:
+  providers:
+    - id: litellm
+      baseUrl: ${LITELLM_GATEWAY_URL}
+      token: ${LITELLM_MASTER_KEY}
+      model: claude-sonnet-5 # model_name in infra/llm-gateways/litellm-config.yaml
+  mcpServers:
+    - id: mlops-mcp
+      name: MLOps MCP Server
+      type: stdio
+      scriptPath: agents/mcp-servers/mlops-server/server.py
+      env:
+        PYTHONPATH: '.'
+    - id: k8s-mcp
+      name: Kubernetes MCP Server
+      type: stdio
+      scriptPath: agents/mcp-servers/k8s-server/server.py
+      env:
+        PYTHONPATH: '.'
+    - id: metrics-mcp
+      name: Metrics MCP Server
+      type: stdio
+      scriptPath: agents/mcp-servers/metrics-server/server.py
+      env:
+        PYTHONPATH: '.'
+
 # Reference documentation http://backstage.io/docs/features/techdocs/configuration
 # Note: After experimenting with basic setup, use CI/CD to generate docs
 # and an external cloud storage when deploying TechDocs for production use-case.
