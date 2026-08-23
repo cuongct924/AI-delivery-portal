@@ -5,6 +5,13 @@ app:
   # Enable all packages by default, this will discover packages from packages/app/package.json
   packages: all
 
+  # @cakecrusher/plugin-litellm — key management UI for the LiteLLM gateway
+  # already running in docker-compose.yml (see adapters/llm_gateway_adapter.py)
+  litellm:
+    apiKey: ${LITELLM_MASTER_KEY}
+    baseUrl: ${LITELLM_GATEWAY_URL}
+    budgetRequired: false
+
   extensions:
     # Default landing page configuration.
     # The catalog is mounted at /catalog by default but is overridden here to
@@ -145,8 +152,7 @@ integrations:
 
 proxy:
   endpoints:
-    # For the prompt-registry plugin (packages/app-backstage) to call
-    # services/orchestration-api (running locally via uvicorn or docker compose).
+    # Proxies prompt-registry calls to services/orchestration-api.
     '/orchestration-api':
       target: 'http://localhost:8000'
       changeOrigin: true
@@ -156,8 +162,7 @@ proxy:
       target: 'http://localhost:9090/api/v1/'
       changeOrigin: true
 
-    # infra/monitoring — grafana service in docker-compose.yml (anonymous
-    # viewer access enabled locally, no auth header needed)
+    # infra/monitoring grafana — anonymous access locally, no auth header needed.
     '/grafana/api':
       target: 'http://localhost:3001'
       changeOrigin: true
@@ -181,16 +186,7 @@ argocd:
         - name: local
           url: https://localhost:8080
 
-app:
-  # @cakecrusher/plugin-litellm — key management UI for the LiteLLM gateway
-  # already running in docker-compose.yml (see adapters/llm_gateway_adapter.py)
-  litellm:
-    apiKey: ${LITELLM_MASTER_KEY}
-    baseUrl: ${LITELLM_GATEWAY_URL}
-    budgetRequired: false
-
-# @backstage-community/plugin-mcp-chat(-backend) — chat UI wired to the
-# LiteLLM gateway and the 3 MCP servers in agents/mcp-servers/
+# Chat UI wired to the LiteLLM gateway + 3 MCP servers.
 mcpChat:
   providers:
     - id: litellm
