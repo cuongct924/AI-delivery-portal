@@ -8,6 +8,8 @@ from mlflow.tracking import MlflowClient
 from adapters.interfaces import IModelRegistryAdapter
 
 
+# TODO: expose via orchestration-api for the `orchestration:register-model`
+# Custom Scaffolder Action (Golden Path #1) to call.
 class MlflowAdapter(IModelRegistryAdapter):
     def __init__(self, tracking_uri: str | None = None):
         self.tracking_uri = tracking_uri or os.getenv(

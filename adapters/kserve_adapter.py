@@ -17,6 +17,8 @@ VERSION = "v1beta1"
 PLURAL = "inferenceservices"
 
 
+# TODO: expose via orchestration-api for the `orchestration:deploy-model`
+# Custom Scaffolder Action (Golden Path #2) — decide direct-call vs GitOps-commit first.
 class KServeAdapter(IInferenceAdapter):
     def __init__(self, namespace: str = "default"):
         config.load_kube_config()

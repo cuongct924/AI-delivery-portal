@@ -11,6 +11,8 @@ import httpx
 from adapters.interfaces import IWorkflowAdapter
 
 
+# TODO: expose via orchestration-api for the `orchestration:trigger-training`
+# Custom Scaffolder Action (Golden Path #1) to call.
 class ArgoAdapter(IWorkflowAdapter):
     def __init__(self, base_url: str | None = None, namespace: str = "default"):
         self.base_url = base_url or os.getenv("ARGO_SERVER_URL", "http://localhost:2746")
