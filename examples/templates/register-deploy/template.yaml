@@ -1,0 +1,53 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: register-deploy
+  title: "Register → Deploy (Golden Path #2, test)"
+  description: >
+    Second test template — doesn't call real KServe/ArgoCD yet, just logs
+    information to understand how the Scaffolder mechanism works before
+    writing a real Custom Action.
+  tags:
+    - mlops
+    - test
+spec:
+  owner: user:guest
+  type: service
+
+  parameters:
+    - title: Enter model to deploy
+      required:
+        - modelName
+        - modelVersion
+      properties:
+        modelName:
+          title: Model name
+          type: string
+          description: E.g. "fraud-detection"
+        modelVersion:
+          title: Version
+          type: string
+          description: E.g. "v1.0.0"
+
+  steps:
+    - id: log-policy-check
+      name: "Log info (mock policy-check step)"
+      action: debug:log
+      input:
+        message: "Checking policy for model ${{ parameters.modelName }} version ${{ parameters.modelVersion }} (mock — will be replaced with OPA/manual validation)"
+
+    - id: log-deploy
+      name: "Log completion (mock deploy step)"
+      action: debug:log
+      input:
+        message: "Finished 'deploying' ${{ parameters.modelName }}:${{ parameters.modelVersion }} (this is a mock step — will be replaced with an HTTP call to FastAPI in week 8-9)"
+
+  output:
+    text:
+      - title: Result
+        content: |
+          Golden path test complete for model **${{ parameters.modelName }}**
+          version **${{ parameters.modelVersion }}**.
+
+          Next step (week 8-9): replace `debug:log` with a real Custom Action
+          that calls the FastAPI backend, which then calls the Adapter to KServe/ArgoCD.

@@ -56,7 +56,7 @@ make check      # lint + typecheck + test
 ```
 
 - Portal UI: `http://localhost:3000` & Backend: `http://localhost:7007`
-- Catalog is preconfigured in [`app-config.yaml`](app-config.yaml) to read [`examples/catalog/model-entity.yaml`](examples/catalog/model-entity.yaml) and the [`hello-golden-path`](examples/templates/hello-golden-path/template.yaml) template
+- Catalog is preconfigured in [`app-config.yaml`](app-config.yaml) to read [`examples/catalog/model-entity.yaml`](examples/catalog/model-entity.yaml) and the [`train-track-register`](examples/templates/train-track-register/template.yaml) / [`register-deploy`](examples/templates/register-deploy/template.yaml) templates
 - **Prompt Registry** (sidebar page, from [`plugins/prompt-registry/`](plugins/prompt-registry/)) reads data through the `/orchestration-api` proxy — [`orchestration-api`](services/orchestration-api/) must be running (`docker compose up` or local `uvicorn`) for data to appear
 
 ### Test CI locally

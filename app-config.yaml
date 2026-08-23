@@ -262,9 +262,15 @@ catalog:
       rules:
         - allow: [Component]
 
-    # AI Delivery Portal — first Software Template golden path
+    # AI Delivery Portal — Golden Path #1 (Train→Track→Register)
     - type: file
-      target: ../../examples/templates/hello-golden-path/template.yaml
+      target: ../../examples/templates/train-track-register/template.yaml
+      rules:
+        - allow: [Template]
+
+    # AI Delivery Portal — Golden Path #2 (Register→Deploy)
+    - type: file
+      target: ../../examples/templates/register-deploy/template.yaml
       rules:
         - allow: [Template]
 

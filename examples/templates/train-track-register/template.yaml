@@ -1,8 +1,8 @@
 apiVersion: scaffolder.backstage.io/v1beta3
 kind: Template
 metadata:
-  name: hello-golden-path
-  title: "Hello Golden Path (test)"
+  name: train-track-register
+  title: "Train → Track → Register (Golden Path #1, test)"
   description: >
     First test template — doesn't call real MLflow yet, just logs information
     to understand how the Scaffolder mechanism works before writing a real Custom Action.

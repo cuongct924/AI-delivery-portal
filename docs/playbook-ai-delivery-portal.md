@@ -214,7 +214,7 @@ class ICIExecutorAdapter(ABC):
 | Pattern | Áp dụng ở đâu (file thật) | Trạng thái |
 |---|---|---|
 | **Adapter** | `adapters/interfaces.py` + 6 implementation | ✅ Đã code |
-| **Template Method** | Backstage Scaffolder (`examples/templates/hello-golden-path/`) | ✅ Đã có |
+| **Template Method** | Backstage Scaffolder (`examples/templates/train-track-register/`, `register-deploy/`) | ✅ Đã có |
 | **Chain of Responsibility** | `evaluations/gate.py` (safety/correctness/relevance thresholds nối tiếp) | ✅ Đã code, cần mở rộng thêm netCI policy khi có |
 | **Factory** | Chọn Adapter theo config (mock vs thật) | ⚠️ Cần rà lại — kiểm tra có factory rõ ràng chưa hay đang hardcode |
 
