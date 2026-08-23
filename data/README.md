@@ -1,8 +1,8 @@
 # data
 
 Datasets tracked with [DVC](https://dvc.org) — actual files live in an S3-compatible
-remote (`minio` service in `docker-compose.yml` for local dev; swap in real Viettel
-S3 credentials later, only `.env`'s `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`
+remote (`minio` service in `docker-compose.yml`, self-hosted for local dev; swap in
+real S3 credentials later if needed, only `.env`'s `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`
 change, `.dvc/config` stays the same).
 
 Only the small `.dvc` pointer files (md5 hash + size) are committed to git —

@@ -1,8 +1,8 @@
 """Shared contract for every Adapter — implemented via the Adapter Pattern.
 
-Principle: switching from Mock/MLflow to Viettel's real system only requires
-adding one new class that implements this interface, without touching code
-that already depends on the interface.
+Principle: switching from Mock/MLflow to a real self-hosted backend only
+requires adding one new class that implements this interface, without
+touching code that already depends on the interface.
 """
 
 from abc import ABC, abstractmethod

@@ -55,7 +55,7 @@ packages/            Portal (Backstage) — app-backstage (React/TS UI) + backen
 plugins/              Backstage plugins — prompt-registry (Prompt version UI)
 services/             orchestration-api — FastAPI BFF, MCP client, auth, evaluations
 agents/               AI Agent & MCP — mcp-servers/, skills/, prompts/
-adapters/             Adapter Pattern — MLflow, KServe, Argo, Qdrant, LiteLLM, Viettel (stub)
+adapters/             Adapter Pattern — MLflow, KServe, Argo, Qdrant, LiteLLM
 infra/                GitOps infra — monitoring/vector-dbs/llm-gateways (active); helm-charts/argocd/opa-policies (week 8+)
 examples/             sample Catalog entity + Software Template (wired into app-config.yaml)
 docs/                 architecture, roadmap, playbook

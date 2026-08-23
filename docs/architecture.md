@@ -28,7 +28,7 @@ file is just a summary for quick lookup while coding.
    (`services/orchestration-api/` once created).
 2. **Every Adapter implements the same shared interface**
    (`IModelRegistryAdapter`, `IInferenceAdapter`...) — so switching from Mock
-   to Viettel's real Adapter only requires adding one new class, without
+   to a real self-hosted backend only requires adding one new class, without
    touching existing code.
 3. **2 core Golden Paths**: Train→Track→Register, Register→Deploy. Do not add
    a third golden path unless the first two are already stable (see `roadmap.md`).
