@@ -1,3 +1,21 @@
-# Add patterns of files dvc should ignore, which could improve
-# the performance. Learn more at
-# https://dvc.org/doc/user-guide/dvcignore
+# DVC-specific ignore — separate from .gitignore, DVC does not read it.
+# Excludes heavy/generated dirs so `dvc status`/`dvc add .` don't scan them.
+
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+dist-types/
+dist
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.cache/
+.pytest_cache/
+.ruff_cache/
+coverage/
+htmlcov/
