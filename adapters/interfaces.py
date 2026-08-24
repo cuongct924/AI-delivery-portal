@@ -68,3 +68,16 @@ class IFeatureStoreAdapter(ABC):
 
     @abstractmethod
     def get_online_features(self, entity_id: str, feature_names: list[str]) -> dict: ...
+
+
+class INotebookAdapter(ABC):
+    @abstractmethod
+    def create_notebook(
+        self, environment: str, ram_gb: int, gpu_type: str | None = None
+    ) -> dict: ...
+
+    @abstractmethod
+    def get_notebook_status(self, notebook_id: str) -> dict: ...
+
+    @abstractmethod
+    def delete_notebook(self, notebook_id: str) -> dict: ...
