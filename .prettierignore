@@ -2,3 +2,17 @@ dist
 dist-types
 coverage
 .vscode
+
+# node_modules is skipped by Prettier's own default, no need to list it here.
+# .venv is NOT skipped by default — confirmed it flags vendored .md/.json
+# files from Python packages (e.g. AUTHORS.md) without this.
+.venv/
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.cache/
+.pytest_cache/
+.ruff_cache/
