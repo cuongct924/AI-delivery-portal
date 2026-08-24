@@ -26,7 +26,7 @@ make run-orchestration-api / run-mlops-mcp / run-k8s-mcp / run-metrics-mcp
 
 Local infra:
 ```bash
-docker compose up -d   # mlflow, keycloak, prometheus, grafana, qdrant, litellm, orchestration-api, 3 MCP servers
+docker compose up -d   # mlflow, keycloak, prometheus, grafana, qdrant, minio, litellm, orchestration-api, 3 MCP servers
 bash scripts/run-mcp-local.sh mlops|k8s|metrics   # run one MCP server without Docker
 ```
 
@@ -55,9 +55,10 @@ packages/            Portal (Backstage) — app-backstage (React/TS UI) + backen
 plugins/              Backstage plugins — prompt-registry (Prompt version UI)
 services/             orchestration-api — FastAPI BFF, MCP client, auth, evaluations
 agents/               AI Agent & MCP — mcp-servers/, skills/, prompts/
-adapters/             Adapter Pattern — MLflow, KServe, Argo, Qdrant, LiteLLM
+adapters/             Adapter Pattern — MLflow, KServe, Argo, Qdrant, LiteLLM, Feast, JupyterHub
+data/                 DVC-tracked datasets — pointer files in git, real data in an S3-compatible remote
 infra/                GitOps infra — monitoring/vector-dbs/llm-gateways (active); helm-charts/argocd/opa-policies (week 8+)
-examples/             sample Catalog entity + Software Template (wired into app-config.yaml)
+examples/             Catalog entity + 2 Golden Path templates (train→track→register, register→deploy), wired into app-config.yaml
 docs/                 architecture, roadmap, playbook
 ```
 
@@ -71,6 +72,3 @@ docs/                 architecture, roadmap, playbook
   `catalog.locations` **and** to `app-config.production.yaml` (different
   relative path — `../../examples/...` vs `./examples/...`, not synced
   automatically).
-- No `fail_under` coverage gate yet (`pyproject.toml`) — most adapters are
-  still stubs by design (`docs/roadmap.md`); don't chase coverage % before the
-  real logic behind it exists.

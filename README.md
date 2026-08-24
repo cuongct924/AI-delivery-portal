@@ -20,14 +20,14 @@ AI-delivery-portal/
 ├── plugins/              ← Backstage plugins — prompt-registry (Prompt version UI)
 ├── services/             ← orchestration-api — FastAPI BFF, MCP client, auth, evaluations
 ├── agents/               ← AI Agent & MCP — mcp-servers/, skills/, prompts/
-├── adapters/             ← Adapter Pattern — MLflow, KServe, Argo, Qdrant, LiteLLM
+├── adapters/             ← Adapter Pattern — MLflow, KServe, Argo, Qdrant, LiteLLM, Feast, JupyterHub
 ├── infra/                ← GitOps infra — monitoring/vector-dbs/llm-gateways (active); helm-charts/argocd/opa-policies (week 8+)
 ├── data/                 ← datasets versioned with DVC (S3-compatible remote, see data/README.md)
-├── examples/             ← sample Catalog entity + Software Template
+├── examples/             ← Catalog entity + 2 Golden Path templates (train-track-register, register-deploy)
 ├── scripts/              ← run-mcp-local.sh
 ├── docs/                 ← architecture, roadmap, playbook
 ├── app-config.yaml       ← shared Backstage config (catalog, scaffolder, auth, proxy...)
-├── docker-compose.yml    ← full local stack (mlflow, keycloak, prometheus, qdrant, litellm, orchestration-api, MCP servers)
+├── docker-compose.yml    ← full local stack (mlflow, keycloak, prometheus, grafana, qdrant, minio, litellm, orchestration-api, MCP servers)
 └── README.md
 ```
 
@@ -43,7 +43,7 @@ yarn lint:all                   # lint — whole repo (what CI runs)
 yarn fix                        # auto-fix what's fixable
 yarn workspace <name> add <pkg> # add a dependency to one workspace (packages/app-backstage, backend, plugins/prompt-registry...)
 cp .env.example .env            # fill in ANTHROPIC_API_KEY before running orchestration-api/litellm
-docker compose up               # run the whole stack: mlflow, keycloak, prometheus, qdrant, litellm,
+docker compose up               # run the whole stack: mlflow, keycloak, prometheus, grafana, qdrant, minio, litellm,
                                  # orchestration-api, mlops/k8s/metrics MCP servers
 bash scripts/run-mcp-local.sh mlops   # or: run a single MCP server standalone, no Docker needed
 
