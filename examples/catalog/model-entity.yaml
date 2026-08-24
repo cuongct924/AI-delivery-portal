@@ -1,10 +1,7 @@
-# A mock entity representing a "model" in the Software Catalog.
-# Uses the default Component kind for now (simple, works right away).
-# From week 4+ consider defining a custom "Model" kind if MLOps-specific
-# fields are needed (accuracy, dataset_version...) that Component doesn't have.
+# Demo entity (fake data) — Resource kind: a model is an artifact, not code.
 
 apiVersion: backstage.io/v1alpha1
-kind: Component
+kind: Resource
 metadata:
   name: fraud-detection-model
   description: "Demo model for the AI Delivery Portal (fake data for testing the Catalog)"
@@ -16,7 +13,8 @@ metadata:
     # Could later add a link straight to the MLflow UI for this specific version
     # backstage.io/techdocs-ref: dir:.
 spec:
-  type: service
-  lifecycle: experimental
+  type: ml-model
   owner: user:guest
-  # Suggested extension for later: add a dependsOn field if the model depends on other dataset/feature-store entities
+  # Illustrative — dataset Resource doesn't exist yet, populated for real by register-model.
+  dependsOn:
+    - resource:default/fraud-detection-dataset
