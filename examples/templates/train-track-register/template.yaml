@@ -27,13 +27,20 @@ spec:
           title: Version
           type: string
           description: E.g. "v1.0.0"
+        baseModelUri:
+          title: Base model (leave empty to train from scratch)
+          type: string
+          description: >
+            MLflow model URI to fine-tune from — selects the
+            fine-tune-golden-path Argo WorkflowTemplate instead of
+            train-register-golden-path when set.
 
   steps:
     - id: log-info
       name: "Log info (mock policy-check step)"
       action: debug:log
       input:
-        message: "Preparing to deploy model ${{ parameters.modelName }} version ${{ parameters.modelVersion }}"
+        message: "Preparing to deploy model ${{ parameters.modelName }} version ${{ parameters.modelVersion }} (base model: ${{ parameters.baseModelUri | default('none — training from scratch') }})"
 
     - id: log-done
       name: "Log completion (mock deploy step)"

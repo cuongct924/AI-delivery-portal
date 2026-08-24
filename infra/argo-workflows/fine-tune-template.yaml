@@ -1,0 +1,57 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: fine-tune-golden-path
+  namespace: default
+spec:
+  entrypoint: fine-tune-and-register
+  # Least-privilege ServiceAccount — provision alongside this template.
+  serviceAccountName: train-register-workflow
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  arguments:
+    parameters:
+      - name: model-name
+      - name: dataset-uri
+      - name: base-model-uri
+  templates:
+    - name: fine-tune-and-register
+      dag:
+        tasks:
+          - name: fine-tune
+            template: fine-tune-step
+            arguments:
+              parameters:
+                - name: dataset-uri
+                  value: '{{workflow.parameters.dataset-uri}}'
+                - name: base-model-uri
+                  value: '{{workflow.parameters.base-model-uri}}'
+          - name: register
+            template: register-step
+            dependencies: [fine-tune]
+            arguments:
+              parameters:
+                - name: model-name
+                  value: '{{workflow.parameters.model-name}}'
+
+    - name: fine-tune-step
+      inputs:
+        parameters:
+          - name: dataset-uri
+          - name: base-model-uri
+      container:
+        image: python:3.12-slim
+        command: [python, -c]
+        args:
+          - "print('TODO: load base-model-uri, fine-tune on dataset-uri, log the run to MLflow via adapters/mlflow_adapter.py')"
+
+    - name: register-step
+      inputs:
+        parameters:
+          - name: model-name
+      container:
+        image: python:3.12-slim
+        command: [python, -c]
+        args:
+          - "print('TODO: call orchestration-api to register the model via MlflowAdapter')"
