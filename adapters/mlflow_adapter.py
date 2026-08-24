@@ -18,22 +18,9 @@ class MlflowAdapter(IModelRegistryAdapter):
         mlflow.set_tracking_uri(self.tracking_uri)
         self.client = MlflowClient(tracking_uri=self.tracking_uri)
 
-    def register_model(
-        self,
-        name: str,
-        version: str,
-        artifact_uri: str,
-        dataset_version: str | None = None,
-    ) -> dict:
+    def register_model(self, name: str, artifact_uri: str) -> dict:
+        # No `version` param — MLflow assigns it, auto-incrementing per name.
         result = mlflow.register_model(model_uri=artifact_uri, name=name)
-        if dataset_version is not None:
-            # DVC md5 hash — just a fingerprint tag, no DVC pull needed.
-            self.client.set_model_version_tag(
-                name=result.name,
-                version=result.version,
-                key="dataset_version",
-                value=dataset_version,
-            )
         return {"name": result.name, "version": result.version}
 
     def list_models(self, project: str | None = None) -> list[dict]:
@@ -45,3 +32,15 @@ class MlflowAdapter(IModelRegistryAdapter):
             raise ValueError(f"Model version {name}:{version} has no associated run_id")
         run = self.client.get_run(mv.run_id)
         return dict(run.data.metrics)
+
+    def get_dataset_lineage(self, name: str, version: str) -> list[dict]:
+        # Reads lineage logged at training time (mlflow.log_input), not a
+        # tag set here — a run can log more than one dataset.
+        mv = self.client.get_model_version(name=name, version=version)
+        if mv.run_id is None:
+            raise ValueError(f"Model version {name}:{version} has no associated run_id")
+        run = self.client.get_run(mv.run_id)
+        return [
+            {"name": d.dataset.name, "digest": d.dataset.digest, "source": str(d.dataset.source)}
+            for d in run.inputs.dataset_inputs
+        ]

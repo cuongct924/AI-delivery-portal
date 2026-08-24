@@ -10,19 +10,16 @@ from abc import ABC, abstractmethod
 
 class IModelRegistryAdapter(ABC):
     @abstractmethod
-    def register_model(
-        self,
-        name: str,
-        version: str,
-        artifact_uri: str,
-        dataset_version: str | None = None,
-    ) -> dict: ...
+    def register_model(self, name: str, artifact_uri: str) -> dict: ...
 
     @abstractmethod
     def list_models(self, project: str | None = None) -> list[dict]: ...
 
     @abstractmethod
     def get_model_metrics(self, name: str, version: str) -> dict: ...
+
+    @abstractmethod
+    def get_dataset_lineage(self, name: str, version: str) -> list[dict]: ...
 
 
 class IInferenceAdapter(ABC):

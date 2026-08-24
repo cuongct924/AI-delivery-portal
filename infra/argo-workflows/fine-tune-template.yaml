@@ -44,7 +44,7 @@ spec:
         image: python:3.12-slim
         command: [python, -c]
         args:
-          - "print('TODO: load base-model-uri, fine-tune on dataset-uri, log the run to MLflow via adapters/mlflow_adapter.py')"
+          - "print('TODO: load base-model-uri, fine-tune on dataset-uri; mlflow.log_input() each dataset used, then log the run via adapters/mlflow_adapter.py')"
 
     - name: register-step
       inputs:

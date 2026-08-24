@@ -40,7 +40,7 @@ spec:
         image: python:3.12-slim
         command: [python, -c]
         args:
-          - "print('TODO: train model, log the run to MLflow via adapters/mlflow_adapter.py')"
+          - "print('TODO: train model; mlflow.log_input() each dataset used, then log the run via adapters/mlflow_adapter.py')"
 
     - name: register-step
       inputs:
