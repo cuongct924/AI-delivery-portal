@@ -39,4 +39,27 @@ class ArgoAdapter(IWorkflowAdapter):
         )
         response.raise_for_status()
         data = response.json()
-        return {"name": workflow_name, "phase": data.get("status", {}).get("phase")}
+        return {
+            "name": workflow_name,
+            "phase": data.get("status", {}).get("phase"),
+            # Surfaces the failure reason (e.g. pod OOMKilled) when phase is Failed/Error.
+            "message": data.get("status", {}).get("message"),
+        }
+
+    def list_workflows(self) -> list[dict]:
+        # Convenience method, not part of IWorkflowAdapter — same precedent
+        # as QdrantAdapter.ensure_collection() in vector_db_adapter.py.
+        response = httpx.get(
+            f"{self.base_url}/api/v1/workflows/{self.namespace}",
+            timeout=10,
+        )
+        response.raise_for_status()
+        items = response.json().get("items") or []
+        return [
+            {
+                "name": item.get("metadata", {}).get("name"),
+                "phase": item.get("status", {}).get("phase"),
+                "startedAt": item.get("status", {}).get("startedAt"),
+            }
+            for item in items
+        ]

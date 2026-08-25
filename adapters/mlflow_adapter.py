@@ -18,9 +18,16 @@ class MlflowAdapter(IModelRegistryAdapter):
         mlflow.set_tracking_uri(self.tracking_uri)
         self.client = MlflowClient(tracking_uri=self.tracking_uri)
 
-    def register_model(self, name: str, artifact_uri: str) -> dict:
+    def register_model(
+        self, name: str, artifact_uri: str, dataset_version: str | None = None
+    ) -> dict:
         # No `version` param — MLflow assigns it, auto-incrementing per name.
         result = mlflow.register_model(model_uri=artifact_uri, name=name)
+        if dataset_version is not None:
+            # Caller already resolved the DVC hash; see data/README.md.
+            self.client.set_model_version_tag(
+                name, result.version, "dataset_version", dataset_version
+            )
         return {"name": result.name, "version": result.version}
 
     def list_models(self, project: str | None = None) -> list[dict]:
@@ -44,3 +51,27 @@ class MlflowAdapter(IModelRegistryAdapter):
             {"name": d.dataset.name, "digest": d.dataset.digest, "source": str(d.dataset.source)}
             for d in run.inputs.dataset_inputs
         ]
+
+    def set_model_version_tag(self, name: str, version: str, key: str, value: str) -> None:
+        self.client.set_model_version_tag(name, version, key, value)
+
+    def get_model_version_details(self, name: str, version: str) -> dict:
+        mv = self.client.get_model_version(name=name, version=version)
+        if mv.run_id is None:
+            raise ValueError(f"Model version {name}:{version} has no associated run_id")
+        run = self.client.get_run(mv.run_id)
+        return {
+            "version": mv.version,
+            "run_id": mv.run_id,
+            "tags": dict(mv.tags),
+            "metrics": dict(run.data.metrics),
+            "status": mv.status,
+        }
+
+    def get_latest_version(self, name: str) -> str:
+        # Convenience method, not part of IModelRegistryAdapter — same
+        # precedent as QdrantAdapter.ensure_collection() in vector_db_adapter.py.
+        versions = self.client.search_model_versions(f"name='{name}'")
+        if not versions:
+            raise ValueError(f"Model {name} has no registered versions")
+        return max(versions, key=lambda mv: int(mv.version)).version

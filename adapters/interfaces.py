@@ -21,6 +21,12 @@ class IModelRegistryAdapter(ABC):
     @abstractmethod
     def get_dataset_lineage(self, name: str, version: str) -> list[dict]: ...
 
+    @abstractmethod
+    def set_model_version_tag(self, name: str, version: str, key: str, value: str) -> None: ...
+
+    @abstractmethod
+    def get_model_version_details(self, name: str, version: str) -> dict: ...
+
 
 class IInferenceAdapter(ABC):
     @abstractmethod
