@@ -176,6 +176,11 @@ grafana:
   proxyPath: /grafana/api
   unifiedAlerting: true
 
+# services/orchestration-api — base URL for the Custom Scaffolder Actions in
+# packages/backend/src/actions (Golden Path #1/#2), not the /orchestration-api proxy above.
+orchestrationApi:
+  baseUrl: http://localhost:8000
+
 # placeholder — infra/argocd is a stub, see roadmap.md Week 8-9
 argocd:
   username: ${ARGOCD_USERNAME}
