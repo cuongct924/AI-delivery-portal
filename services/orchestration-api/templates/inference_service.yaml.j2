@@ -1,0 +1,12 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: {{ model_name }}
+  labels:
+    version: "{{ model_version }}"
+spec:
+  predictor:
+    model:
+      modelFormat:
+        name: mlflow
+      storageUri: {{ storage_uri }}
