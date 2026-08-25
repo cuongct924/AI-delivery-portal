@@ -1,8 +1,8 @@
-# SỔ TAY THAM CHIẾU CỦA CƯỜNG (v3)
-## AI Delivery Portal — GitOps for Model (MLOps/LLMOps)
-### Viettel Digital Talent 2026 · Track Cloud · Phase 2
+# SỔ TAY THAM CHIẾU CỦA CƯỜNG (v4)
+## AI Delivery Portal (MLOps/LLMOps)
+### Viettel Digital Talent 2026 · Track Cloud
 
-> **Thay đổi lớn nhất so với bản trước**: Đề tài đã được mentor CHÍNH THỨC tách thành 2 sản phẩm chạy song song, dùng chung 1 bức tranh lớn nhưng KHÁC repo, khác người bảo vệ. Sổ tay này viết lại toàn bộ phần định vị/kiến trúc/scope cho đúng ranh giới mới.
+> **Thay đổi lớn nhất so với bản trước**: Mentor yêu cầu tạm gác hướng "GitOps for Model" tích hợp CI/CD generic ngoài phạm vi AI Platform — tập trung hoàn thiện đầy đủ luồng MLOps/LLMOps của AI Delivery Portal trước. Sổ tay này viết lại toàn bộ phần định vị/kiến trúc/scope theo đúng phạm vi mới.
 
 ---
 
@@ -22,55 +22,36 @@ Tần suất thấp  │  Ưu tiên thấp nhất      │  Stretch goal
 
 ---
 
-## 2. ĐỊNH VỊ ĐỀ TÀI — BỨC TRANH 2 SẢN PHẨM
+## 2. ĐỊNH VỊ ĐỀ TÀI — AI DELIVERY PORTAL
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ Phase 1 — netCI Delivery Platform (Hiếu)                │
-│ = NỀN TẢNG CI/CD GENERIC, dùng cho MỌI project          │
-│                                                         │
-│ - Pipeline-as-Code (Jenkins Shared Library, form UI)    │
-│ - Jenkins config quản lý bằng Git (IaC, tái lập được)   │
-│ - Ephemeral agent (Jenkins Kubernetes Plugin) cô lập    │
-│   theo project, thay workspace dùng chung               │
-│ - Deploy đa hạ tầng (Systemd/Docker/K8s) qua Ansible +  │
-│   Helm, có Dev/Staging/Prod, approval, audit            │
-│ - Vận hành đa cụm Jenkins, SBOM, ký artifact, dashboard │
-│   DORA                                                  │
-└─────────────────────────────────────────────────────────┘
-                            │ Cường GỌI VÀO qua API/Adapter
-                            │ (netci_adapter.py) — KHÔNG tự dựng
-                            │ Jenkins, KHÔNG tự học multi-cluster/SBOM
-                            ▼
-┌─────────────────────────────────────────────────────────┐
-│ Phase 2 — GitOps for Model / AI Delivery Portal (Cường) │
-│ = LỚP NGHIỆP VỤ đặc thù MLOps/LLMOps                    │
-│                                                         │
-│ - Backstage UI + Adapter Pattern tích hợp 4 sản phẩm    │
-│   AI Platform (Registry/Experiment/Inference/Notebook)  │
-│ - Golden Path #1: Train → Track → Register              │
-│ - Golden Path #2: Register → Deploy (quyết định GÌ được │
-│   phép lên Git — Evaluate Gate, không phải cơ chế sync) │
-│ - Vòng lặp Monitor → Drift → Retrain (đặc thù ML, netCI │
-│   generic không có khái niệm này)                       │
-│ - Agent-ready: MCP servers + Skills                     │
+│ AI Delivery Portal — MLOps/LLMOps (Cường)                │
+│ = LỚP NGHIỆP VỤ cho vòng đời model AI, trên nền Backstage│
+│                                                           │
+│ - Backstage UI + Adapter Pattern tích hợp 4 sản phẩm     │
+│   AI Platform (Registry/Experiment/Inference/Notebook)   │
+│ - Golden Path #1: Train → Track → Register               │
+│ - Golden Path #2: Register → Deploy (quyết định GÌ được  │
+│   phép deploy — Evaluate Gate)                            │
+│ - Vòng lặp Monitor → Drift → Retrain                      │
+│ - Agent-ready: MCP servers + Skills                       │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ### Câu chuyện định vị (dùng khi bảo vệ)
 
-> *"netCI (Hiếu) là ĐỘNG CƠ — cơ chế CI/CD kỹ thuật tổng quát, dùng được cho bất kỳ loại project nào. AI Delivery Portal / GitOps for Model (Cường) là BỘ NÃO cho riêng domain MLOps — quyết định model nào đủ điều kiện lên Git (Evaluate Gate), theo dõi vòng đời model sau khi deploy (Drift→Retrain) — những khái niệm không tồn tại trong CI/CD generic. Em không tự xây lại cơ chế deploy/agent/multi-cluster — không TIÊU THỤ nó qua Adapter Pattern, đúng kiến trúc đã thiết kế từ đầu."*
+> *"AI Delivery Portal là BỘ NÃO cho vòng đời model AI trong AI Platform — quyết định model nào đủ điều kiện đưa vào sử dụng (Evaluate Gate), theo dõi vòng đời model sau khi deploy (Drift → Retrain). Phạm vi hiện tại là hoàn thiện trọn vẹn luồng MLOps/LLMOps nội bộ: train → track → register → deploy → monitor. Việc tích hợp CI/CD generic với hệ thống ngoài là hướng mở rộng đã xác định trong roadmap, không nằm trong phạm vi hiện tại — đây là quyết định thu hẹp phạm vi có chủ đích theo định hướng của mentor, không phải giới hạn kỹ thuật."*
 
-### So sánh GitOps thông thường vs GitOps for Model
+### Đặc thù vòng đời Model AI
 
-netCI làm "GitOps" ở mức cơ chế (sync hạ tầng generic); phần của Cường **không trùng lặp** — vì hai bên khác nhau về bản chất, không chỉ khác tên gọi:
+So với một ứng dụng thông thường, vòng đời của model AI có những đặc thù riêng — đây là lý do luồng MLOps/LLMOps cần thiết kế khác, không thể dùng nguyên bộ quy trình deploy ứng dụng thông thường:
 
-| | GitOps thông thường | GitOps for Model |
+| | Ứng dụng thông thường | Model AI |
 |---|---|---|
-| **Đối tượng quản lý** | Ứng dụng / hạ tầng (image, replicas, config) | Model ML (version, chất lượng dự đoán, dữ liệu huấn luyện) |
-| **Điều kiện "đủ tốt để deploy"** | Vượt qua kiểm thử kỹ thuật (build, security scan) | Vượt qua đánh giá chất lượng (Evaluate Gate — accuracy/LLM-as-judge) |
-| **Truy vết (lineage)** | Commit code → image | Code + dữ liệu huấn luyện + tham số → model |
-| **Vòng đời sau deploy** | Ổn định cho tới khi có bản vá mới | Suy giảm dần theo thời gian (drift) — cần giám sát & huấn luyện lại |
+| **Điều kiện "đủ tốt để dùng"** | Vượt qua kiểm thử kỹ thuật (build, test) | Vượt qua đánh giá chất lượng (Evaluate Gate — accuracy/LLM-as-judge) |
+| **Truy vết (lineage)** | Commit code → artifact | Code + dữ liệu huấn luyện + tham số → model |
+| **Vòng đời sau khi đưa vào dùng** | Ổn định tới khi có bản vá mới | Suy giảm dần theo thời gian (drift) — cần giám sát & huấn luyện lại |
 | **Rollback bảo vệ điều gì** | Tính đúng đắn kỹ thuật (không lỗi/crash) | Chất lượng dự đoán thực tế (accuracy) |
 
 ---
@@ -112,7 +93,7 @@ Chốt đúng **2 golden path**, không có #3 — AI Notebook và provisioning 
    - `orchestration:trigger-training` → Argo
    - `orchestration:register-model` → MLflow
    - `orchestration:policy-check` → Evaluate Gate
-   - `orchestration:deploy-model` → **commit Git** → ArgoCD sync (đúng GitOps, không gọi K8s trực tiếp)
+   - `orchestration:deploy-model` → commit Git → ArgoCD tự động sync (không gọi K8s trực tiếp)
 3. Nối 4 action vào 2 template (thay `debug:log`).
 4. **Catalog**: thêm action `catalog:register` cuối Golden Path #1 → tự sinh entity thật thay vì file demo.
 5. **Test**: `docker compose up -d` → verify từng endpoint qua curl/Postman → verify lại qua Scaffolder UI.
@@ -124,32 +105,31 @@ Chốt đúng **2 golden path**, không có #3 — AI Notebook và provisioning 
 
 ### Nguyên tắc thiết kế UI/UX
 
-> **"Một Portal duy nhất — không phải tập hợp các UI rời rạc. Dev chỉ chạm vào UI gốc của hệ thống con (netCI/Jenkins, MLflow...) khi chủ động muốn đào sâu chi tiết."**
+> **"Một Portal duy nhất — không phải tập hợp các UI rời rạc. Dev chỉ chạm vào UI gốc của hệ thống con (MLflow, Argo Workflows, KServe...) khi chủ động muốn đào sâu chi tiết."**
 
 **Vì sao:** đúng tinh thần Backstage — Portal là *single pane of glass*, không phải cổng trung chuyển. Theo nghiên cứu UX cho IDP (Kirsten Schwarzer, "Designing for Success: UX Principles for IDP", KubeCon), khi vẽ user journey map cho onboarding, ma sát (friction) lớn nhất tập trung đúng ở *touchpoint* — chỗ dev phải nhảy qua lại giữa nhiều UI khác nhau để hoàn thành 1 tác vụ. Gộp về 1 Portal là cách trực tiếp triệt tiêu điểm ma sát này, không chỉ là lựa chọn thẩm mỹ.
 
-- Dev KHÔNG BAO GIỜ cần mở UI gốc của netCI/Jenkins để thao tác (trigger, theo dõi trạng thái).
+- Dev KHÔNG BAO GIỜ cần mở UI gốc của MLflow/Argo Workflows để thao tác (trigger training, theo dõi trạng thái).
 - Trạng thái/log **nhúng (embed) trực tiếp** trong Portal — không deep-link đưa Dev rời khỏi Portal.
 - Log lỗi hiển thị trong Portal theo nguyên tắc "error là proxy của frustration" (Jared Spool, trích trong cùng talk): nêu rõ **chuyện gì xảy ra, vì sao, và bước tiếp theo cần làm** — không chỉ dump nguyên console gốc.
-- Áp dụng: `netci_adapter.get_console_log_stream()` (qua Adapter Pattern) trả log stream về, Portal render ngay trong trang Catalog của model/component đó.
+- Áp dụng: Adapter Pattern (`IWorkflowAdapter.get_workflow_status()`, `IInferenceAdapter.get_inference_status()`) lấy trạng thái/log trực tiếp từ Argo Workflows/KServe, Portal render ngay trong trang Catalog của model/component đó.
 
 ---
 
 ## 4. KIẾN TRÚC HỆ THỐNG
 
 ```
-┌───────────────────────────────────────────────────────────────────────────────────────────────┐
-│ Portal UI (Backstage) — packages/app-backstage                                                │
-│ + plugins/prompt-registry                                                                     │
-├───────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Orchestration API (FastAPI) — services/orchestration-api                                      │
-│ - auth/keycloak.py    - evaluations/gate.py + llm_judge                                       │
-│ - routers/chat.py, prompts.py                                                                 │
-├───────────────┬───────────────┬───────────────┬───────────────┬───────────────┬───────────────┤
-│   Registry    │   Inference   │   Workflow    │   VectorDB    │    LLM GW     │     netCI     │
-│   (MLflow)    │   (KServe)    │    (Argo)     │   (Qdrant)    │   (LiteLLM)   │ (gọi vào Hiếu │
-│               │               │               │               │               │ — mock trước) │
-└───────────────┴───────────────┴───────────────┴───────────────┴───────────────┴───────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│ Portal UI (Backstage) — packages/app-backstage                        │
+│ + plugins/prompt-registry                                             │
+├───────────────────────────────────────────────────────────────────────┤
+│ Orchestration API (FastAPI) — services/orchestration-api              │
+│ - auth/keycloak.py    - evaluations/gate.py + llm_judge               │
+│ - routers/chat.py, prompts.py                                         │
+├───────────────┬───────────────┬───────────────┬───────────────┬───────┤
+│   Registry    │   Inference   │   Workflow    │   VectorDB    │ LLM GW│
+│   (MLflow)    │   (KServe)    │    (Argo)     │   (Qdrant)    │(LiteLLM)
+└───────────────┴───────────────┴───────────────┴───────────────┴───────┘
   Adapter Layer
 
 Cross-cutting: Prometheus/Grafana | Keycloak
@@ -164,42 +144,41 @@ class IModelRegistryAdapter(ABC):
     def register_model(...) -> dict: ...
     def list_models(...) -> list[dict]: ...
     def get_model_metrics(...) -> dict: ...
+    def get_dataset_lineage(...) -> list[dict]: ...
 
 class IInferenceAdapter(ABC): ...
 class IWorkflowAdapter(ABC): ...
 class IVectorStoreAdapter(ABC): ...
 class ILLMGatewayAdapter(ABC): ...
-
-# CẦN THÊM (còn thiếu trong repo — việc tiếp theo):
-class ICIExecutorAdapter(ABC):
-    """Gọi vào netCI (Hiếu) để trigger/theo dõi pipeline generic.
-    Giữ MOCK cho tới khi Hiếu có API thật — KHÔNG chờ Hiếu để tiếp
-    tục phát triển Golden Path."""
-    def trigger_job(self, job_config) -> JobHandle: ...
-    def get_job_status(self, job_handle) -> JobStatus: ...
-    def get_console_log_stream(self, job_handle): ...
+class IFeatureStoreAdapter(ABC): ...
+class INotebookAdapter(ABC): ...
 ```
+
+Switching Mock → real backend (MLflow/KServe/Argo/...) means adding one new
+class that implements the interface — never touching callers. Không có
+adapter nào gọi ra hệ thống ngoài phạm vi AI Platform hiện tại; tích hợp CI/CD
+generic (nếu cần) sẽ là 1 adapter mới thêm sau, theo đúng nguyên tắc này.
 
 ---
 
 ## 5. BỐ CỤC SLIDE BẢO VỆ
 
 ```
-1. Trang bìa (ghi rõ: Phase 2 — GitOps for Model, song song với netCI của Hiếu)
-2. Bối cảnh AI Platform + vị trí trong bức tranh 2 sản phẩm (sơ đồ mục 1)
+1. Trang bìa (AI Delivery Portal — MLOps/LLMOps)
+2. Bối cảnh AI Platform + vị trí của Portal trong bức tranh tổng thể (sơ đồ mục 2)
 3. ⭐ Vấn đề thật (pain point — bổ sung số liệu Qwen/fine-tune nếu có)
-4. Giải pháp tổng quan — nhấn: "netCI là động cơ, mình là bộ não MLOps"
+4. Giải pháp tổng quan — Backstage + Adapter Pattern + Golden Path
 5. Kiến trúc hệ thống (sơ đồ mục 4, có nhánh Agent Interface — MCP)
 6. Adapter Pattern — minh chứng bằng code thật (interfaces.py)
 7. Golden Path #1 (Argo Workflows)
-8. Golden Path #2 (trọng tâm) — Evaluate Gate LLM-as-judge, GitOps sync
+8. Golden Path #2 (trọng tâm) — Evaluate Gate LLM-as-judge
 9. LLMOps active: Vector DB + LLM Gateway + Prompt Registry (case thật: Qwen)
 10. Demo (live + video backup)
 11. Benchmark thời gian/số bước
 12. Dashboard observability
 13. (nếu MCP ổn định) Demo agent gọi Golden Path qua MCP
-14. Giới hạn hiện tại — nêu rõ phần phụ thuộc netCI đang mock
-15. Roadmap Production
+14. Giới hạn hiện tại — nêu rõ phạm vi chưa gồm tích hợp CI/CD generic bên ngoài
+15. Roadmap Production (bao gồm hướng mở rộng tích hợp CI/CD sau này)
 16. Kết luận
 ```
 
@@ -207,11 +186,11 @@ class ICIExecutorAdapter(ABC):
 
 ## 6. CÂU TRẢ LỜI MẪU CHO CÂU HỎI KHÓ
 
-**Q: "Sao không tự làm Jenkins/CI-CD, lại đi gọi qua netCI của người khác?"**
-> "Việc chuẩn hóa CI/CD generic (multi-cluster Jenkins, ephemeral agent, SBOM) là bài toán hạ tầng tổng quát — Adapter Pattern của em cho phép tách biệt rõ: em tập trung vào NGHIỆP VỤ đặc thù MLOps (Evaluate Gate, Drift→Retrain) là nơi tạo giá trị khác biệt, còn cơ chế thực thi generic thì tái sử dụng, tránh trùng lặp công sức với đề tài netCI đang chạy song song."
+**Q: "Sao chưa tích hợp CI/CD generic (Jenkins) với hệ thống ngoài?"**
+> "Đây là quyết định thu hẹp phạm vi có chủ đích theo yêu cầu mentor — ưu tiên hoàn thiện trọn vẹn luồng MLOps/LLMOps nội bộ trước (train → track → register → deploy → monitor), tránh dàn trải sang tích hợp CI/CD generic khi lõi nghiệp vụ MLOps chưa xong. Kiến trúc Adapter Pattern đã tính trước hướng mở rộng này — thêm 1 Adapter mới khi cần, không phải thiết kế lại."
 
-**Q: "Nếu netCI của Hiếu chưa xong, Portal của em có chạy được không?"**
-> "Có — `netci_adapter.py` được thiết kế mock hoàn chỉnh ngay từ đầu, đúng nguyên tắc Adapter Pattern đã áp dụng cho mọi hệ thống con khác. Golden Path của em không phụ thuộc tiến độ netCI để phát triển và demo."
+**Q: "Vì sao dùng Adapter Pattern thay vì gọi thẳng MLflow/KServe/Argo?"**
+> "Để cô lập Portal khỏi thay đổi ở từng backend cụ thể — đổi Mock sang backend thật chỉ cần thêm 1 class implement interface có sẵn trong `adapters/interfaces.py`, không sửa code gọi (Orchestration API, Custom Action). Đây cũng là nền cho việc mở rộng thêm hệ thống mới sau này mà không phải thiết kế lại kiến trúc."
 
 **Q: "Golden path của em dừng ở Deploy, model xuống cấp thì sao?"**
 > "Em đã có `agents/skills/evaluate_drift.py` làm nền cho vòng lặp Retrain — phần trigger tự động nằm trong roadmap, nhưng cơ chế phát hiện drift đã có sẵn."
@@ -219,7 +198,6 @@ class ICIExecutorAdapter(ABC):
 **Q: "Sao lại thêm MCP/Agent, đề bài đâu có yêu cầu?"**
 > "Orchestration API thiết kế theo Facade Pattern — thêm kênh truy cập cho AI Agent gần như không phát sinh rủi ro kiến trúc. Đây là minh chứng cho việc thiết kế Adapter/Facade từ đầu là đúng đắn, đón đầu xu hướng Agentic Platform Engineering."
 
- 
 ---
 
 ## 7. NGUYÊN TẮC GHI NHỚ TỔNG QUÁT
@@ -227,14 +205,14 @@ class ICIExecutorAdapter(ABC):
 1. Luôn quay lại **4 câu hỏi cốt lõi** (mục 1)
 2. Chiều sâu > chiều rộng — **Golden Path #2 là ưu tiên số 1 hiện tại**, không mở rộng MCP thêm cho tới khi #2 xong
 3. Mọi thiết kế phải có lý do — kể cả lý do KHÔNG dùng 1 công nghệ (Temporal/Kusion/Crossplane) cũng cần ghi lại, không chỉ lý do có dùng
-4. Chủ động nêu giới hạn — đặc biệt phần đang mock chờ netCI
-5. **Adapter Pattern là bảo hiểm — áp dụng cho CẢ hệ thống anh em (netCI), không chỉ hệ thống AI Platform**
+4. Chủ động nêu giới hạn — đặc biệt phạm vi hiện tại chưa gồm tích hợp CI/CD generic bên ngoài (roadmap có chủ đích, không phải giới hạn kỹ thuật)
+5. **Adapter Pattern là bảo hiểm** — cô lập Portal khỏi thay đổi ở từng backend cụ thể (MLflow/KServe/Argo/...), và là nền sẵn cho việc thêm hệ thống ngoài sau này
 6. Nghĩ như Platform Engineer thật — golden path giải quyết pain point thật, đo lường được, có đường tới production
 7. Agent-ready là triết lý thiết kế, nhưng **không được lấn át việc hoàn thiện Golden Path lõi** — 3 MCP server hiện tại là tín hiệu cần tự kiểm tra lại ưu tiên.
 
 ---
 
-**Cập nhật lần 3, sau khi:** 
+**Cập nhật lần 4, sau khi:**
 
-- (a) mentor phân Phase rõ ràng giữa Cường (GitOps for Model) và Hiếu (netCI Delivery Platform); 
-- (b) soát trực tiếp repo thật `AI-delivery-portal`.
+- (a) mentor yêu cầu tạm gác hướng tích hợp CI/CD generic và framing "GitOps for Model", tập trung hoàn thiện đầy đủ luồng MLOps/LLMOps của AI Delivery Portal trước;
+- (b) soát trực tiếp repo thật `AI-delivery-portal` (`adapters/interfaces.py`).
