@@ -11,3 +11,17 @@ nodes:
       - containerPort: 443
         hostPort: 8443
         protocol: TCP
+      # Argo Server REST API, exposed via a fixed NodePort (see
+      # scripts/setup-k8s-local.sh) — chosen over `kubectl port-forward` so
+      # localhost:2746 stays reachable across reboots/terminal restarts
+      # without a background process to babysit.
+      - containerPort: 32746
+        hostPort: 2746
+        protocol: TCP
+    extraMounts:
+      # Exposes the DVC-pulled dataset to training pods via hostPath, so
+      # ephemeral train-step containers can read it without embedding
+      # S3/DVC-pull logic (see infra/argo-workflows/README.md).
+      - hostPath: ../../data
+        containerPath: /mnt/data
+        readOnly: true
