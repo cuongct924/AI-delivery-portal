@@ -10,6 +10,12 @@ spec:
   securityContext:
     runAsNonRoot: true
     runAsUser: 1000
+  volumes:
+    # hostPath from kind-config.yaml's extraMounts — avoids S3/DVC-pull logic here.
+    - name: dataset
+      hostPath:
+        path: /mnt/data
+        type: Directory
   arguments:
     parameters:
       - name: model-name
@@ -31,23 +37,149 @@ spec:
               parameters:
                 - name: model-name
                   value: '{{workflow.parameters.model-name}}'
+                - name: artifact-uri
+                  value: '{{tasks.train.outputs.parameters.artifact-uri}}'
+                - name: dataset-digest
+                  value: '{{tasks.train.outputs.parameters.dataset-digest}}'
 
     - name: train-step
       inputs:
         parameters:
           - name: dataset-uri
+      outputs:
+        parameters:
+          - name: artifact-uri
+            valueFrom:
+              path: /tmp/artifact-uri
+          - name: dataset-digest
+            valueFrom:
+              path: /tmp/dataset-digest
       container:
         image: python:3.12-slim
-        command: [python, -c]
+        command: [sh, -c]
+        env:
+          # pip --user needs a writable, resolvable HOME (UID 1000 has none).
+          - name: HOME
+            value: /tmp
         args:
-          - "print('TODO: train model; mlflow.log_input() each dataset used, then log the run via adapters/mlflow_adapter.py')"
+          - |
+            set -euo pipefail
+            pip install --user -q mlflow pandas scikit-learn httpx
+
+            DATASET_URI='{{inputs.parameters.dataset-uri}}'
+            export DATASET_URI
+
+            python3 <<'PY'
+            import os
+            import re
+            from pathlib import Path
+
+            import mlflow
+            import mlflow.data
+            import mlflow.sklearn
+            import pandas as pd
+            from sklearn.linear_model import LogisticRegression
+            from sklearn.metrics import accuracy_score, precision_score, recall_score
+            from sklearn.model_selection import train_test_split
+
+            dataset_uri = os.environ["DATASET_URI"]
+            # Strip the "file://" scheme to get a real filesystem path pandas can open.
+            csv_path = Path(dataset_uri.removeprefix("file://"))
+            df = pd.read_csv(csv_path)
+
+            # .dvc's md5 is the dataset-digest convention documented in data/README.md.
+            dvc_path = csv_path.with_name(csv_path.name + ".dvc")
+            dvc_text = dvc_path.read_text()
+            md5_match = re.search(r"md5:\s*(\S+)", dvc_text)
+            if md5_match is None:
+                raise RuntimeError(f"no md5 hash found in {dvc_path}")
+            dataset_digest = md5_match.group(1)
+
+            target_column = "is_fraud"
+            features = df.drop(columns=[target_column, "transaction_id"]).copy()
+            # Ordinal-encode the categorical column — LogisticRegression needs numeric input.
+            features["merchant_category"] = features["merchant_category"].astype("category").cat.codes
+            labels = df[target_column]
+
+            X_train, X_test, y_train, y_test = train_test_split(
+                features, labels, test_size=0.3, random_state=42, stratify=labels
+            )
+
+            model = LogisticRegression(max_iter=1000)
+            model.fit(X_train, y_train)
+
+            predictions = model.predict(X_test)
+            accuracy = accuracy_score(y_test, predictions)
+            precision = precision_score(y_test, predictions, zero_division=0)
+            recall = recall_score(y_test, predictions, zero_division=0)
+
+            mlflow.set_tracking_uri("http://host.docker.internal:5000")
+            with mlflow.start_run() as run:
+                mlflow.log_metric("accuracy", accuracy)
+                mlflow.log_metric("precision", precision)
+                mlflow.log_metric("recall", recall)
+
+                dataset = mlflow.data.from_pandas(df, source=dataset_uri, digest=dataset_digest)
+                mlflow.log_input(dataset, context="training")
+
+                mlflow.sklearn.log_model(model, artifact_path="model")
+                artifact_uri = f"runs:/{run.info.run_id}/model"
+
+            # Argo reads this back via outputs.parameters to hand off to the next task.
+            Path("/tmp/artifact-uri").write_text(artifact_uri)
+            Path("/tmp/dataset-digest").write_text(dataset_digest)
+            PY
+        volumeMounts:
+          - name: dataset
+            mountPath: /mnt/data
+            readOnly: true
 
     - name: register-step
       inputs:
         parameters:
           - name: model-name
+          - name: artifact-uri
+          - name: dataset-digest
       container:
         image: python:3.12-slim
-        command: [python, -c]
+        command: [sh, -c]
+        env:
+          - name: HOME
+            value: /tmp
         args:
-          - "print('TODO: call orchestration-api to register the model via MlflowAdapter')"
+          - |
+            set -euo pipefail
+            pip install --user -q httpx
+
+            MODEL_NAME='{{inputs.parameters.model-name}}'
+            ARTIFACT_URI='{{inputs.parameters.artifact-uri}}'
+            DATASET_DIGEST='{{inputs.parameters.dataset-digest}}'
+            export MODEL_NAME ARTIFACT_URI DATASET_DIGEST
+
+            python3 <<'PY'
+            import os
+            import sys
+
+            import httpx
+
+            model_name = os.environ["MODEL_NAME"]
+            artifact_uri = os.environ["ARTIFACT_URI"]
+            dataset_digest = os.environ.get("DATASET_DIGEST") or None
+
+            # Business logic stays in orchestration-api, not here — CLAUDE.md convention.
+            response = httpx.post(
+                "http://host.docker.internal:8000/models/register",
+                json={
+                    "name": model_name,
+                    "artifact_uri": artifact_uri,
+                    "dataset_version": dataset_digest,
+                },
+                timeout=30.0,
+            )
+            if response.is_error:
+                # Exit non-zero so Argo marks this step Failed, not silently succeeds.
+                print(f"model registration failed: {response.status_code} {response.text}", file=sys.stderr)
+                sys.exit(1)
+
+            print(response.json())
+            PY
