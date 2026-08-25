@@ -2,23 +2,24 @@ apiVersion: scaffolder.backstage.io/v1beta3
 kind: Template
 metadata:
   name: register-deploy
-  title: "Register → Deploy (Golden Path #2, test)"
+  title: "Register → Deploy (Golden Path #2)"
   description: >
-    Second test template — doesn't call real KServe/ArgoCD yet, just logs
-    information to understand how the Scaffolder mechanism works before
-    writing a real Custom Action.
+    Runs the Evaluate Gate against a registered model version and, if it
+    passes, opens a PR with the generated KServe InferenceService manifest —
+    calling services/orchestration-api the whole way, no mock steps.
   tags:
     - mlops
-    - test
+
 spec:
   owner: user:guest
   type: service
 
   parameters:
-    - title: Enter model to deploy
+    - title: Model to deploy
       required:
         - modelName
         - modelVersion
+        - repoUrl
       properties:
         modelName:
           title: Model name
@@ -27,27 +28,67 @@ spec:
         modelVersion:
           title: Version
           type: string
-          description: E.g. "v1.0.0"
+          description: E.g. "3" — the MLflow Model Registry version number
+        repoUrl:
+          title: Repository
+          type: string
+          description: >
+            Target GitOps repo for the deploy manifest PR, in the format
+            github.com?owner=<org>&repo=<repo> (same shape
+            publish:github:pull-request expects). No RepoUrlPicker field
+            extension is confirmed available in this repo's frontend, so
+            this is a plain string field.
 
   steps:
-    - id: log-policy-check
-      name: "Log info (mock policy-check step)"
-      action: debug:log
+    - id: policy-check
+      name: "Run the Evaluate Gate"
+      action: orchestration:policy-check
       input:
-        message: "Checking policy for model ${{ parameters.modelName }} version ${{ parameters.modelVersion }} (mock — will be replaced with OPA/manual validation)"
+        modelName: ${{ parameters.modelName }}
+        modelVersion: ${{ parameters.modelVersion }}
 
-    - id: log-deploy
-      name: "Log completion (mock deploy step)"
-      action: debug:log
+    - id: prepare-manifest
+      name: "Render the InferenceService manifest"
+      action: orchestration:prepare-deploy-manifest
       input:
-        message: "Finished 'deploying' ${{ parameters.modelName }}:${{ parameters.modelVersion }} (this is a mock step — will be replaced with an HTTP call to FastAPI in week 8-9)"
+        modelName: ${{ parameters.modelName }}
+        modelVersion: ${{ parameters.modelVersion }}
+
+    - id: publish-pr
+      name: "Open the deploy PR"
+      action: publish:github:pull-request
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        branchName: deploy-${{ parameters.modelName }}-${{ parameters.modelVersion }}
+        title: "Deploy ${{ parameters.modelName }}:${{ parameters.modelVersion }}"
+        description: >
+          Adds the KServe InferenceService manifest for
+          **${{ parameters.modelName }}** version **${{ parameters.modelVersion }}**
+          (Evaluate Gate passed). Once ArgoCD is set up (currently a stub —
+          see infra/argocd/README.md), it will pick up this manifest and
+          sync it; merging this PR does **not** deploy anything today.
+        sourcePath: infra/inference-services
+        targetPath: infra/inference-services
+
+    - id: record-deploy
+      name: "Record the deploy PR"
+      action: orchestration:record-deploy
+      input:
+        modelName: ${{ parameters.modelName }}
+        modelVersion: ${{ parameters.modelVersion }}
+        prUrl: ${{ steps['publish-pr'].output.remoteUrl }}
 
   output:
+    links:
+      - title: View deploy pull request
+        url: ${{ steps['publish-pr'].output.remoteUrl }}
     text:
       - title: Result
         content: |
-          Golden path test complete for model **${{ parameters.modelName }}**
-          version **${{ parameters.modelVersion }}**.
+          Evaluate Gate passed for **${{ parameters.modelName }}** version
+          **${{ parameters.modelVersion }}** — deploy PR opened:
+          ${{ steps['publish-pr'].output.remoteUrl }}
 
-          Next step (week 8-9): replace `debug:log` with a real Custom Action
-          that calls the FastAPI backend, which then calls the Adapter to KServe/ArgoCD.
+          It contains `infra/inference-services/${{ parameters.modelName }}/${{ parameters.modelVersion }}.yaml`.
+          ArgoCD sync is not wired up yet (infra/argocd/README.md, week 8+) —
+          merging this PR does not deploy the model on its own.

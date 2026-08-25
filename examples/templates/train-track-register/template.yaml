@@ -2,58 +2,85 @@ apiVersion: scaffolder.backstage.io/v1beta3
 kind: Template
 metadata:
   name: train-track-register
-  title: "Train → Track → Register (Golden Path #1, test)"
+  title: "Train → Track → Register (Golden Path #1)"
   description: >
-    First test template — doesn't call real MLflow yet, just logs information
-    to understand how the Scaffolder mechanism works before writing a real Custom Action.
+    Trains (or fine-tunes) a model on the local Argo Workflows cluster,
+    tracks the run in MLflow, and registers the resulting model version —
+    calling services/orchestration-api the whole way, no mock steps.
   tags:
     - mlops
-    - test
+
 spec:
   owner: user:guest
   type: service
 
   parameters:
-    - title: Enter fake model information
+    - title: Model to train
       required:
         - modelName
-        - modelVersion
+        - datasetUri
       properties:
         modelName:
           title: Model name
           type: string
           description: E.g. "fraud-detection"
-        modelVersion:
-          title: Version
+        datasetUri:
+          title: Dataset URI
           type: string
-          description: E.g. "v1.0.0"
+          description: >
+            A file:// path readable inside the training pod — the kind
+            cluster mounts the repo's data/ directory at /mnt/data
+            (infra/k8s-local-cluster/kind-config.yaml).
+          default: file:///mnt/data/fraud-detection-sample.csv
         baseModelUri:
           title: Base model (leave empty to train from scratch)
           type: string
           description: >
             MLflow model URI to fine-tune from — selects the
             fine-tune-golden-path Argo WorkflowTemplate instead of
-            train-register-golden-path when set.
+            train-register-golden-path when set (see
+            services/orchestration-api/routers/models.py trigger_training()).
 
   steps:
-    - id: log-info
-      name: "Log info (mock policy-check step)"
-      action: debug:log
+    - id: trigger-training
+      name: "Train and register the model"
+      action: orchestration:trigger-training
       input:
-        message: "Preparing to deploy model ${{ parameters.modelName }} version ${{ parameters.modelVersion }} (base model: ${{ parameters.baseModelUri | default('none — training from scratch') }})"
+        modelName: ${{ parameters.modelName }}
+        datasetUri: ${{ parameters.datasetUri }}
+        baseModelUri: ${{ parameters.baseModelUri }}
 
-    - id: log-done
-      name: "Log completion (mock deploy step)"
-      action: debug:log
+    - id: render-catalog-info
+      name: "Generate the model's catalog entity"
+      action: fetch:template
       input:
-        message: "Finished 'deploying' ${{ parameters.modelName }}:${{ parameters.modelVersion }} (this is a mock step — will be replaced with an HTTP call to FastAPI in week 3-4)"
+        url: ./skeleton
+        values:
+          modelName: ${{ parameters.modelName }}
+          modelVersion: ${{ steps['trigger-training'].output.modelVersion }}
 
   output:
+    links:
+      - title: View run in MLflow
+        url: http://localhost:5000
+      - title: "Argo Workflow: ${{ steps['trigger-training'].output.workflowName }}"
+        url: http://localhost:2746
     text:
       - title: Result
         content: |
-          Golden path test complete for model **${{ parameters.modelName }}**
-          version **${{ parameters.modelVersion }}**.
+          Trained and registered **${{ parameters.modelName }}** version
+          **${{ steps['trigger-training'].output.modelVersion }}**
+          (Argo Workflow `${{ steps['trigger-training'].output.workflowName }}`,
+          finished as `${{ steps['trigger-training'].output.phase }}`).
 
-          Next step (week 2-3): replace `debug:log` with a real Custom Action
-          that calls the FastAPI backend, which then calls the Adapter to MLflow.
+          A `catalog-info.yaml` for this model version was generated in this
+          run's workspace (see the step log / task download above) — it is
+          **not yet live in the Catalog**. Neither `catalog:register` nor
+          `catalog:write` can register content that only exists in the
+          Scaffolder's ephemeral workspace: `catalog:register` needs an
+          already-resolvable absolute URL (no template variable exposes the
+          workspace's filesystem path in this Backstage version, and Backstage's
+          UrlReaders don't resolve `file:` URLs anyway), and `catalog:write`
+          only writes the file — neither calls `catalog.addLocation`. Making
+          this entity durably browsable would need a `publish:github`-style
+          step first (like Golden Path #2's PR), which is out of scope here.

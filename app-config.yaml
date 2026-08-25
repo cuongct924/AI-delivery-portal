@@ -265,7 +265,7 @@ catalog:
     - type: file
       target: ../../examples/catalog/model-entity.yaml
       rules:
-        - allow: [Component]
+        - allow: [Resource]
 
     # AI Delivery Portal — Golden Path #1 (Train→Track→Register)
     - type: file
