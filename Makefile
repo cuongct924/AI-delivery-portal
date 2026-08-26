@@ -6,6 +6,14 @@ UV := $(VENV)/bin/uv
 RUFF := $(VENV)/bin/ruff
 PYRIGHT := $(VENV)/bin/pyright
 PYTEST := $(VENV)/bin/pytest
+DVC := $(VENV)/bin/dvc
+
+# Auto-loads .env (AWS_ACCESS_KEY_ID, KEYCLOAK_URL, ...) into every recipe's
+# environment — no more manually exporting before dvc/uvicorn/etc.
+ifneq (,$(wildcard .env))
+include .env
+export
+endif
 
 # Per-service requirements.txt (source of truth) -> requirements.lock.txt
 # (fully pinned incl. transitive deps, what each Dockerfile actually installs
@@ -21,6 +29,7 @@ SERVICE_REQS := requirements-dev.txt \
 .PHONY: venv install lock hooks lint format format-check typecheck test check \
 	gitleaks checkov trivy security \
 	run-orchestration-api run-mlops-mcp run-k8s-mcp run-metrics-mcp \
+	dvc-pull dvc-push \
 	clean-venv
 
 # Pinned to 3.12 to match the Dockerfile base image (python:3.12-slim) — avoids
@@ -92,7 +101,7 @@ checkov:
 
 ## Builds the 4 service images, then Trivy-scans each — needs Docker running.
 trivy:
-	docker build -t orchestration-api:local -f services/orchestration-api/Dockerfile services/orchestration-api
+	docker build -t orchestration-api:local -f services/orchestration-api/Dockerfile .
 	docker build -t mlops-server:local -f agents/mcp-servers/mlops-server/Dockerfile .
 	docker build -t k8s-server:local -f agents/mcp-servers/k8s-server/Dockerfile .
 	docker build -t metrics-server:local -f agents/mcp-servers/metrics-server/Dockerfile .
@@ -115,6 +124,15 @@ run-k8s-mcp:
 
 run-metrics-mcp:
 	bash scripts/run-mcp-local.sh metrics
+
+## Pulls/pushes the DVC-tracked dataset (data/) against the local MinIO
+## remote — needs AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, auto-loaded from
+## .env above instead of exporting them by hand.
+dvc-pull:
+	$(DVC) pull
+
+dvc-push:
+	$(DVC) push
 
 clean-venv:
 	rm -rf $(VENV)
