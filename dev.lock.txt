@@ -182,7 +182,7 @@ fastapi==0.141.1
     # via
     #   -r services/orchestration-api/requirements.txt
     #   mlflow-skinny
-filelock==3.32.3
+filelock==3.32.4
     # via
     #   iterative-telemetry
     #   python-discovery

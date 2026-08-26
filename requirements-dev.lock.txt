@@ -120,7 +120,7 @@ dvc-task==0.40.2
     # via dvc
 entrypoints==0.4
     # via gto
-filelock==3.32.3
+filelock==3.32.4
     # via
     #   iterative-telemetry
     #   python-discovery
