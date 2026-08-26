@@ -46,7 +46,7 @@ jobs:
       - uses: actions/checkout@v4
       # NOTE: plain ubuntu-latest, not a python:3.12-slim container — that
       # image's missing git/libatomic1 caused repeated CI failures.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - uses: actions/cache@v4
