@@ -1,5 +1,5 @@
 app:
-  title: Scaffolded Backstage App
+  title: AI Delivery Portal
   baseUrl: http://localhost:3000
 
   # Enable all packages by default, this will discover packages from packages/app/package.json
@@ -104,7 +104,7 @@ app:
               height: 4
 
 organization:
-  name: My Company
+  name: AI Delivery Portal
 
 backend:
   # Used for enabling authentication, secret is shared by all backend plugins
@@ -199,24 +199,26 @@ mcpChat:
       token: ${LITELLM_MASTER_KEY}
       model: claude-sonnet-5 # model_name in infra/llm-gateways/litellm-config.yaml
   mcpServers:
+    # Paths relative to packages/backend/ (this process's cwd when spawning
+    # them), not the repo root — hence the ../..
     - id: mlops-mcp
       name: MLOps MCP Server
       type: stdio
-      scriptPath: agents/mcp-servers/mlops-server/server.py
+      scriptPath: ../../agents/mcp-servers/mlops-server/server.py
       env:
-        PYTHONPATH: '.'
+        PYTHONPATH: '../..'
     - id: k8s-mcp
       name: Kubernetes MCP Server
       type: stdio
-      scriptPath: agents/mcp-servers/k8s-server/server.py
+      scriptPath: ../../agents/mcp-servers/k8s-server/server.py
       env:
-        PYTHONPATH: '.'
+        PYTHONPATH: '../..'
     - id: metrics-mcp
       name: Metrics MCP Server
       type: stdio
-      scriptPath: agents/mcp-servers/metrics-server/server.py
+      scriptPath: ../../agents/mcp-servers/metrics-server/server.py
       env:
-        PYTHONPATH: '.'
+        PYTHONPATH: '../..'
 
 # Reference documentation http://backstage.io/docs/features/techdocs/configuration
 # Note: After experimenting with basic setup, use CI/CD to generate docs
@@ -305,5 +307,5 @@ permission:
 
 # see https://backstage.io/docs/ai/mcp-actions for more details
 mcpActions:
-  name: 'My Company Backstage' # defaults to "backstage"
-  description: 'Tools for managing your software catalog, creating new services from templates, and exploring your developer portal' # optional
+  name: 'AI Delivery Portal' # defaults to "backstage"
+  description: 'Golden Path tools for the MLOps/LLMOps model lifecycle — train, register, evaluate, and deploy' # optional
