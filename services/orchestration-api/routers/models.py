@@ -17,8 +17,7 @@ adapters/argo_adapter.py) plus the Evaluate Gate (evaluations/).
 from pathlib import Path
 from typing import Final
 
-from evaluations.gate import evaluate_gate
-from evaluations.llm_judge import judge_response
+from evaluations.gate import evaluate_metrics_gate
 from fastapi import APIRouter
 from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel
@@ -177,29 +176,23 @@ def get_latest_version(name: str) -> LatestVersionResponse:
 
 @router.post("/policy-check")
 def policy_check(request: PolicyCheckRequest) -> dict[str, object]:
+    # Classical ML models have ground-truth metrics — compare them directly
+    # against thresholds instead of routing through LLM-as-judge (no LiteLLM
+    # cost). LLM/RAG artifacts still use evaluate_gate() (evaluations/gate.py).
     details = mlflow_adapter.get_model_version_details(request.model_name, request.model_version)
-    question = (
-        f"Should model '{request.model_name}' version {request.model_version} be approved "
-        "for production deployment?"
-    )
-    answer = (
-        f"Model {request.model_name} version {request.model_version} reports these "
-        f"metrics: {details['metrics']}."
-    )
-    judge_result = judge_response(question, answer)
-    gate_result = evaluate_gate(judge_result)
+    gate_result = evaluate_metrics_gate(details["metrics"])
 
     # MLflow tags are strings — stringify every value before persisting.
     mlflow_adapter.set_model_version_tag(
         request.model_name, request.model_version, "gate_passed", str(gate_result["passed"])
     )
-    for criterion in ("safety", "correctness", "relevance"):
-        if criterion in judge_result:
+    for metric_name in ("accuracy", "precision", "recall"):
+        if metric_name in details["metrics"]:
             mlflow_adapter.set_model_version_tag(
                 request.model_name,
                 request.model_version,
-                f"gate_{criterion}",
-                str(judge_result[criterion]),
+                f"gate_{metric_name}",
+                str(details["metrics"][metric_name]),
             )
     return gate_result
 

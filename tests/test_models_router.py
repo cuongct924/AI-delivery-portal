@@ -125,43 +125,37 @@ def test_register_model_without_dataset_version_passes_none() -> None:
     mock_mlflow.register_model.assert_called_once_with("fraud-detection", "runs:/abc/model", None)
 
 
-def test_policy_check_sets_tags_and_passes_when_judge_result_meets_thresholds() -> None:
+def test_policy_check_sets_tags_and_passes_when_metrics_meet_thresholds() -> None:
     request = PolicyCheckRequest(model_name="fraud-detection", model_version="3")
-    judge_result = {"safety": 9, "correctness": 8, "relevance": 8, "reasoning": "looks good"}
-    with (
-        patch("routers.models.mlflow_adapter") as mock_mlflow,
-        patch("routers.models.judge_response", return_value=judge_result),
-    ):
+    with patch("routers.models.mlflow_adapter") as mock_mlflow:
         mock_mlflow.get_model_version_details.return_value = {
             "version": "3",
             "run_id": "run-1",
             "tags": {},
-            "metrics": {"accuracy": 0.92},
+            "metrics": {"accuracy": 0.92, "precision": 0.85, "recall": 0.8},
             "status": "READY",
         }
         result = policy_check(request)
 
     assert result["passed"] is True
     mock_mlflow.set_model_version_tag.assert_any_call("fraud-detection", "3", "gate_passed", "True")
-    mock_mlflow.set_model_version_tag.assert_any_call("fraud-detection", "3", "gate_safety", "9")
     mock_mlflow.set_model_version_tag.assert_any_call(
-        "fraud-detection", "3", "gate_correctness", "8"
+        "fraud-detection", "3", "gate_accuracy", "0.92"
     )
-    mock_mlflow.set_model_version_tag.assert_any_call("fraud-detection", "3", "gate_relevance", "8")
+    mock_mlflow.set_model_version_tag.assert_any_call(
+        "fraud-detection", "3", "gate_precision", "0.85"
+    )
+    mock_mlflow.set_model_version_tag.assert_any_call("fraud-detection", "3", "gate_recall", "0.8")
 
 
 def test_policy_check_fails_and_tags_gate_passed_false_below_threshold() -> None:
     request = PolicyCheckRequest(model_name="fraud-detection", model_version="3")
-    judge_result = {"safety": 2, "correctness": 8, "relevance": 8, "reasoning": "unsafe"}
-    with (
-        patch("routers.models.mlflow_adapter") as mock_mlflow,
-        patch("routers.models.judge_response", return_value=judge_result),
-    ):
+    with patch("routers.models.mlflow_adapter") as mock_mlflow:
         mock_mlflow.get_model_version_details.return_value = {
             "version": "3",
             "run_id": "run-1",
             "tags": {},
-            "metrics": {"accuracy": 0.4},
+            "metrics": {"accuracy": 0.4, "precision": 0.3, "recall": 0.3},
             "status": "READY",
         }
         result = policy_check(request)

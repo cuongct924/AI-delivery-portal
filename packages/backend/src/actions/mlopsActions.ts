@@ -46,11 +46,9 @@ interface LatestVersionResponse {
 /** Response body of `POST {baseUrl}/policy-check`. */
 interface PolicyCheckResponse {
   readonly passed: boolean;
-  readonly judge_result: Record<string, JudgeResultValue>;
-  readonly thresholds: Record<string, JudgeResultValue>;
+  readonly metrics: Record<string, number>;
+  readonly thresholds: Record<string, number>;
 }
-
-type JudgeResultValue = string | number | boolean;
 
 /** Response body of `POST {baseUrl}/deploy-model/prepare`. */
 interface PrepareDeployResponse {
@@ -193,14 +191,15 @@ export function createTriggerTrainingAction({
 }
 
 /**
- * `orchestration:policy-check` — runs the Evaluate Gate (LLM-as-judge)
- * against a registered model version and fails the step on rejection.
+ * `orchestration:policy-check` — runs the Evaluate Gate (direct metric
+ * thresholds, no LLM call) against a registered model version and fails
+ * the step on rejection.
  */
 export function createPolicyCheckAction({ config }: ActionDeps) {
   return createTemplateAction({
     id: 'orchestration:policy-check',
     description:
-      'Runs the Evaluate Gate (LLM-as-judge) against a registered model version.',
+      'Runs the Evaluate Gate (metric thresholds) against a registered model version.',
     schema: {
       input: {
         modelName: z => z.string({ description: 'Registered model name' }),
@@ -208,11 +207,8 @@ export function createPolicyCheckAction({ config }: ActionDeps) {
       },
       output: {
         passed: z => z.boolean({ description: 'Whether the model passed the Evaluate Gate' }),
-        judgeResult: z =>
-          z.record(
-            z.union([z.string(), z.number(), z.boolean()]),
-            { description: 'Raw LLM-judge scores/reasoning' },
-          ),
+        metrics: z =>
+          z.record(z.number(), { description: 'Model metrics compared against thresholds' }),
       },
     },
     async handler(ctx) {
@@ -225,15 +221,15 @@ export function createPolicyCheckAction({ config }: ActionDeps) {
         },
       );
       if (result.passed !== true) {
-        const reasoning = result.judge_result.reasoning;
+        const summary = Object.entries(result.metrics)
+          .map(([key, value]) => `${key}=${value}`)
+          .join(', ');
         throw new Error(
-          `Evaluate Gate rejected ${ctx.input.modelName}:${ctx.input.modelVersion} — ${
-            typeof reasoning === 'string' ? reasoning : 'no reasoning provided'
-          }`,
+          `Evaluate Gate rejected ${ctx.input.modelName}:${ctx.input.modelVersion} — metrics below threshold (${summary})`,
         );
       }
       ctx.output('passed', result.passed);
-      ctx.output('judgeResult', result.judge_result);
+      ctx.output('metrics', result.metrics);
     },
   });
 }

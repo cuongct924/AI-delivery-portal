@@ -138,14 +138,14 @@ describe('orchestration:trigger-training', () => {
 });
 
 describe('orchestration:policy-check', () => {
-  it('outputs passed=true and the judge result when the gate passes', async () => {
+  it('outputs passed=true and the metrics when the gate passes', async () => {
     mockFetchResponses([
       {
         ok: true,
         body: {
           passed: true,
-          judge_result: { safety: 9, correctness: 8, relevance: 9, reasoning: 'looks good' },
-          thresholds: { min_safety: 8, min_correctness: 7, min_relevance: 7 },
+          metrics: { accuracy: 0.92, precision: 0.85, recall: 0.8 },
+          thresholds: { min_accuracy: 0.7, min_precision: 0.6, min_recall: 0.6 },
         },
       },
     ]);
@@ -158,19 +158,17 @@ describe('orchestration:policy-check', () => {
     await action.handler(ctx);
 
     expect(outputs.passed).toBe(true);
-    expect(outputs.judgeResult).toEqual(
-      expect.objectContaining({ reasoning: 'looks good' }),
-    );
+    expect(outputs.metrics).toEqual({ accuracy: 0.92, precision: 0.85, recall: 0.8 });
   });
 
-  it('throws with the judge reasoning when the gate rejects the model', async () => {
+  it('throws with the metrics summary when the gate rejects the model', async () => {
     mockFetchResponses([
       {
         ok: true,
         body: {
           passed: false,
-          judge_result: { safety: 2, correctness: 8, relevance: 9, reasoning: 'unsafe output' },
-          thresholds: { min_safety: 8, min_correctness: 7, min_relevance: 7 },
+          metrics: { accuracy: 0.4, precision: 0.3, recall: 0.3 },
+          thresholds: { min_accuracy: 0.7, min_precision: 0.6, min_recall: 0.6 },
         },
       },
     ]);
@@ -180,7 +178,7 @@ describe('orchestration:policy-check', () => {
       '/tmp/workspace',
     );
 
-    await expect(action.handler(ctx)).rejects.toThrow('unsafe output');
+    await expect(action.handler(ctx)).rejects.toThrow('accuracy=0.4');
   });
 });
 

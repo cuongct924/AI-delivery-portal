@@ -1,8 +1,9 @@
-"""Evaluate Gate — decides whether a response/model is fit to go to
-production. Combines LLM-as-a-judge (safety/correctness, see llm_judge.py)
-with the option to extend with traditional metrics (latency, drift — see
-agents/skills/evaluate_drift.py, agents/mcp-servers/metrics-server/) instead
-of relying on a single simple accuracy threshold.
+"""Evaluate Gate — decides whether a model/response is fit to go to
+production. Two independent mechanisms, picked per artifact type:
+evaluate_metrics_gate() compares objective metrics directly (classical ML
+models with a ground-truth test set — no LLM call, no LiteLLM cost) and
+evaluate_gate() uses LLM-as-a-judge (free-text output with no single correct
+answer — LLMOps prompts/RAG, see llm_judge.py).
 """
 
 from dataclasses import asdict, dataclass
@@ -25,5 +26,26 @@ def evaluate_gate(judge_result: dict, thresholds: GateThresholds | None = None) 
     return {
         "passed": passed,
         "judge_result": judge_result,
+        "thresholds": asdict(thresholds),
+    }
+
+
+@dataclass
+class MetricsGateThresholds:
+    min_accuracy: float = 0.7
+    min_precision: float = 0.6
+    min_recall: float = 0.6
+
+
+def evaluate_metrics_gate(metrics: dict, thresholds: MetricsGateThresholds | None = None) -> dict:
+    thresholds = thresholds or MetricsGateThresholds()
+    passed = (
+        metrics.get("accuracy", 0) >= thresholds.min_accuracy
+        and metrics.get("precision", 0) >= thresholds.min_precision
+        and metrics.get("recall", 0) >= thresholds.min_recall
+    )
+    return {
+        "passed": passed,
+        "metrics": metrics,
         "thresholds": asdict(thresholds),
     }
