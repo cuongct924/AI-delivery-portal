@@ -7,7 +7,7 @@ scrape_configs:
     static_configs:
       - targets: ['orchestration-api:8000']
 
-  # Add a real target once KServe/BentoML expose /metrics (week 8+)
+  # Add a real target once KServe/BentoML expose /metrics
   # - job_name: kserve-inference
   #   static_configs:
   #     - targets: ['<inference-service>:8080']

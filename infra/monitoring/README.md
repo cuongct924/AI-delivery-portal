@@ -19,5 +19,4 @@ Grafana dashboards.
   Anonymous viewer access is enabled for convenience; login is `admin`/`admin`
   if you need to edit anything.
 - ServiceMonitor (CRD for Prometheus Operator on a real K8s cluster) —
-  not implemented yet, week 8+ once a real cluster exists (see
-  `docs/roadmap.md`).
+  not implemented yet, once a real cluster exists.

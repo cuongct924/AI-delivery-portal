@@ -1,7 +1,7 @@
 """MCP Server that reads Kubernetes status (read-only, no write/delete permission).
 
 Currently returns mock data — swap in the real kubernetes-client when
-integrating a cluster during the infrastructure phase (see docs/roadmap.md, week 8+).
+integrating a real cluster.
 """
 
 from mcp.server.mcpserver import MCPServer

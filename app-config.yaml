@@ -181,7 +181,7 @@ grafana:
 orchestrationApi:
   baseUrl: http://localhost:8000
 
-# placeholder — infra/argocd is a stub, see roadmap.md Week 8-9
+# placeholder — infra/argocd is a stub, not implemented yet
 argocd:
   username: ${ARGOCD_USERNAME}
   password: ${ARGOCD_PASSWORD}

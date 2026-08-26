@@ -21,17 +21,17 @@ AI-delivery-portal/
 ├── services/             ← orchestration-api — FastAPI BFF, MCP client, auth, evaluations
 ├── agents/               ← AI Agent & MCP — mcp-servers/, skills/, prompts/
 ├── adapters/             ← Adapter Pattern — MLflow, KServe, Argo, Qdrant, LiteLLM, Feast, JupyterHub
-├── infra/                ← GitOps infra — monitoring/vector-dbs/llm-gateways (active); helm-charts/argocd/opa-policies (week 8+)
+├── infra/                ← GitOps infra — monitoring/vector-dbs/llm-gateways (active); helm-charts/argocd/opa-policies (not yet implemented)
 ├── data/                 ← datasets versioned with DVC (S3-compatible remote, see data/README.md)
 ├── examples/             ← Catalog entity + 2 Golden Path templates (train-track-register, register-deploy)
 ├── scripts/              ← run-mcp-local.sh
-├── docs/                 ← architecture, roadmap, playbook
+├── docs/                 ← playbook, LLMOps draft plan
 ├── app-config.yaml       ← shared Backstage config (catalog, scaffolder, auth, proxy...)
 ├── docker-compose.yml    ← full local stack (mlflow, keycloak, prometheus, grafana, qdrant, minio, litellm, orchestration-api, MCP servers)
 └── README.md
 ```
 
-See [`docs/architecture.md`](docs/architecture.md) for the full component breakdown and design rationale.
+See [`docs/playbook-ai-delivery-portal.md`](docs/playbook-ai-delivery-portal.md) for the full component breakdown and design rationale.
 
 ## Usage
 

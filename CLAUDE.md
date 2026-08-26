@@ -1,8 +1,8 @@
 # AI Delivery Portal
 
 Portal (Backstage) + Orchestration API (FastAPI) + AI Agent/MCP + Adapter layer
-+ GitOps infra, one repo. See `docs/architecture.md` for the component diagram
-and `docs/playbook-ai-delivery-portal.md` for design decisions/rationale.
++ GitOps infra, one repo. See `docs/playbook-ai-delivery-portal.md` for the
+component diagram and design decisions/rationale.
 
 ## Commands
 
@@ -57,9 +57,9 @@ services/             orchestration-api — FastAPI BFF, MCP client, auth, evalu
 agents/               AI Agent & MCP — mcp-servers/, skills/, prompts/
 adapters/             Adapter Pattern — MLflow, KServe, Argo, Qdrant, LiteLLM, Feast, JupyterHub
 data/                 DVC-tracked datasets — pointer files in git, real data in an S3-compatible remote
-infra/                GitOps infra — monitoring/vector-dbs/llm-gateways (active); helm-charts/argocd/opa-policies (week 8+)
+infra/                GitOps infra — monitoring/vector-dbs/llm-gateways (active); helm-charts/argocd/opa-policies (not yet implemented)
 examples/             Catalog entity + 2 Golden Path templates (train→track→register, register→deploy), wired into app-config.yaml
-docs/                 architecture, roadmap, playbook
+docs/                 playbook, LLMOps draft plan
 ```
 
 ## Workflow

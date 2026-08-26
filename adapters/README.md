@@ -23,7 +23,7 @@ adapters/
   `register_model()` accepts an optional `dataset_version` (the DVC md5 hash from
   the dataset's `.dvc` file, see `../data/`) and stores it as a model version tag
   — the caller resolves the hash, this adapter just passes it through.
-- `kserve_adapter.py` needs a real kubeconfig — only usable from the infrastructure phase (week 8+).
+- `kserve_adapter.py` needs a real kubeconfig — only usable once a real cluster exists.
 - `argo_adapter.py` reads `ARGO_SERVER_URL` (defaults to `http://localhost:2746`), calls
   the WorkflowTemplate in `infra/argo-workflows/`.
 - `vector_db_adapter.py` reads `QDRANT_URL` (defaults to `http://localhost:6333`), spun up
@@ -32,9 +32,9 @@ adapters/
   via `docker compose up` — see `infra/llm-gateways/`.
 - `feature_store_adapter.py` reads `FEAST_REPO_PATH` (defaults to `infra/feature-store`) —
   needs that Feast repo (feature_store.yaml + entity/feature definitions) provisioned
-  before it can connect for real, same infra-phase caveat as `kserve_adapter.py`.
+  before it can connect for real, same caveat as `kserve_adapter.py`.
 - `notebook_adapter.py` reads `JUPYTERHUB_URL`/`JUPYTERHUB_API_TOKEN` — needs a real
   JupyterHub deployment (KubeSpawner profiles for environment/RAM/GPU) before it can
-  connect for real, same infra-phase caveat as `kserve_adapter.py`.
+  connect for real, same caveat as `kserve_adapter.py`.
 
 Install shared dependencies: `pip install -r adapters/requirements.txt`.\

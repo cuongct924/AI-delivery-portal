@@ -90,5 +90,5 @@ spec:
           ${{ steps['publish-pr'].output.remoteUrl }}
 
           It contains `infra/inference-services/${{ parameters.modelName }}/${{ parameters.modelVersion }}.yaml`.
-          ArgoCD sync is not wired up yet (infra/argocd/README.md, week 8+) —
+          ArgoCD sync is not wired up yet (see infra/argocd/README.md) —
           merging this PR does not deploy the model on its own.

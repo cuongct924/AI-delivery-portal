@@ -2,8 +2,7 @@
 
 Uses the Kubernetes Python client to operate on the `InferenceService`
 custom resource (serving.kserve.io/v1beta1). Requires a kubeconfig pointing
-at a real cluster — only usable starting from the infrastructure phase
-(see docs/roadmap.md, week 8+).
+at a real cluster.
 """
 
 from typing import cast

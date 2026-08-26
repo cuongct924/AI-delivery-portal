@@ -30,7 +30,7 @@ branch = true
 skip_empty = true
 exclude_lines = ["pragma: no cover", "if __name__ == .__main__.:"]
 # Coverage is low right now because most modules (adapters, MCP servers, auth)
-# are still stubs with no business logic to test yet — see docs/roadmap.md.
+# are still stubs with no business logic to test yet.
 # Raise this once real logic lands instead of chasing a number early.
 # fail_under = 80
 
