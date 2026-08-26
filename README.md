@@ -1,13 +1,14 @@
 # AI Delivery Portal
 
-**A CI/CD Portal and Internal Developer Platform for MLOps/LLMOps**
+**An Internal Developer Platform for MLOps/LLMOps**
 
 Repository for the **AI Delivery Portal** project (Viettel Digital Talent 2026 — Cloud Track - Phase 02).
 
-An MLOps platform built as an Internal Developer Platform (IDP) for AI/ML workloads:
+An MLOps/LLMOps platform built as an Internal Developer Platform (IDP) for AI/ML workloads:
 
 - Acts as the **DevEx and orchestration layer** on top of the AI platform ecosystem — Model Registry, Model Experiments, AI Inference, AI Notebooks
 - Provides **golden paths** so developers and ML engineers can ship standard MLOps/LLMOps workflows without hand-rolling infrastructure each time
+- Scope is the internal MLOps/LLMOps flow itself — integrating generic CI/CD with external systems is out of scope (see [`docs/playbook-ai-delivery-portal.md`](docs/playbook-ai-delivery-portal.md))
 
 Official structure: Portal (Backstage) + Orchestration API (FastAPI) + AI Agent/MCP
 + Adapter layer + GitOps infrastructure.
@@ -43,8 +44,14 @@ yarn lint:all                   # lint — whole repo (what CI runs)
 yarn fix                        # auto-fix what's fixable
 yarn workspace <name> add <pkg> # add a dependency to one workspace (packages/app-backstage, backend, plugins/prompt-registry...)
 cp .env.example .env            # fill in ANTHROPIC_API_KEY before running orchestration-api/litellm
-docker compose up               # run the whole stack: mlflow, keycloak, prometheus, grafana, qdrant, minio, litellm,
-                                 # orchestration-api, mlops/k8s/metrics MCP servers
+docker compose --profile mlops up -d       # MLOps only: mlflow, keycloak, minio, orchestration-api
+docker compose --profile llmops up -d      # LLMOps only: qdrant, litellm
+docker compose --profile observability up -d   # optional: prometheus, grafana
+docker compose --profile mlops --profile llmops --profile observability up -d   # everything
+
+# MCP servers use stdio transport — not meant to run detached (`up -d` exits
+# them immediately). Spawn one on demand instead:
+docker compose run -i mlops-mcp-server     # or k8s-mcp-server / metrics-mcp-server
 bash scripts/run-mcp-local.sh mlops   # or: run a single MCP server standalone, no Docker needed
 
 make install    # create a Python 3.12 .venv, install ruff + pyright + pytest + every service's requirements.txt
@@ -71,6 +78,35 @@ echo "--container-architecture linux/amd64" >> ~/.actrc   # Apple Silicon: match
 act -l                                                      # list jobs, sanity-check the workflow parses
 act pull_request --container-architecture linux/amd64       # run the full pipeline (skips the GHCR push step — needs main branch)
 act pull_request -j python-checks                           # run a single job: python-checks example
+```
+
+## Local Kubernetes cluster
+
+[`scripts/setup-k8s-local.sh`](scripts/setup-k8s-local.sh) creates the `kind` cluster + Argo Workflows that back Golden Path #1. Once it's up:
+
+```bash
+# switch kubectl back if it points elsewhere
+kubectl config use-context kind-ai-delivery-portal
+
+# cluster is up if this returns a Ready node
+kubectl get nodes
+# Argo controller/server status
+kubectl get pods -n argo
+# debug a stuck/crashing pod                              
+kubectl describe pod -n argo -l app=workflow-controller
+# controller logs
+kubectl logs -n argo -l app=workflow-controller
+# server logs
+kubectl logs -n argo -l app=argo-server                
+
+kubectl get workflowtemplates -n default               # confirm train-register-golden-path / fine-tune-golden-path exist
+kubectl get workflows -n default                       # list runs triggered via POST /trigger-training
+kubectl get workflows -n default -w                    # watch a run's phase live
+kubectl logs -n default <pod-name>                     # logs of a specific train/register step pod
+
+curl http://localhost:2746/api/v1/workflows/default    # Argo Server REST API health check (what ArgoAdapter calls)
+
+kind delete cluster --name ai-delivery-portal          # tear the whole cluster down
 ```
 
 ## Reference
