@@ -32,15 +32,12 @@ annotated-doc==0.0.5
     #   typer
 annotated-types==0.8.0
     # via pydantic
-anthropic==0.122.0
-    # via -r services/orchestration-api/requirements.txt
 antlr4-python3-runtime==4.9.3
     # via
     #   hydra-core
     #   omegaconf
 anyio==4.14.2
     # via
-    #   anthropic
     #   httpx
     #   httpx2
     #   mcp
@@ -153,13 +150,10 @@ distlib==0.4.3
     # via virtualenv
 distro==1.9.0
     # via
-    #   anthropic
     #   dvc
     #   iterative-telemetry
 docker==7.2.0
     # via mlflow
-docstring-parser==0.18.0
-    # via anthropic
 dpath==2.2.0
     # via dvc
 dulwich==1.2.12
@@ -288,7 +282,6 @@ httpx==0.28.1
     #   -r adapters/requirements.txt
     #   -r agents/mcp-servers/metrics-server/requirements.txt
     #   -r services/orchestration-api/requirements.txt
-    #   anthropic
     #   qdrant-client
 httpx2==2.12.0
     # via mcp
@@ -320,8 +313,6 @@ jinja2==3.1.6
     #   -r services/orchestration-api/requirements.txt
     #   feast
     #   flask
-jiter==0.16.0
-    # via anthropic
 jmespath==1.1.0
     # via
     #   aiobotocore
@@ -371,6 +362,7 @@ mlflow==3.15.1
     # via
     #   -r adapters/requirements.txt
     #   -r agents/mcp-servers/mlops-server/requirements.txt
+    #   -r services/orchestration-api/requirements.txt
 mlflow-skinny==3.15.1
     # via mlflow
 mlflow-tracing==3.15.1
@@ -513,7 +505,6 @@ pycparser==3.0
     # via cffi
 pydantic==2.13.4
     # via
-    #   anthropic
     #   fastapi
     #   feast
     #   gto
@@ -666,8 +657,6 @@ skops==0.14.0
     # via mlflow
 smmap==5.0.3
     # via gitdb
-sniffio==1.3.1
-    # via anthropic
 sqlalchemy==2.0.52
     # via
     #   alembic
@@ -724,7 +713,6 @@ typing-extensions==4.16.0
     #   aiohttp
     #   aiosignal
     #   alembic
-    #   anthropic
     #   anyio
     #   asyncssh
     #   fastapi

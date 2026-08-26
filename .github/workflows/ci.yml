@@ -136,7 +136,7 @@ jobs:
           echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
       - name: Build images
         run: |
-          docker build -t orchestration-api:$SHORT_SHA -f services/orchestration-api/Dockerfile services/orchestration-api
+          docker build -t orchestration-api:$SHORT_SHA -f services/orchestration-api/Dockerfile .
           docker build -t mlops-server:$SHORT_SHA -f agents/mcp-servers/mlops-server/Dockerfile .
           docker build -t k8s-server:$SHORT_SHA -f agents/mcp-servers/k8s-server/Dockerfile .
           docker build -t metrics-server:$SHORT_SHA -f agents/mcp-servers/metrics-server/Dockerfile .
