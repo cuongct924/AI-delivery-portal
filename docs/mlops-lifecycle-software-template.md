@@ -419,6 +419,45 @@ Mở rộng `template.yaml`: thêm nhánh JSON Schema `if/then` cho `architectur
 (`sklearn`/`mlp`/`lstm`), mỗi lựa chọn hiện đúng field hyperparameter tương
 ứng — cùng kỹ thuật đã dùng cho `algorithm` theo `taskType` (mục 3.4).
 
+### 5.5 Đã code — tinh chỉnh so với 5.1-5.4 lúc triển khai thật
+
+- **`train_dl.py` tách file riêng** (đúng 5.2), nhưng **dispatch nằm trong
+  `train.py`** chứ không phải entrypoint/container riêng — `main()` đọc
+  `ARCHITECTURE` (mặc định `sklearn`), rẽ nhánh sau khi `_split()` (dùng
+  chung nguyên vẹn với sklearn). `_handle_missing_values`/`_scale_features`
+  sklearn-style **không dùng cho DL** — `train_dl.py` luôn tự
+  chuẩn hoá (mean/std), không có cờ bật/tắt như `AlgorithmSpec.requires_scaling`.
+- **torch CPU-only**: `--extra-index-url https://download.pytorch.org/whl/cpu`
+  + `torch==2.13.0` trong `requirements.txt` — không có GPU trên `kind`
+  cluster, tránh kéo theo gói CUDA vô dụng (cùng loại vấn đề đã gặp với
+  `nvidia-nccl-cu12` ở `xgboost`). Kéo theo 2 lần chỉnh
+  `--index-strategy unsafe-best-match`: 1 lần ở `Makefile`'s `lock` target
+  (compile-time — nếu không, `uv pip compile` từ chối resolve các gói không
+  liên quan gì đến torch, ví dụ `qdrant-client`/`dvc`, vì mặc định chỉ tin
+  index đầu tiên chứa 1 tên gói) và 1 lần **thêm mới** ở
+  `training-image/Dockerfile`'s `uv pip install` (install-time — lock file
+  giờ tự khai `--extra-index-url` qua `--emit-index-url`, nên `uv pip
+  install` bên trong container cũng cần cờ này để không từ chối resolve
+  `certifi`/các gói khác quá phiên bản có trên riêng
+  `download.pytorch.org`).
+- **LSTM windowing xảy ra sau `_split()`** — `build_sequences()` chạy riêng
+  trên phần train và phần test, chấp nhận mất vài dòng biên thay vì
+  windowing rồi mới chia.
+- **Optimizer cố định Adam**, `CrossEntropyLoss` dùng chung cho classification
+  (kể cả nhị phân, qua `output_size = train_labels.nunique()`), target
+  regression cũng được chuẩn hoá (mean/std lưu riêng, un-scale trước khi
+  gọi `compute_metrics()` vì R2/MAPE cần giá trị đúng thang đo gốc).
+  `mlflow.log_metric("loss", value, step=epoch)` mỗi epoch — tái dùng UI
+  MLflow có sẵn, cùng tinh thần mục 6c.3.
+- **Lỗi môi trường phát hiện lúc code** (không phải lỗi thiết kế): trên máy
+  dev macOS, import `xgboost`/`lightgbm` (hoặc gián tiếp qua
+  `algorithm_registry.py`) trước `torch` trong cùng 1 process làm segfault ở
+  lần gọi `CrossEntropyLoss` đầu tiên — 2 runtime OpenMP xung đột. Fix bằng
+  cách ép `torch` import trước (`train.py` có `import torch` tường minh
+  trước `algorithm_registry`; bộ test có `tests/conftest.py` làm điều tương
+  tự cho cả pytest process). Chỉ ảnh hưởng macOS dev venv — image Docker
+  thật chạy Linux, không gặp lỗi này.
+
 ## 6. Trạng thái từng phần — thứ tự tuyến tính đã chốt (MLOps xong hết mới tới LLMOps)
 
 Toàn bộ đã được sắp xếp thành **1 chuỗi phụ thuộc tuyến tính duy nhất**
@@ -428,7 +467,7 @@ trong task list (mỗi phase `blockedBy` task cuối của phase trước):
 |---|---|---|---|
 | 1 | Golden Path #1 — Classical ML (mục 3) | #9–18 | **Đã code + commit** (training image, data quality, gate, 5-step template) |
 | 2 | Golden Path #2 — Deploy Strategy (mục 4) | #24–29 | **Đã code + commit** (`adapters/deploy_strategies.py`, KServe create-or-update fix, mục 4.5). Hạ tầng chạy thật (ArgoCD + Helm + KServe Serverless trên kind, mục 4b) cũng đã dựng xong — chạy thử end-to-end được ngay |
-| 3 | Deep Learning — MLP+LSTM (mục 5) | #19–23 | Đã duyệt, `blockedBy` #29 |
+| 3 | Deep Learning — MLP+LSTM (mục 5) | #19–23 | **Đã code + commit** (`dl_models.py`, `dl_architecture_registry.py`, `train_dl.py`, dispatch trong `train.py`, dataset `sensor-timeseries-sample.csv`, mục 5.5). `docker build` của `training-image` chưa verify lại lần cuối — máy dev hết dung lượng đĩa giữa chừng |
 | 4 | BYOC — custom script (mục 6b.3) | #30–34 | Đã duyệt, `blockedBy` #23 |
 | 5 | HPO — Grid/Random/Bayesian (mục 6c) | #35–37 | Đã duyệt, `blockedBy` #34 |
 | 6 | NLP — text classification (mục 6b) | #38 | Roadmap, cần thiết kế chi tiết trước khi tách task nhỏ, `blockedBy` #37 |
