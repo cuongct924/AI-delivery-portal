@@ -232,6 +232,40 @@ describe('orchestration:trigger-training', () => {
       custom_config: '{"lr": 0.01}',
     });
   });
+
+  it('forwards HPO fields to the orchestration API when searchStrategy is not fixed', async () => {
+    const fetchMock = mockFetchResponses([
+      { ok: true, body: { workflow_name: 'wf-6' } },
+      { ok: true, body: { name: 'wf-6', phase: 'Succeeded', message: null } },
+      { ok: true, body: { name: 'sensor-forecast', version: '1' } },
+    ]);
+    const action = createTriggerTrainingAction({ config, pollIntervalMs: 1 });
+    const { ctx } = createMockContext<typeof action>(
+      {
+        modelName: 'sensor-forecast',
+        datasetUri: 'file:///sensor.csv',
+        taskType: 'regression',
+        architecture: 'mlp',
+        targetColumn: 'target',
+        searchStrategy: 'bayesian',
+        numTrials: 20,
+        searchSpaceJson: '{"learning_rate": {"low": 0.0001, "high": 0.1}}',
+        objectiveMetric: 'r2',
+        objectiveDirection: 'maximize',
+      },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(requestInit.body as string);
+    expect(body.search_strategy).toBe('bayesian');
+    expect(body.num_trials).toBe(20);
+    expect(body.search_space_json).toBe('{"learning_rate": {"low": 0.0001, "high": 0.1}}');
+    expect(body.objective_metric).toBe('r2');
+    expect(body.objective_direction).toBe('maximize');
+  });
 });
 
 describe('orchestration:validate-dataset', () => {

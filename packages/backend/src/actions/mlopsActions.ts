@@ -189,6 +189,26 @@ export function createTriggerTrainingAction({
               description: 'JSON object of hyperparameters passed to train()\'s config arg — algorithm="custom"',
             })
             .optional(),
+        searchStrategy: z =>
+          z
+            .string({ description: '"fixed" (default), "grid", "random", or "bayesian" — mục 6c' })
+            .optional(),
+        numTrials: z =>
+          z.number({ description: 'Trial budget — searchStrategy=random/bayesian' }).optional(),
+        searchSpaceJson: z =>
+          z
+            .string({
+              description: 'JSON object mapping hyperparameter name to {choices:[...]} or {low,high} — searchStrategy!=fixed',
+            })
+            .optional(),
+        objectiveMetric: z =>
+          z
+            .string({ description: 'Metric name to optimize across trials — searchStrategy!=fixed' })
+            .optional(),
+        objectiveDirection: z =>
+          z
+            .string({ description: '"maximize" (default) or "minimize" — searchStrategy!=fixed' })
+            .optional(),
       },
       output: {
         workflowName: z => z.string({ description: 'Name of the Argo Workflow that ran' }),
@@ -224,6 +244,11 @@ export function createTriggerTrainingAction({
           code_repo_url: ctx.input.codeRepoUrl,
           entrypoint_path: ctx.input.entrypointPath,
           custom_config: ctx.input.customConfig,
+          search_strategy: ctx.input.searchStrategy,
+          num_trials: ctx.input.numTrials,
+          search_space_json: ctx.input.searchSpaceJson,
+          objective_metric: ctx.input.objectiveMetric,
+          objective_direction: ctx.input.objectiveDirection,
         });
       ctx.logger.info(`Triggered training workflow "${workflowName}"`);
 

@@ -77,6 +77,13 @@ class TriggerTrainingRequest(BaseModel):
     code_repo_url: str | None = None
     entrypoint_path: str | None = None
     custom_config: str | None = None
+    # HPO (mục 6c) — only used when architecture is "mlp"/"lstm" and
+    # search_strategy is not "fixed" (the default).
+    search_strategy: str | None = None
+    num_trials: int | None = None
+    search_space_json: str | None = None
+    objective_metric: str | None = None
+    objective_direction: str | None = None
 
 
 class TriggerTrainingResponse(BaseModel):
@@ -226,6 +233,16 @@ def trigger_training(request: TriggerTrainingRequest) -> TriggerTrainingResponse
         parameters["entrypoint-path"] = request.entrypoint_path
     if request.custom_config is not None:
         parameters["custom-config"] = request.custom_config
+    if request.search_strategy is not None:
+        parameters["search-strategy"] = request.search_strategy
+    if request.num_trials is not None:
+        parameters["num-trials"] = str(request.num_trials)
+    if request.search_space_json is not None:
+        parameters["search-space-json"] = request.search_space_json
+    if request.objective_metric is not None:
+        parameters["objective-metric"] = request.objective_metric
+    if request.objective_direction is not None:
+        parameters["objective-direction"] = request.objective_direction
     result = argo_adapter.trigger_workflow(TRAIN_REGISTER_TEMPLATE, parameters)
     return TriggerTrainingResponse(workflow_name=result["metadata"]["name"])
 

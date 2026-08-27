@@ -170,6 +170,38 @@ def test_trigger_training_forwards_byoc_fields_for_custom_algorithm() -> None:
     assert response.workflow_name == "wf-byoc"
 
 
+def test_trigger_training_forwards_hpo_fields_for_non_fixed_search_strategy() -> None:
+    request = TriggerTrainingRequest(
+        model_name="sensor-forecast",
+        dataset_uri="file:///mnt/data/sensor-timeseries-sample.csv",
+        task_type="regression",
+        architecture="mlp",
+        target_column="target",
+        hidden_layers=[64, 32],
+        dropout=0.2,
+        learning_rate=0.01,
+        epochs=10,
+        batch_size=16,
+        search_strategy="bayesian",
+        num_trials=20,
+        search_space_json='{"learning_rate": {"low": 0.0001, "high": 0.1}}',
+        objective_metric="r2",
+        objective_direction="maximize",
+    )
+    with patch("routers.models.argo_adapter") as mock_argo:
+        mock_argo.trigger_workflow.return_value = {"metadata": {"name": "wf-hpo"}}
+        response = trigger_training(request)
+
+    call_args = mock_argo.trigger_workflow.call_args.args
+    assert call_args[0] == "train-register-golden-path"
+    assert call_args[1]["search-strategy"] == "bayesian"
+    assert call_args[1]["num-trials"] == "20"
+    assert call_args[1]["search-space-json"] == '{"learning_rate": {"low": 0.0001, "high": 0.1}}'
+    assert call_args[1]["objective-metric"] == "r2"
+    assert call_args[1]["objective-direction"] == "maximize"
+    assert response.workflow_name == "wf-hpo"
+
+
 def test_get_training_status_returns_argo_status() -> None:
     with patch("routers.models.argo_adapter") as mock_argo:
         mock_argo.get_workflow_status.return_value = {

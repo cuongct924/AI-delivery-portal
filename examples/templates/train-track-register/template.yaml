@@ -102,6 +102,41 @@ spec:
         batchSize:
           title: Batch size (architecture=mlp/lstm)
           type: integer
+        searchStrategy:
+          title: Hyperparameter search strategy (architecture=mlp/lstm)
+          type: string
+          enum: [fixed, grid, random, bayesian]
+          default: fixed
+          description: >
+            "fixed" (default) trains once with the values above, unchanged.
+            "grid"/"random"/"bayesian" run multiple trials instead — set
+            searchSpaceJson to say which hyperparameters to search, and
+            objectiveMetric/numTrials below (mục 6c).
+        numTrials:
+          title: Number of trials (searchStrategy=random/bayesian)
+          type: integer
+          description: Ignored by "grid" — trial count there is the full grid size.
+        searchSpaceJson:
+          title: Search space JSON (searchStrategy!=fixed)
+          type: string
+          default: "{}"
+          description: >
+            JSON object mapping hyperparameter name to either
+            {"choices": [...]} or {"low": ..., "high": ...}, e.g.
+            {"learning_rate": {"low": 0.0001, "high": 0.1}}. Any
+            hyperparameter above not listed here stays fixed at its value.
+        objectiveMetric:
+          title: Objective metric (searchStrategy!=fixed)
+          type: string
+          description: >
+            Metric name to optimize across trials, e.g. "accuracy" or
+            "mean_absolute_error" — must be one of the metrics this task
+            type computes (see evaluations/gate.py TASK_TYPE_THRESHOLDS).
+        objectiveDirection:
+          title: Objective direction (searchStrategy!=fixed)
+          type: string
+          enum: [maximize, minimize]
+          default: maximize
         targetColumn:
           title: Target column
           type: string
@@ -237,6 +272,20 @@ spec:
             required:
               - codeRepoUrl
               - entrypointPath
+        - if:
+            properties:
+              searchStrategy:
+                enum: [grid, random, bayesian]
+          then:
+            required:
+              - objectiveMetric
+        - if:
+            properties:
+              searchStrategy:
+                enum: [random, bayesian]
+          then:
+            required:
+              - numTrials
 
   steps:
     - id: validate-dataset
@@ -272,6 +321,11 @@ spec:
         codeRepoUrl: ${{ parameters.codeRepoUrl }}
         entrypointPath: ${{ parameters.entrypointPath }}
         customConfig: ${{ parameters.customConfig }}
+        searchStrategy: ${{ parameters.searchStrategy }}
+        numTrials: ${{ parameters.numTrials }}
+        searchSpaceJson: ${{ parameters.searchSpaceJson }}
+        objectiveMetric: ${{ parameters.objectiveMetric }}
+        objectiveDirection: ${{ parameters.objectiveDirection }}
 
     - id: model-summary
       name: "Fetch the model version's metrics"
