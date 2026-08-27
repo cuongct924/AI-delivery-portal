@@ -1,8 +1,22 @@
 # helm-charts
 
-Helm chart for each service (`orchestration-api`, `mlops-server`, `k8s-server`,
-Portal Backstage). **Not implemented yet**, once the services are running
-stably via `docker-compose.yml`.
+Helm chart per service, each at `infra/helm-charts/<service-name>/` with
+`Chart.yaml`, `values.yaml`, `templates/` — implemented for exactly 2:
 
-Each chart is expected to live at `infra/helm-charts/<service-name>/` with
-`Chart.yaml`, `values.yaml`, `templates/`.
+- **`orchestration-api/`**
+- **`portal/`** (Backstage backend — runs with `app-config.yaml` dev-mode
+  config, in-memory SQLite + guest auth, not `app-config.production.yaml`,
+  which needs a Postgres that doesn't exist anywhere in this project yet)
+
+Synced onto the local `kind` cluster via ArgoCD (`infra/argocd/
+orchestration-api-app.yaml` / `portal-app.yaml`) — see
+`scripts/setup-kserve-argocd-local.sh`. **Additive to `docker compose up
+-d`/`yarn start`, not a replacement** — this is the GitOps/production-like
+verification path, local dev keeps using docker-compose for its fast
+code-then-see-it loop.
+
+**Deliberately no chart for the 3 MCP servers** (`mlops-server`/
+`k8s-server`/`metrics-server`) — they're stdio-transport tools spawned
+on-demand (`docker compose run -i ...`, `profiles: ["manual"]` in
+`docker-compose.yml`), not long-running services. A K8s `Deployment`
+would crash-loop them (no stdin attached, the process exits on EOF).

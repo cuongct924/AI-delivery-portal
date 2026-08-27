@@ -64,9 +64,10 @@ spec:
         description: >
           Adds the KServe InferenceService manifest for
           **${{ parameters.modelName }}** version **${{ parameters.modelVersion }}**
-          (Evaluate Gate passed). Once ArgoCD is set up (currently a stub —
-          see infra/argocd/README.md), it will pick up this manifest and
-          sync it; merging this PR does **not** deploy anything today.
+          (Evaluate Gate passed). ArgoCD (infra/argocd/inference-services-app.yaml)
+          watches this path with automated sync — merging this PR deploys
+          the model, no manual `kubectl apply` needed (assumes
+          scripts/setup-kserve-argocd-local.sh has been run).
         sourcePath: infra/inference-services
         targetPath: infra/inference-services
 
@@ -90,5 +91,6 @@ spec:
           ${{ steps['publish-pr'].output.remoteUrl }}
 
           It contains `infra/inference-services/${{ parameters.modelName }}/${{ parameters.modelVersion }}.yaml`.
-          ArgoCD sync is not wired up yet (see infra/argocd/README.md) —
-          merging this PR does not deploy the model on its own.
+          Once merged, ArgoCD (infra/argocd/README.md) picks it up
+          automatically — by default within ~3 minutes, or run
+          `argocd app sync inference-services` to sync immediately.

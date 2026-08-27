@@ -1,0 +1,17 @@
+# app-config.yaml (baked into the image) hardcodes localhost:3000/:7007 —
+# correct for `yarn start`, wrong once the same origin is reached through
+# the NodePort. This 3rd config layer overrides just baseUrl/cors.origin;
+# app-config.production.yaml (needs Postgres — not used, see Chart.yaml)
+# is intentionally never referenced.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "portal.fullname" . }}-config
+data:
+  app-config.local.yaml: |
+    app:
+      baseUrl: {{ .Values.externalUrl }}
+    backend:
+      baseUrl: {{ .Values.externalUrl }}
+      cors:
+        origin: {{ .Values.externalUrl }}
