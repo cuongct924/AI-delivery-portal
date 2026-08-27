@@ -30,13 +30,42 @@ class IModelRegistryAdapter(ABC):
 
 class IInferenceAdapter(ABC):
     @abstractmethod
-    def deploy_model(self, name: str, version: str, model_uri: str) -> dict: ...
+    def deploy_model(
+        self, name: str, version: str, model_uri: str, traffic_fields: dict | None = None
+    ) -> dict: ...
 
     @abstractmethod
     def get_inference_status(self, name: str) -> dict: ...
 
     @abstractmethod
     def predict(self, name: str, payload: dict) -> dict: ...
+
+
+class IDeployTrafficStrategy(ABC):
+    """How traffic moves to the new model version — Golden Path #2.
+
+    Direct and TrafficSplit (Canary/A-B/Blue-Green) are the only 2
+    concrete strategies: KServe's `canaryTrafficPercent` field is one
+    mechanism that Canary/A-B/Blue-Green only differ in *intent* over
+    (mục 4.1, docs/mlops-lifecycle-software-template.md) — not 3 separate
+    classes.
+    """
+
+    @abstractmethod
+    def render(self) -> dict:
+        """Fields to merge into the InferenceService's spec.predictor
+        block — {} for Direct, {"canaryTrafficPercent": N} for TrafficSplit."""
+
+
+class IReleaseStrategy(ABC):
+    """How a deploy gets approved — PR-gated (default, unchanged) vs
+    Instant (calls the inference adapter directly, no Git/PR)."""
+
+    @abstractmethod
+    def release(self, model_name: str, model_version: str, manifest_content: str) -> dict:
+        """Performs the release action. PRGatedStrategy is a no-op — the
+        caller still publishes manifest_content as a PR itself. Instant
+        actually deploys and returns {"deployed": True}."""
 
 
 class IWorkflowAdapter(ABC):

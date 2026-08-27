@@ -5,8 +5,8 @@ metadata:
   title: "Register → Deploy (Golden Path #2)"
   description: >
     Runs the Evaluate Gate against a registered model version and, if it
-    passes, opens a PR with the generated KServe InferenceService manifest —
-    calling services/orchestration-api the whole way, no mock steps.
+    passes, deploys via the chosen deploy/release strategy — calling
+    services/orchestration-api the whole way, no mock steps.
   tags:
     - mlops
 
@@ -19,7 +19,6 @@ spec:
       required:
         - modelName
         - modelVersion
-        - repoUrl
       properties:
         modelName:
           title: Model name
@@ -29,11 +28,43 @@ spec:
           title: Version
           type: string
           description: E.g. "3" — the MLflow Model Registry version number
+        deployStrategy:
+          title: Deploy strategy
+          type: string
+          enum: [direct, canary, ab, blue-green]
+          default: direct
+          description: >
+            Direct replaces 100% of traffic immediately — always valid,
+            including a model's first deploy. Canary/A-B/Blue-Green all
+            use the same KServe canaryTrafficPercent mechanism (they only
+            differ in what percent to start at) and REQUIRE a prior
+            deploy of this model to already exist — orchestration-api
+            rejects them otherwise with a clear error.
+        trafficPercent:
+          title: Traffic percent
+          type: integer
+          description: >
+            Required unless deployStrategy is Direct. Canary: start low
+            (e.g. 10) and increase manually over time by re-running this
+            template with a higher value. A-B: a fixed percent held for
+            comparison. Blue-Green: 0 to stage dark (no traffic yet) or
+            100 to cut over immediately.
+        releaseStrategy:
+          title: Release strategy
+          type: string
+          enum: [pr-gated, instant]
+          default: pr-gated
+          description: >
+            PR-gated (default) opens a PR against repoUrl — merging it is
+            what actually deploys, via ArgoCD's automated sync. Instant
+            calls orchestration-api directly, no PR/Git involved — repoUrl
+            is unused in this case.
         repoUrl:
           title: Repository
           type: string
           description: >
-            Target GitOps repo for the deploy manifest PR, in the format
+            Target GitOps repo for the deploy manifest PR — required when
+            releaseStrategy is pr-gated, in the format
             github.com?owner=<org>&repo=<repo> (same shape
             publish:github:pull-request expects). No RepoUrlPicker field
             extension is confirmed available in this repo's frontend, so
@@ -48,15 +79,19 @@ spec:
         modelVersion: ${{ parameters.modelVersion }}
 
     - id: prepare-manifest
-      name: "Render the InferenceService manifest"
+      name: "Render the InferenceService manifest / deploy"
       action: orchestration:prepare-deploy-manifest
       input:
         modelName: ${{ parameters.modelName }}
         modelVersion: ${{ parameters.modelVersion }}
+        trafficStrategy: ${{ parameters.deployStrategy }}
+        trafficPercent: ${{ parameters.trafficPercent }}
+        releaseStrategy: ${{ parameters.releaseStrategy }}
 
     - id: publish-pr
       name: "Open the deploy PR"
       action: publish:github:pull-request
+      if: ${{ parameters.releaseStrategy === 'pr-gated' }}
       input:
         repoUrl: ${{ parameters.repoUrl }}
         branchName: deploy-${{ parameters.modelName }}-${{ parameters.modelVersion }}
@@ -64,33 +99,41 @@ spec:
         description: >
           Adds the KServe InferenceService manifest for
           **${{ parameters.modelName }}** version **${{ parameters.modelVersion }}**
-          (Evaluate Gate passed). ArgoCD (infra/argocd/inference-services-app.yaml)
-          watches this path with automated sync — merging this PR deploys
-          the model, no manual `kubectl apply` needed (assumes
+          (Evaluate Gate passed, deployStrategy=${{ parameters.deployStrategy }}).
+          ArgoCD (infra/argocd/inference-services-app.yaml) watches this
+          path with automated sync — merging this PR deploys the model,
+          no manual `kubectl apply` needed (assumes
           scripts/setup-kserve-argocd-local.sh has been run).
         sourcePath: infra/inference-services
         targetPath: infra/inference-services
 
     - id: record-deploy
-      name: "Record the deploy PR"
+      name: "Record the deploy"
       action: orchestration:record-deploy
       input:
         modelName: ${{ parameters.modelName }}
         modelVersion: ${{ parameters.modelVersion }}
-        prUrl: ${{ steps['publish-pr'].output.remoteUrl }}
+        prUrl: ${{ parameters.releaseStrategy === 'pr-gated' and steps['publish-pr'].output.remoteUrl or '' }}
 
   output:
     links:
-      - title: View deploy pull request
-        url: ${{ steps['publish-pr'].output.remoteUrl }}
+      - title: View sync status in ArgoCD
+        url: http://localhost:32748
     text:
       - title: Result
         content: |
           Evaluate Gate passed for **${{ parameters.modelName }}** version
-          **${{ parameters.modelVersion }}** — deploy PR opened:
-          ${{ steps['publish-pr'].output.remoteUrl }}
+          **${{ parameters.modelVersion }}**
+          (deployStrategy=${{ parameters.deployStrategy }}, releaseStrategy=${{ parameters.releaseStrategy }}).
+
+          {% if parameters.releaseStrategy === 'pr-gated' %}
+          Deploy PR opened: ${{ steps['publish-pr'].output.remoteUrl }}
 
           It contains `infra/inference-services/${{ parameters.modelName }}/${{ parameters.modelVersion }}.yaml`.
           Once merged, ArgoCD (infra/argocd/README.md) picks it up
           automatically — by default within ~3 minutes, or run
           `argocd app sync inference-services` to sync immediately.
+          {% else %}
+          Deployed immediately — no PR opened. Check status with
+          `kubectl get inferenceservice ${{ parameters.modelName }} -o yaml`.
+          {% endif %}

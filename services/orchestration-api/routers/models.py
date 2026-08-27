@@ -23,9 +23,18 @@ from data_quality.registry import run_checks
 from evaluations.gate import evaluate_metrics_gate
 from fastapi import APIRouter
 from jinja2 import Environment, FileSystemLoader
+from kubernetes.client.exceptions import ApiException
 from pydantic import BaseModel
 
 from adapters.argo_adapter import ArgoAdapter
+from adapters.deploy_strategies import (
+    DirectStrategy,
+    InstantStrategy,
+    PRGatedStrategy,
+    TrafficSplitStrategy,
+)
+from adapters.interfaces import IDeployTrafficStrategy, IReleaseStrategy
+from adapters.kserve_adapter import KServeAdapter
 from adapters.mlflow_adapter import MlflowAdapter
 
 router = APIRouter(tags=["models"])
@@ -133,23 +142,31 @@ class PolicyCheckRequest(BaseModel):
 class PrepareDeployRequest(BaseModel):
     model_name: str
     model_version: str
+    # "direct" | "canary" | "ab" | "blue-green" — canary/ab/blue-green all
+    # render the same canaryTrafficPercent field (mục 4.1), only the
+    # Dev-facing suggested default differs.
+    traffic_strategy: str = "direct"
+    traffic_percent: int | None = None
+    # "pr-gated" | "instant"
+    release_strategy: str = "pr-gated"
 
 
 class PrepareDeployResponse(BaseModel):
     file_name: str
     content: str
+    deployed: bool = False
 
 
 class RecordDeployRequest(BaseModel):
     model_name: str
     model_version: str
-    pr_url: str
+    pr_url: str | None = None
 
 
 class RecordDeployResponse(BaseModel):
     model_name: str
     model_version: str
-    pr_url: str
+    pr_url: str | None = None
 
 
 @router.post("/trigger-training", response_model=TriggerTrainingResponse)
@@ -280,21 +297,67 @@ def prepare_deploy_manifest(request: PrepareDeployRequest) -> PrepareDeployRespo
     # loader (mlflow.pyfunc.load_model, KServe's "mlflow" modelFormat) without
     # needing the run's underlying artifact path.
     storage_uri = f"models:/{request.model_name}/{request.model_version}"
+
+    # Constructed lazily, only when actually needed — KServeAdapter.__init__
+    # calls config.load_kube_config() eagerly, which would crash
+    # orchestration-api startup in any environment without a kubeconfig
+    # (this container, CI, dev before `kind` is running) if it were a
+    # module-level singleton like mlflow_adapter/argo_adapter.
+    needs_kserve = request.traffic_strategy != "direct" or request.release_strategy == "instant"
+    kserve_adapter = KServeAdapter() if needs_kserve else None
+
+    traffic_strategy: IDeployTrafficStrategy
+    if request.traffic_strategy == "direct":
+        traffic_strategy = DirectStrategy()
+    else:
+        # Canary/A-B/Blue-Green only make sense with a prior deploy to
+        # compare/rollback against — Backstage Scaffolder v1beta3 can't
+        # gate form fields on live cluster state, so it's enforced here
+        # instead (mục Context #2, docs/mlops-lifecycle-software-template.md).
+        assert kserve_adapter is not None
+        try:
+            kserve_adapter.get_inference_status(request.model_name)
+        except ApiException as exc:
+            if exc.status != 404:
+                raise
+            raise ValueError(
+                f"{request.model_name} has no prior deploy — "
+                "choose deployStrategy=direct for a model's first deploy"
+            ) from exc
+        if request.traffic_percent is None:
+            raise ValueError("traffic_percent is required when traffic_strategy is not 'direct'")
+        traffic_strategy = TrafficSplitStrategy(request.traffic_percent)
+
+    traffic_fields = traffic_strategy.render()
     template = _JINJA_ENV.get_template("inference_service.yaml.j2")
     content = template.render(
         model_name=request.model_name,
         model_version=request.model_version,
         storage_uri=storage_uri,
+        canary_traffic_percent=traffic_fields.get("canaryTrafficPercent"),
     )
     file_name = f"infra/inference-services/{request.model_name}/{request.model_version}.yaml"
-    return PrepareDeployResponse(file_name=file_name, content=content)
+
+    release_strategy: IReleaseStrategy
+    if request.release_strategy == "instant":
+        assert kserve_adapter is not None
+        release_strategy = InstantStrategy(kserve_adapter, traffic_fields)
+    else:
+        release_strategy = PRGatedStrategy()
+    release_result = release_strategy.release(request.model_name, request.model_version, content)
+
+    return PrepareDeployResponse(
+        file_name=file_name, content=content, deployed=release_result["deployed"]
+    )
 
 
 @router.post("/deploy-model/record", response_model=RecordDeployResponse)
 def record_deploy(request: RecordDeployRequest) -> RecordDeployResponse:
-    mlflow_adapter.set_model_version_tag(
-        request.model_name, request.model_version, "deploy_pr_url", request.pr_url
-    )
+    # No PR for an Instant release — nothing to tag.
+    if request.pr_url:
+        mlflow_adapter.set_model_version_tag(
+            request.model_name, request.model_version, "deploy_pr_url", request.pr_url
+        )
     return RecordDeployResponse(
         model_name=request.model_name,
         model_version=request.model_version,

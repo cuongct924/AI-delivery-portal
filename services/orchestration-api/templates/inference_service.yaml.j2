@@ -6,6 +6,9 @@ metadata:
     version: "{{ model_version }}"
 spec:
   predictor:
+    {% if canary_traffic_percent is not none %}
+    canaryTrafficPercent: {{ canary_traffic_percent }}
+    {% endif %}
     model:
       modelFormat:
         name: mlflow

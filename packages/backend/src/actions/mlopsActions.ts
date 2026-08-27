@@ -71,6 +71,7 @@ interface PolicyCheckResponse {
 interface PrepareDeployResponse {
   readonly file_name: string;
   readonly content: string;
+  readonly deployed: boolean;
 }
 
 /** Response body of `POST {baseUrl}/deploy-model/record`. */
@@ -390,23 +391,54 @@ export function createPrepareDeployManifestAction({ config }: ActionDeps) {
       input: {
         modelName: z => z.string({ description: 'Registered model name' }),
         modelVersion: z => z.string({ description: 'Registered model version' }),
+        trafficStrategy: z =>
+          z
+            .enum(['direct', 'canary', 'ab', 'blue-green'], {
+              description: 'How traffic moves to the new version — canary/ab/blue-green require a prior deploy',
+            })
+            .optional(),
+        trafficPercent: z =>
+          z
+            .number({ description: 'Required unless trafficStrategy is direct/unset' })
+            .optional(),
+        releaseStrategy: z =>
+          z
+            .enum(['pr-gated', 'instant'], {
+              description: 'pr-gated (default) opens a PR; instant deploys directly, no PR',
+            })
+            .optional(),
       },
       output: {
         filePath: z => z.string({ description: 'Workspace-relative path the manifest was written to' }),
+        deployed: z =>
+          z.boolean({
+            description: 'True when releaseStrategy=instant already deployed it — no PR to publish',
+          }),
       },
     },
     async handler(ctx) {
       const baseUrl = getBaseUrl(config);
-      const { file_name: fileName, content } =
-        await postJson<PrepareDeployResponse>(`${baseUrl}/deploy-model/prepare`, {
-          model_name: ctx.input.modelName,
-          model_version: ctx.input.modelVersion,
-        });
+      const {
+        file_name: fileName,
+        content,
+        deployed,
+      } = await postJson<PrepareDeployResponse>(`${baseUrl}/deploy-model/prepare`, {
+        model_name: ctx.input.modelName,
+        model_version: ctx.input.modelVersion,
+        traffic_strategy: ctx.input.trafficStrategy,
+        traffic_percent: ctx.input.trafficPercent,
+        release_strategy: ctx.input.releaseStrategy,
+      });
       const absolutePath = path.join(ctx.workspacePath, fileName);
       await fs.mkdir(path.dirname(absolutePath), { recursive: true });
       await fs.writeFile(absolutePath, content, 'utf-8');
-      ctx.logger.info(`Wrote deploy manifest to "${fileName}"`);
+      ctx.logger.info(
+        deployed
+          ? `Deployed "${ctx.input.modelName}:${ctx.input.modelVersion}" directly (releaseStrategy=instant)`
+          : `Wrote deploy manifest to "${fileName}"`,
+      );
       ctx.output('filePath', fileName);
+      ctx.output('deployed', deployed);
     },
   });
 }
@@ -423,7 +455,10 @@ export function createRecordDeployAction({ config }: ActionDeps) {
       input: {
         modelName: z => z.string({ description: 'Registered model name' }),
         modelVersion: z => z.string({ description: 'Registered model version' }),
-        prUrl: z => z.string({ description: 'URL of the deploy pull request' }),
+        prUrl: z =>
+          z
+            .string({ description: 'URL of the deploy pull request — omitted for an instant release' })
+            .optional(),
       },
       output: {
         recorded: z => z.boolean({ description: 'Always true on success — an HTTP error throws instead' }),

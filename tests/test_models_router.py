@@ -14,6 +14,8 @@ import sys
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+import pytest
+from kubernetes.client.exceptions import ApiException
 
 sys.modules.setdefault("mlflow", MagicMock())
 sys.modules.setdefault("mlflow.tracking", MagicMock())
@@ -291,6 +293,69 @@ def test_prepare_deploy_manifest_renders_registry_uri_into_template() -> None:
     assert "name: fraud-detection" in response.content
     assert 'version: "3"' in response.content
     assert "storageUri: models:/fraud-detection/3" in response.content
+    assert "canaryTrafficPercent" not in response.content
+    assert response.deployed is False
+
+
+def test_prepare_deploy_manifest_direct_never_touches_kserve() -> None:
+    # deployStrategy=direct + releaseStrategy=pr-gated (the defaults) never
+    # need a kubeconfig — KServeAdapter must not even be constructed.
+    request = PrepareDeployRequest(model_name="fraud-detection", model_version="3")
+    with patch("routers.models.KServeAdapter") as mock_kserve_cls:
+        prepare_deploy_manifest(request)
+    mock_kserve_cls.assert_not_called()
+
+
+def test_prepare_deploy_manifest_traffic_split_renders_canary_percent() -> None:
+    request = PrepareDeployRequest(
+        model_name="fraud-detection",
+        model_version="4",
+        traffic_strategy="canary",
+        traffic_percent=10,
+    )
+    with patch("routers.models.KServeAdapter") as mock_kserve_cls:
+        mock_kserve_cls.return_value.get_inference_status.return_value = {"status": {}}
+        response = prepare_deploy_manifest(request)
+
+    assert "canaryTrafficPercent: 10" in response.content
+    assert response.deployed is False
+
+
+def test_prepare_deploy_manifest_traffic_split_without_prior_deploy_raises() -> None:
+    request = PrepareDeployRequest(
+        model_name="never-deployed",
+        model_version="1",
+        traffic_strategy="canary",
+        traffic_percent=10,
+    )
+    with patch("routers.models.KServeAdapter") as mock_kserve_cls:
+        mock_kserve_cls.return_value.get_inference_status.side_effect = ApiException(status=404)
+        with pytest.raises(ValueError, match="no prior deploy"):
+            prepare_deploy_manifest(request)
+
+
+def test_prepare_deploy_manifest_traffic_split_requires_percent() -> None:
+    request = PrepareDeployRequest(
+        model_name="fraud-detection", model_version="4", traffic_strategy="canary"
+    )
+    with patch("routers.models.KServeAdapter") as mock_kserve_cls:
+        mock_kserve_cls.return_value.get_inference_status.return_value = {"status": {}}
+        with pytest.raises(ValueError, match="traffic_percent is required"):
+            prepare_deploy_manifest(request)
+
+
+def test_prepare_deploy_manifest_instant_deploys_without_a_pr() -> None:
+    request = PrepareDeployRequest(
+        model_name="fraud-detection", model_version="5", release_strategy="instant"
+    )
+    with patch("routers.models.KServeAdapter") as mock_kserve_cls:
+        mock_adapter = mock_kserve_cls.return_value
+        response = prepare_deploy_manifest(request)
+
+    mock_adapter.deploy_model.assert_called_once_with(
+        "fraud-detection", "5", "models:/fraud-detection/5", traffic_fields={}
+    )
+    assert response.deployed is True
 
 
 def test_record_deploy_sets_deploy_pr_url_tag() -> None:
@@ -306,3 +371,13 @@ def test_record_deploy_sets_deploy_pr_url_tag() -> None:
         "fraud-detection", "3", "deploy_pr_url", "https://github.com/org/repo/pull/1"
     )
     assert response.pr_url == "https://github.com/org/repo/pull/1"
+
+
+def test_record_deploy_skips_tagging_when_no_pr_url() -> None:
+    # Instant releases never open a PR — nothing to tag.
+    request = RecordDeployRequest(model_name="fraud-detection", model_version="5")
+    with patch("routers.models.mlflow_adapter") as mock_mlflow:
+        response = record_deploy(request)
+
+    mock_mlflow.set_model_version_tag.assert_not_called()
+    assert response.pr_url is None

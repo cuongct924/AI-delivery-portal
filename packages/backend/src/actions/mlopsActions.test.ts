@@ -286,10 +286,10 @@ describe('orchestration:prepare-deploy-manifest', () => {
       path.join(os.tmpdir(), 'mlops-actions-test-'),
     );
     const fileName = 'infra/inference-services/fraud-detection/3.yaml';
-    mockFetchResponses([
+    const fetchMock = mockFetchResponses([
       {
         ok: true,
-        body: { file_name: fileName, content: 'kind: InferenceService\n' },
+        body: { file_name: fileName, content: 'kind: InferenceService\n', deployed: false },
       },
     ]);
     const action = createPrepareDeployManifestAction({ config });
@@ -301,11 +301,66 @@ describe('orchestration:prepare-deploy-manifest', () => {
     await action.handler(ctx);
 
     expect(outputs.filePath).toBe(fileName);
+    expect(outputs.deployed).toBe(false);
     const written = await fs.readFile(
       path.join(workspacePath, fileName),
       'utf-8',
     );
     expect(written).toBe('kind: InferenceService\n');
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${BASE_URL}/deploy-model/prepare`,
+      expect.objectContaining({
+        body: JSON.stringify({
+          model_name: 'fraud-detection',
+          model_version: '3',
+          traffic_strategy: undefined,
+          traffic_percent: undefined,
+          release_strategy: undefined,
+        }),
+      }),
+    );
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+
+  it('forwards the traffic/release strategy fields and outputs deployed=true for instant', async () => {
+    const workspacePath = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'mlops-actions-test-'),
+    );
+    const fileName = 'infra/inference-services/fraud-detection/4.yaml';
+    const fetchMock = mockFetchResponses([
+      {
+        ok: true,
+        body: { file_name: fileName, content: 'kind: InferenceService\n', deployed: true },
+      },
+    ]);
+    const action = createPrepareDeployManifestAction({ config });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      {
+        modelName: 'fraud-detection',
+        modelVersion: '4',
+        trafficStrategy: 'canary',
+        trafficPercent: 10,
+        releaseStrategy: 'instant',
+      },
+      workspacePath,
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.deployed).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${BASE_URL}/deploy-model/prepare`,
+      expect.objectContaining({
+        body: JSON.stringify({
+          model_name: 'fraud-detection',
+          model_version: '4',
+          traffic_strategy: 'canary',
+          traffic_percent: 10,
+          release_strategy: 'instant',
+        }),
+      }),
+    );
 
     await fs.rm(workspacePath, { recursive: true, force: true });
   });
@@ -343,6 +398,34 @@ describe('orchestration:record-deploy', () => {
           model_name: 'fraud-detection',
           model_version: '3',
           pr_url: 'https://github.com/org/repo/pull/1',
+        }),
+      }),
+    );
+  });
+
+  it('omits prUrl for an instant release with no PR', async () => {
+    const fetchMock = mockFetchResponses([
+      {
+        ok: true,
+        body: { model_name: 'fraud-detection', model_version: '5', pr_url: null },
+      },
+    ]);
+    const action = createRecordDeployAction({ config });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      { modelName: 'fraud-detection', modelVersion: '5' },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.recorded).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${BASE_URL}/deploy-model/record`,
+      expect.objectContaining({
+        body: JSON.stringify({
+          model_name: 'fraud-detection',
+          model_version: '5',
+          pr_url: undefined,
         }),
       }),
     );
