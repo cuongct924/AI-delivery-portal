@@ -59,6 +59,7 @@ def test_trigger_training_sets_mode_finetune_when_base_model_uri_given() -> None
             "model-name": "fraud-detection",
             "dataset-uri": "file:///mnt/data/fraud-detection-sample.csv",
             "task-type": "classification",
+            "architecture": "sklearn",
             "algorithm": "LogisticRegression",
             "mode": "finetune",
             "base-model-uri": "models:/fraud-detection/1",
@@ -86,6 +87,7 @@ def test_trigger_training_sets_mode_train_without_base_model_uri() -> None:
             "model-name": "fraud-detection",
             "dataset-uri": "file:///mnt/data/fraud-detection-sample.csv",
             "task-type": "classification",
+            "architecture": "sklearn",
             "algorithm": "LogisticRegression",
             "mode": "train",
             "target-column": "is_fraud",
@@ -93,6 +95,46 @@ def test_trigger_training_sets_mode_train_without_base_model_uri() -> None:
         },
     )
     assert response.workflow_name == "wf-456"
+
+
+def test_trigger_training_forwards_dl_hyperparameters_for_non_sklearn_architecture() -> None:
+    request = TriggerTrainingRequest(
+        model_name="sensor-forecast",
+        dataset_uri="file:///mnt/data/sensor-timeseries-sample.csv",
+        task_type="regression",
+        architecture="lstm",
+        target_column="target",
+        time_column="timestamp",
+        sequence_length=10,
+        num_layers=2,
+        hidden_size=32,
+        learning_rate=0.001,
+        epochs=20,
+        batch_size=16,
+    )
+    with patch("routers.models.argo_adapter") as mock_argo:
+        mock_argo.trigger_workflow.return_value = {"metadata": {"name": "wf-789"}}
+        response = trigger_training(request)
+
+    mock_argo.trigger_workflow.assert_called_once_with(
+        "train-register-golden-path",
+        {
+            "model-name": "sensor-forecast",
+            "dataset-uri": "file:///mnt/data/sensor-timeseries-sample.csv",
+            "task-type": "regression",
+            "architecture": "lstm",
+            "mode": "train",
+            "target-column": "target",
+            "time-column": "timestamp",
+            "sequence-length": "10",
+            "num-layers": "2",
+            "hidden-size": "32",
+            "learning-rate": "0.001",
+            "epochs": "20",
+            "batch-size": "16",
+        },
+    )
+    assert response.workflow_name == "wf-789"
 
 
 def test_get_training_status_returns_argo_status() -> None:

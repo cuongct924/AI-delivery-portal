@@ -152,6 +152,50 @@ describe('orchestration:trigger-training', () => {
 
     await expect(action.handler(ctx)).rejects.toThrow(/Timed out/);
   });
+
+  it('forwards architecture and DL hyperparameters to the orchestration API', async () => {
+    const fetchMock = mockFetchResponses([
+      { ok: true, body: { workflow_name: 'wf-4' } },
+      { ok: true, body: { name: 'wf-4', phase: 'Succeeded', message: null } },
+      { ok: true, body: { name: 'sensor-forecast', version: '1' } },
+    ]);
+    const action = createTriggerTrainingAction({ config, pollIntervalMs: 1 });
+    const { ctx } = createMockContext<typeof action>(
+      {
+        modelName: 'sensor-forecast',
+        datasetUri: 'file:///sensor.csv',
+        taskType: 'regression',
+        architecture: 'lstm',
+        targetColumn: 'target',
+        timeColumn: 'timestamp',
+        sequenceLength: 10,
+        numLayers: 2,
+        hiddenSize: 32,
+        learningRate: 0.001,
+        epochs: 20,
+        batchSize: 16,
+      },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(requestInit.body as string)).toEqual({
+      model_name: 'sensor-forecast',
+      dataset_uri: 'file:///sensor.csv',
+      task_type: 'regression',
+      architecture: 'lstm',
+      target_column: 'target',
+      time_column: 'timestamp',
+      sequence_length: 10,
+      num_layers: 2,
+      hidden_size: 32,
+      learning_rate: 0.001,
+      epochs: 20,
+      batch_size: 16,
+    });
+  });
 });
 
 describe('orchestration:validate-dataset', () => {

@@ -130,8 +130,14 @@ export function createTriggerTrainingAction({
         datasetUri: z => z.string({ description: 'URI of the training dataset' }),
         taskType: z =>
           z.string({ description: 'classification, regression, or clustering' }),
+        architecture: z =>
+          z
+            .string({ description: '"sklearn" (default), "mlp", or "lstm" — see dl_architecture_registry.py' })
+            .optional(),
         algorithm: z =>
-          z.string({ description: 'Registry key, e.g. "XGBClassifier" — see algorithm_registry.py' }),
+          z
+            .string({ description: 'Registry key, e.g. "XGBClassifier" — required when architecture is "sklearn"' })
+            .optional(),
         targetColumn: z =>
           z
             .string({ description: 'Label column — required unless taskType is clustering' })
@@ -154,6 +160,19 @@ export function createTriggerTrainingAction({
                 'Base model URI — when set, fine-tunes instead of training from scratch',
             })
             .optional(),
+        hiddenLayers: z =>
+          z
+            .array(z.number(), { description: 'Hidden layer sizes, e.g. [64, 32] — architecture=mlp' })
+            .optional(),
+        dropout: z => z.number({ description: 'Dropout rate — architecture=mlp' }).optional(),
+        sequenceLength: z =>
+          z.number({ description: 'Sliding-window length — architecture=lstm' }).optional(),
+        numLayers: z => z.number({ description: 'LSTM layer count — architecture=lstm' }).optional(),
+        hiddenSize: z => z.number({ description: 'LSTM hidden size — architecture=lstm' }).optional(),
+        learningRate: z =>
+          z.number({ description: 'Optimizer learning rate — architecture=mlp/lstm' }).optional(),
+        epochs: z => z.number({ description: 'Training epochs — architecture=mlp/lstm' }).optional(),
+        batchSize: z => z.number({ description: 'Batch size — architecture=mlp/lstm' }).optional(),
       },
       output: {
         workflowName: z => z.string({ description: 'Name of the Argo Workflow that ran' }),
@@ -172,11 +191,20 @@ export function createTriggerTrainingAction({
           model_name: ctx.input.modelName,
           dataset_uri: ctx.input.datasetUri,
           task_type: ctx.input.taskType,
+          architecture: ctx.input.architecture,
           algorithm: ctx.input.algorithm,
           target_column: ctx.input.targetColumn,
           id_columns: ctx.input.idColumns,
           time_column: ctx.input.timeColumn,
           base_model_uri: ctx.input.baseModelUri,
+          hidden_layers: ctx.input.hiddenLayers,
+          dropout: ctx.input.dropout,
+          sequence_length: ctx.input.sequenceLength,
+          num_layers: ctx.input.numLayers,
+          hidden_size: ctx.input.hiddenSize,
+          learning_rate: ctx.input.learningRate,
+          epochs: ctx.input.epochs,
+          batch_size: ctx.input.batchSize,
         });
       ctx.logger.info(`Triggered training workflow "${workflowName}"`);
 

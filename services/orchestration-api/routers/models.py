@@ -56,11 +56,23 @@ class TriggerTrainingRequest(BaseModel):
     model_name: str
     dataset_uri: str
     task_type: str
-    algorithm: str
+    # sklearn by default — "algorithm" only applies to that architecture;
+    # mlp/lstm use the DL hyperparameter fields below instead (mục 5.1).
+    architecture: str = "sklearn"
+    algorithm: str | None = None
     target_column: str | None = None
     id_columns: list[str] | None = None
     time_column: str | None = None
     base_model_uri: str | None = None
+    # DL hyperparameters (mục 5.1) — unused for architecture="sklearn".
+    hidden_layers: list[int] | None = None
+    dropout: float | None = None
+    sequence_length: int | None = None
+    num_layers: int | None = None
+    hidden_size: int | None = None
+    learning_rate: float | None = None
+    epochs: int | None = None
+    batch_size: int | None = None
 
 
 class TriggerTrainingResponse(BaseModel):
@@ -175,9 +187,11 @@ def trigger_training(request: TriggerTrainingRequest) -> TriggerTrainingResponse
         "model-name": request.model_name,
         "dataset-uri": request.dataset_uri,
         "task-type": request.task_type,
-        "algorithm": request.algorithm,
+        "architecture": request.architecture,
         "mode": "finetune" if request.base_model_uri is not None else "train",
     }
+    if request.algorithm is not None:
+        parameters["algorithm"] = request.algorithm
     if request.target_column is not None:
         parameters["target-column"] = request.target_column
     if request.id_columns:
@@ -186,6 +200,22 @@ def trigger_training(request: TriggerTrainingRequest) -> TriggerTrainingResponse
         parameters["time-column"] = request.time_column
     if request.base_model_uri is not None:
         parameters["base-model-uri"] = request.base_model_uri
+    if request.hidden_layers is not None:
+        parameters["hidden-layers"] = ",".join(str(n) for n in request.hidden_layers)
+    if request.dropout is not None:
+        parameters["dropout"] = str(request.dropout)
+    if request.sequence_length is not None:
+        parameters["sequence-length"] = str(request.sequence_length)
+    if request.num_layers is not None:
+        parameters["num-layers"] = str(request.num_layers)
+    if request.hidden_size is not None:
+        parameters["hidden-size"] = str(request.hidden_size)
+    if request.learning_rate is not None:
+        parameters["learning-rate"] = str(request.learning_rate)
+    if request.epochs is not None:
+        parameters["epochs"] = str(request.epochs)
+    if request.batch_size is not None:
+        parameters["batch-size"] = str(request.batch_size)
     result = argo_adapter.trigger_workflow(TRAIN_REGISTER_TEMPLATE, parameters)
     return TriggerTrainingResponse(workflow_name=result["metadata"]["name"])
 

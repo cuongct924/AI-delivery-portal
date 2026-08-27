@@ -21,7 +21,6 @@ spec:
         - modelName
         - datasetUri
         - taskType
-        - algorithm
         - repoUrl
       properties:
         modelName:
@@ -41,10 +40,48 @@ spec:
           type: string
           enum: [classification, regression, clustering]
           default: classification
+        architecture:
+          title: Architecture
+          type: string
+          enum: [sklearn, mlp, lstm]
+          default: sklearn
+          description: >
+            "sklearn" trains a classical algorithm (choose it below). "mlp"/
+            "lstm" train a neural network instead (mục 5) — no clustering
+            support, and "lstm" requires a time column for sequence
+            windowing.
         algorithm:
-          title: Algorithm
+          title: Algorithm (architecture=sklearn)
           type: string
           description: Options depend on the task type selected above.
+        hiddenLayers:
+          title: Hidden layer sizes (architecture=mlp)
+          type: array
+          items:
+            type: integer
+          description: E.g. [64, 32] — one Linear+ReLU+Dropout block per entry.
+        dropout:
+          title: Dropout (architecture=mlp)
+          type: number
+        sequenceLength:
+          title: Sequence length (architecture=lstm)
+          type: integer
+          description: Number of past rows in each sliding-window input.
+        numLayers:
+          title: LSTM layers (architecture=lstm)
+          type: integer
+        hiddenSize:
+          title: Hidden size (architecture=lstm)
+          type: integer
+        learningRate:
+          title: Learning rate (architecture=mlp/lstm)
+          type: number
+        epochs:
+          title: Epochs (architecture=mlp/lstm)
+          type: integer
+        batchSize:
+          title: Batch size (architecture=mlp/lstm)
+          type: integer
         targetColumn:
           title: Target column
           type: string
@@ -138,6 +175,37 @@ spec:
           then:
             required:
               - targetColumn
+        - if:
+            properties:
+              architecture:
+                const: sklearn
+          then:
+            required:
+              - algorithm
+        - if:
+            properties:
+              architecture:
+                const: mlp
+          then:
+            required:
+              - hiddenLayers
+              - dropout
+              - learningRate
+              - epochs
+              - batchSize
+        - if:
+            properties:
+              architecture:
+                const: lstm
+          then:
+            required:
+              - sequenceLength
+              - numLayers
+              - hiddenSize
+              - learningRate
+              - epochs
+              - batchSize
+              - timeColumn
 
   steps:
     - id: validate-dataset
@@ -156,11 +224,20 @@ spec:
         modelName: ${{ parameters.modelName }}
         datasetUri: ${{ parameters.datasetUri }}
         taskType: ${{ parameters.taskType }}
+        architecture: ${{ parameters.architecture }}
         algorithm: ${{ parameters.algorithm }}
         targetColumn: ${{ parameters.targetColumn }}
         idColumns: ${{ parameters.idColumns }}
         timeColumn: ${{ parameters.timeColumn }}
         baseModelUri: ${{ parameters.baseModelUri }}
+        hiddenLayers: ${{ parameters.hiddenLayers }}
+        dropout: ${{ parameters.dropout }}
+        sequenceLength: ${{ parameters.sequenceLength }}
+        numLayers: ${{ parameters.numLayers }}
+        hiddenSize: ${{ parameters.hiddenSize }}
+        learningRate: ${{ parameters.learningRate }}
+        epochs: ${{ parameters.epochs }}
+        batchSize: ${{ parameters.batchSize }}
 
     - id: model-summary
       name: "Fetch the model version's metrics"
