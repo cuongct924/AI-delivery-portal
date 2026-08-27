@@ -7,10 +7,12 @@
 import { coreServices, createBackendModule } from '@backstage/backend-plugin-api';
 import { scaffolderActionsExtensionPoint } from '@backstage/plugin-scaffolder-node';
 import {
+  createModelSummaryAction,
   createPolicyCheckAction,
   createPrepareDeployManifestAction,
   createRecordDeployAction,
   createTriggerTrainingAction,
+  createValidateDatasetAction,
 } from './mlopsActions';
 
 export default createBackendModule({
@@ -24,7 +26,9 @@ export default createBackendModule({
       },
       async init({ scaffolder, config }) {
         scaffolder.addActions(
+          createValidateDatasetAction({ config }),
           createTriggerTrainingAction({ config }),
+          createModelSummaryAction({ config }),
           createPolicyCheckAction({ config }),
           createPrepareDeployManifestAction({ config }),
           createRecordDeployAction({ config }),

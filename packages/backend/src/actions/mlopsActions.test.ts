@@ -3,10 +3,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { ConfigReader } from '@backstage/config';
 import {
+  createModelSummaryAction,
   createPolicyCheckAction,
   createPrepareDeployManifestAction,
   createRecordDeployAction,
   createTriggerTrainingAction,
+  createValidateDatasetAction,
 } from './mlopsActions';
 
 const BASE_URL = 'http://orchestration-api.test';
@@ -78,7 +80,12 @@ describe('orchestration:trigger-training', () => {
     ]);
     const action = createTriggerTrainingAction({ config, pollIntervalMs: 1 });
     const { ctx, outputs } = createMockContext<typeof action>(
-      { modelName: 'fraud-detection', datasetUri: 'file:///data.csv' },
+      {
+        modelName: 'fraud-detection',
+        datasetUri: 'file:///data.csv',
+        taskType: 'classification',
+        algorithm: 'LogisticRegression',
+      },
       '/tmp/workspace',
     );
 
@@ -99,7 +106,12 @@ describe('orchestration:trigger-training', () => {
     ]);
     const action = createTriggerTrainingAction({ config, pollIntervalMs: 1 });
     const { ctx } = createMockContext<typeof action>(
-      { modelName: 'fraud-detection', datasetUri: 'file:///data.csv' },
+      {
+        modelName: 'fraud-detection',
+        datasetUri: 'file:///data.csv',
+        taskType: 'classification',
+        algorithm: 'LogisticRegression',
+      },
       '/tmp/workspace',
     );
 
@@ -129,11 +141,97 @@ describe('orchestration:trigger-training', () => {
       pollTimeoutMs: 5,
     });
     const { ctx } = createMockContext<typeof action>(
-      { modelName: 'fraud-detection', datasetUri: 'file:///data.csv' },
+      {
+        modelName: 'fraud-detection',
+        datasetUri: 'file:///data.csv',
+        taskType: 'classification',
+        algorithm: 'LogisticRegression',
+      },
       '/tmp/workspace',
     );
 
     await expect(action.handler(ctx)).rejects.toThrow(/Timed out/);
+  });
+});
+
+describe('orchestration:validate-dataset', () => {
+  it('outputs results and does not throw when nothing is blocking', async () => {
+    mockFetchResponses([
+      {
+        ok: true,
+        body: [
+          { check_name: 'check_missing_values', severity: 'info', message: 'clean', details: {} },
+          {
+            check_name: 'check_class_imbalance',
+            severity: 'warning',
+            message: 'minority class is 3%',
+            details: {},
+          },
+        ],
+      },
+    ]);
+    const action = createValidateDatasetAction({ config });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      { datasetUri: 'file:///data.csv', taskType: 'classification', targetColumn: 'is_fraud' },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.results).toEqual([
+      { checkName: 'check_missing_values', severity: 'info', message: 'clean' },
+      { checkName: 'check_class_imbalance', severity: 'warning', message: 'minority class is 3%' },
+    ]);
+  });
+
+  it('throws with the blocking checks summary when any check is blocking', async () => {
+    mockFetchResponses([
+      {
+        ok: true,
+        body: [
+          {
+            check_name: 'check_missing_values',
+            severity: 'blocking',
+            message: "target column 'is_fraud' has 2 missing value(s)",
+            details: {},
+          },
+        ],
+      },
+    ]);
+    const action = createValidateDatasetAction({ config });
+    const { ctx } = createMockContext<typeof action>(
+      { datasetUri: 'file:///data.csv', taskType: 'classification', targetColumn: 'is_fraud' },
+      '/tmp/workspace',
+    );
+
+    await expect(action.handler(ctx)).rejects.toThrow('check_missing_values');
+  });
+});
+
+describe('orchestration:model-summary', () => {
+  it('outputs the task type and metrics', async () => {
+    mockFetchResponses([
+      {
+        ok: true,
+        body: {
+          name: 'fraud-detection',
+          version: '3',
+          task_type: 'classification',
+          metrics: { accuracy: 0.92 },
+          tags: { task_type: 'classification' },
+        },
+      },
+    ]);
+    const action = createModelSummaryAction({ config });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      { modelName: 'fraud-detection', modelVersion: '3' },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.taskType).toBe('classification');
+    expect(outputs.metrics).toEqual({ accuracy: 0.92 });
   });
 });
 

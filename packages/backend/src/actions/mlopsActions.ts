@@ -43,6 +43,23 @@ interface LatestVersionResponse {
   readonly version: string;
 }
 
+/** One entry of `POST {baseUrl}/datasets/validate`'s response array. */
+interface CheckResultItem {
+  readonly check_name: string;
+  readonly severity: 'blocking' | 'warning' | 'info';
+  readonly message: string;
+  readonly details: Record<string, unknown>;
+}
+
+/** Response body of `GET {baseUrl}/models/{name}/{version}/summary`. */
+interface ModelVersionSummaryResponse {
+  readonly name: string;
+  readonly version: string;
+  readonly task_type: string | null;
+  readonly metrics: Record<string, number>;
+  readonly tags: Record<string, string>;
+}
+
 /** Response body of `POST {baseUrl}/policy-check`. */
 interface PolicyCheckResponse {
   readonly passed: boolean;
@@ -110,6 +127,25 @@ export function createTriggerTrainingAction({
       input: {
         modelName: z => z.string({ description: 'Name to register the trained model under' }),
         datasetUri: z => z.string({ description: 'URI of the training dataset' }),
+        taskType: z =>
+          z.string({ description: 'classification, regression, or clustering' }),
+        algorithm: z =>
+          z.string({ description: 'Registry key, e.g. "XGBClassifier" — see algorithm_registry.py' }),
+        targetColumn: z =>
+          z
+            .string({ description: 'Label column — required unless taskType is clustering' })
+            .optional(),
+        idColumns: z =>
+          z
+            .array(z.string(), { description: 'Columns to exclude as identifiers, e.g. transaction_id' })
+            .optional(),
+        timeColumn: z =>
+          z
+            .string({
+              description:
+                'Date/time column — when set, training always uses TimeSeriesSplit to avoid future leakage',
+            })
+            .optional(),
         baseModelUri: z =>
           z
             .string({
@@ -134,6 +170,11 @@ export function createTriggerTrainingAction({
         await postJson<TriggerTrainingResponse>(`${baseUrl}/trigger-training`, {
           model_name: ctx.input.modelName,
           dataset_uri: ctx.input.datasetUri,
+          task_type: ctx.input.taskType,
+          algorithm: ctx.input.algorithm,
+          target_column: ctx.input.targetColumn,
+          id_columns: ctx.input.idColumns,
+          time_column: ctx.input.timeColumn,
           base_model_uri: ctx.input.baseModelUri,
         });
       ctx.logger.info(`Triggered training workflow "${workflowName}"`);
@@ -186,6 +227,107 @@ export function createTriggerTrainingAction({
       ctx.output('workflowName', workflowName);
       ctx.output('phase', finalPhase);
       ctx.output('modelVersion', modelVersion);
+    },
+  });
+}
+
+/**
+ * `orchestration:validate-dataset` — runs the Data Quality checks
+ * (services/orchestration-api/data_quality/) before training starts, and
+ * fails fast (no Argo compute spent) if any check comes back blocking.
+ */
+export function createValidateDatasetAction({ config }: ActionDeps) {
+  return createTemplateAction({
+    id: 'orchestration:validate-dataset',
+    description:
+      'Runs data quality checks against the dataset and fails the step on any blocking result.',
+    schema: {
+      input: {
+        datasetUri: z => z.string({ description: 'URI of the dataset to validate' }),
+        taskType: z =>
+          z.string({ description: 'classification, regression, or clustering' }),
+        targetColumn: z =>
+          z
+            .string({ description: 'Label column — required unless taskType is clustering' })
+            .optional(),
+        timeColumn: z => z.string({ description: 'Date/time column, if the data is ordered' }).optional(),
+      },
+      output: {
+        results: z =>
+          z
+            .array(
+              z.object({
+                checkName: z.string(),
+                severity: z.enum(['blocking', 'warning', 'info']),
+                message: z.string(),
+              }),
+              { description: 'One entry per check that ran, grouped by severity in the log' },
+            ),
+      },
+    },
+    async handler(ctx) {
+      const baseUrl = getBaseUrl(config);
+      const results = await postJson<CheckResultItem[]>(`${baseUrl}/datasets/validate`, {
+        dataset_uri: ctx.input.datasetUri,
+        task_type: ctx.input.taskType,
+        target_column: ctx.input.targetColumn,
+        time_column: ctx.input.timeColumn,
+      });
+
+      for (const result of results) {
+        ctx.logger.info(`[${result.severity}] ${result.check_name}: ${result.message}`);
+      }
+
+      const blocking = results.filter(r => r.severity === 'blocking');
+      if (blocking.length > 0) {
+        const summary = blocking.map(r => `${r.check_name}: ${r.message}`).join('; ');
+        throw new Error(`Dataset validation failed (blocking): ${summary}`);
+      }
+
+      ctx.output(
+        'results',
+        results.map(r => ({
+          checkName: r.check_name,
+          severity: r.severity,
+          message: r.message,
+        })),
+      );
+    },
+  });
+}
+
+/**
+ * `orchestration:model-summary` — fetches a registered model version's
+ * task type, metrics, and tags for display mid-template.
+ */
+export function createModelSummaryAction({ config }: ActionDeps) {
+  return createTemplateAction({
+    id: 'orchestration:model-summary',
+    description: 'Fetches a registered model version — task type, metrics, and tags.',
+    schema: {
+      input: {
+        modelName: z => z.string({ description: 'Registered model name' }),
+        modelVersion: z => z.string({ description: 'Registered model version' }),
+      },
+      output: {
+        taskType: z => z.string({ description: 'Task type tag set at register time' }).nullable(),
+        metrics: z => z.record(z.number(), { description: 'Logged training metrics' }),
+      },
+    },
+    async handler(ctx) {
+      const baseUrl = getBaseUrl(config);
+      const response = await fetch(
+        `${baseUrl}/models/${encodeURIComponent(ctx.input.modelName)}/${encodeURIComponent(ctx.input.modelVersion)}/summary`,
+      );
+      if (!response.ok) {
+        throw new Error(
+          `GET model version summary failed with ${response.status}: ${await response.text()}`,
+        );
+      }
+      const summary = (await response.json()) as ModelVersionSummaryResponse;
+
+      ctx.output('taskType', summary.task_type);
+      ctx.output('metrics', summary.metrics);
     },
   });
 }
