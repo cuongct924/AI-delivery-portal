@@ -24,6 +24,8 @@ import pandas as pd
 import torch  # noqa: F401
 from algorithm_registry import AlgorithmSpec, get_algorithm_spec
 from byoc_runner import run_custom_training
+from hpo_runner import build_search_spaces, run_hpo
+from hpo_strategies import build_search_strategy
 from metrics import compute_metrics
 
 # Submodule imports, not `import mlflow` + `mlflow.sklearn.x` — mlflow's
@@ -229,6 +231,10 @@ def main() -> None:
     is_custom = algorithm == "custom"
     code_repo_url = os.environ.get("CODE_REPO_URL") or None
     entrypoint_path = os.environ.get("ENTRYPOINT_PATH") or None
+    # HPO (mục 6c) — "fixed" (default) keeps this Phase-3 code path
+    # completely unchanged, no nested runs, no Optuna involved at all.
+    search_strategy_name = os.environ.get("SEARCH_STRATEGY") or "fixed"
+    is_search = search_strategy_name != "fixed"
 
     if is_custom and (code_repo_url is None or entrypoint_path is None):
         raise RuntimeError("CODE_REPO_URL and ENTRYPOINT_PATH are required when ALGORITHM=custom")
@@ -243,6 +249,13 @@ def main() -> None:
         # classification/regression hyperparameters (mục 5.1) — no DL
         # clustering support.
         raise RuntimeError(f"architecture {architecture!r} does not support task_type='clustering'")
+    if is_search and (is_custom or architecture == "sklearn"):
+        # HPO (mục 6c) is scoped to the DL hyperparameters (mục 5.1) — the
+        # only ones with an existing single-value form field to search
+        # over. sklearn has no tunable field yet, and BYOC's train()
+        # contract has no room for the platform to inject search-sampled
+        # hyperparameters into.
+        raise RuntimeError("SEARCH_STRATEGY != 'fixed' requires ARCHITECTURE=mlp or lstm")
 
     # Strip the "file://" scheme to get a real filesystem path pandas can open.
     csv_path = Path(dataset_uri.removeprefix("file://"))
@@ -320,17 +333,43 @@ def main() -> None:
                 df, features, labels_full, task_type, time_column
             )
             hyperparameters = _read_dl_hyperparameters()
-            model, metrics = train_dl_and_evaluate(
-                train_features,
-                test_features,
-                train_labels,
-                test_labels,
-                task_type,
-                architecture,
-                hyperparameters,
-                mode,
-                base_model_uri,
-            )
+            if is_search:
+                num_trials = int(os.environ["NUM_TRIALS"])
+                search_space_config = json.loads(os.environ.get("SEARCH_SPACE_JSON") or "{}")
+                objective_metric = os.environ["OBJECTIVE_METRIC"]
+                objective_direction = os.environ.get("OBJECTIVE_DIRECTION", "maximize")
+                strategy = build_search_strategy(search_strategy_name, objective_direction)
+                spaces = build_search_spaces(search_space_config, hyperparameters)
+                model, metrics, best_hyperparameters = run_hpo(
+                    strategy,
+                    hyperparameters,
+                    spaces,
+                    num_trials,
+                    train_features,
+                    test_features,
+                    train_labels,
+                    test_labels,
+                    task_type,
+                    architecture,
+                    mode,
+                    base_model_uri,
+                    objective_metric,
+                    objective_direction,
+                )
+                mlflow.log_param("search_strategy", search_strategy_name)
+                mlflow.log_params({f"best_{k}": v for k, v in best_hyperparameters.items()})
+            else:
+                model, metrics = train_dl_and_evaluate(
+                    train_features,
+                    test_features,
+                    train_labels,
+                    test_labels,
+                    task_type,
+                    architecture,
+                    hyperparameters,
+                    mode,
+                    base_model_uri,
+                )
             for metric_name, value in metrics.items():
                 mlflow.log_metric(metric_name, value)
             mlflow_pytorch.log_model(model, artifact_path="model")

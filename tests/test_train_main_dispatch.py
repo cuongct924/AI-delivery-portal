@@ -108,6 +108,60 @@ def test_main_dl_branch_dispatches_to_train_dl_when_architecture_set(
     mock_mlflow_pytorch.log_model.assert_called_once_with(fake_model, artifact_path="model")
 
 
+def test_main_hpo_branch_dispatches_to_run_hpo_when_search_strategy_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with (
+        patch("train.mlflow_pytorch") as mock_mlflow_pytorch,
+        patch("train.mlflow_data"),
+        patch("train.mlflow") as mock_mlflow,
+    ):
+        csv_path = _write_dataset(tmp_path)
+        mock_mlflow.start_run.return_value.__enter__.return_value.info.run_id = "run-hpo"
+        fake_model = MagicMock()
+        mock_run_hpo = MagicMock(
+            return_value=(fake_model, {"r2": 0.95}, {"learning_rate": 0.01, "epochs": 10})
+        )
+        monkeypatch.setattr("train.run_hpo", mock_run_hpo)
+        monkeypatch.setattr("train.train_dl_and_evaluate", MagicMock(side_effect=AssertionError))
+        _set_env(
+            monkeypatch,
+            csv_path,
+            tmp_path,
+            LEARNING_RATE="0.01",
+            EPOCHS="10",
+            BATCH_SIZE="4",
+            HIDDEN_LAYERS="8,4",
+            DROPOUT="0.0",
+            SEARCH_STRATEGY="bayesian",
+            NUM_TRIALS="5",
+            SEARCH_SPACE_JSON='{"learning_rate": {"low": 0.001, "high": 0.1}}',
+            OBJECTIVE_METRIC="r2",
+            OBJECTIVE_DIRECTION="maximize",
+        )
+        monkeypatch.setenv("ARCHITECTURE", "mlp")
+
+        import train
+
+        train.main()
+
+        mock_run_hpo.assert_called_once()
+        mock_mlflow_pytorch.log_model.assert_called_once_with(fake_model, artifact_path="model")
+        mock_mlflow.log_param.assert_any_call("search_strategy", "bayesian")
+
+
+def test_main_rejects_search_strategy_for_sklearn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    csv_path = _write_dataset(tmp_path)
+    _set_env(monkeypatch, csv_path, tmp_path, ALGORITHM="LinearRegression", SEARCH_STRATEGY="grid")
+
+    import train
+
+    with pytest.raises(RuntimeError, match="SEARCH_STRATEGY != 'fixed' requires ARCHITECTURE"):
+        train.main()
+
+
 @patch("train.mlflow_pyfunc")
 @patch("train.mlflow_data")
 @patch("train.mlflow")

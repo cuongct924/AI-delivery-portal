@@ -63,6 +63,17 @@ spec:
         value: ""
       - name: custom-config
         value: "{}"
+      # HPO (mục 6c) — fixed by default, matches the pre-Phase-5b behavior.
+      - name: search-strategy
+        value: fixed
+      - name: num-trials
+        value: ""
+      - name: search-space-json
+        value: "{}"
+      - name: objective-metric
+        value: ""
+      - name: objective-direction
+        value: maximize
   templates:
     - name: train-and-register
       dag:
@@ -111,6 +122,16 @@ spec:
                   value: '{{workflow.parameters.entrypoint-path}}'
                 - name: custom-config
                   value: '{{workflow.parameters.custom-config}}'
+                - name: search-strategy
+                  value: '{{workflow.parameters.search-strategy}}'
+                - name: num-trials
+                  value: '{{workflow.parameters.num-trials}}'
+                - name: search-space-json
+                  value: '{{workflow.parameters.search-space-json}}'
+                - name: objective-metric
+                  value: '{{workflow.parameters.objective-metric}}'
+                - name: objective-direction
+                  value: '{{workflow.parameters.objective-direction}}'
           - name: register
             template: register-step
             dependencies: [train]
@@ -148,6 +169,11 @@ spec:
           - name: code-repo-url
           - name: entrypoint-path
           - name: custom-config
+          - name: search-strategy
+          - name: num-trials
+          - name: search-space-json
+          - name: objective-metric
+          - name: objective-direction
       outputs:
         parameters:
           - name: artifact-uri
@@ -205,6 +231,16 @@ spec:
             value: '{{inputs.parameters.entrypoint-path}}'
           - name: CUSTOM_CONFIG
             value: '{{inputs.parameters.custom-config}}'
+          - name: SEARCH_STRATEGY
+            value: '{{inputs.parameters.search-strategy}}'
+          - name: NUM_TRIALS
+            value: '{{inputs.parameters.num-trials}}'
+          - name: SEARCH_SPACE_JSON
+            value: '{{inputs.parameters.search-space-json}}'
+          - name: OBJECTIVE_METRIC
+            value: '{{inputs.parameters.objective-metric}}'
+          - name: OBJECTIVE_DIRECTION
+            value: '{{inputs.parameters.objective-direction}}'
           - name: MLFLOW_TRACKING_URI
             value: http://host.docker.internal:5000
         volumeMounts:
