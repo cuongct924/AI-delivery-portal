@@ -17,6 +17,9 @@ adapters/argo_adapter.py) plus the Evaluate Gate (evaluations/).
 from pathlib import Path
 from typing import Final
 
+import pandas as pd
+from data_quality.checks import CheckResult
+from data_quality.registry import run_checks
 from evaluations.gate import evaluate_metrics_gate
 from fastapi import APIRouter
 from jinja2 import Environment, FileSystemLoader
@@ -31,9 +34,9 @@ router = APIRouter(tags=["models"])
 mlflow_adapter = MlflowAdapter()
 argo_adapter = ArgoAdapter()
 
-# Argo WorkflowTemplate names (infra/argo-workflows/*.yaml) — the switch
-# between them is documented in examples/templates/train-track-register/template.yaml.
-FINE_TUNE_TEMPLATE: Final[str] = "fine-tune-golden-path"
+# Single Argo WorkflowTemplate (infra/argo-workflows/train-register-template.yaml)
+# now covers both train and fine-tune — mode is a workflow parameter, not a
+# choice between two near-duplicate templates.
 TRAIN_REGISTER_TEMPLATE: Final[str] = "train-register-golden-path"
 
 _TEMPLATES_DIR: Final[Path] = Path(__file__).resolve().parent.parent / "templates"
@@ -43,11 +46,39 @@ _JINJA_ENV: Final[Environment] = Environment(loader=FileSystemLoader(_TEMPLATES_
 class TriggerTrainingRequest(BaseModel):
     model_name: str
     dataset_uri: str
+    task_type: str
+    algorithm: str
+    target_column: str | None = None
+    id_columns: list[str] | None = None
+    time_column: str | None = None
     base_model_uri: str | None = None
 
 
 class TriggerTrainingResponse(BaseModel):
     workflow_name: str
+
+
+class ValidateDatasetRequest(BaseModel):
+    dataset_uri: str
+    task_type: str
+    target_column: str | None = None
+    time_column: str | None = None
+
+
+class CheckResultResponse(BaseModel):
+    check_name: str
+    severity: str
+    message: str
+    details: dict[str, object]
+
+    @classmethod
+    def from_check_result(cls, result: CheckResult) -> "CheckResultResponse":
+        return cls(
+            check_name=result.check_name,
+            severity=result.severity,
+            message=result.message,
+            details=result.details,
+        )
 
 
 class WorkflowStatusResponse(BaseModel):
@@ -65,6 +96,7 @@ class WorkflowSummary(BaseModel):
 class RegisterModelRequest(BaseModel):
     name: str
     artifact_uri: str
+    task_type: str
     dataset_version: str | None = None
 
 
@@ -76,6 +108,14 @@ class RegisterModelResponse(BaseModel):
 class ModelSummary(BaseModel):
     name: str
     version: str
+    metrics: dict[str, float]
+    tags: dict[str, str]
+
+
+class ModelVersionSummaryResponse(BaseModel):
+    name: str
+    version: str
+    task_type: str | None
     metrics: dict[str, float]
     tags: dict[str, str]
 
@@ -114,13 +154,22 @@ class RecordDeployResponse(BaseModel):
 
 @router.post("/trigger-training", response_model=TriggerTrainingResponse)
 def trigger_training(request: TriggerTrainingRequest) -> TriggerTrainingResponse:
-    parameters = {"model-name": request.model_name, "dataset-uri": request.dataset_uri}
+    parameters = {
+        "model-name": request.model_name,
+        "dataset-uri": request.dataset_uri,
+        "task-type": request.task_type,
+        "algorithm": request.algorithm,
+        "mode": "finetune" if request.base_model_uri is not None else "train",
+    }
+    if request.target_column is not None:
+        parameters["target-column"] = request.target_column
+    if request.id_columns:
+        parameters["id-columns"] = ",".join(request.id_columns)
+    if request.time_column is not None:
+        parameters["time-column"] = request.time_column
     if request.base_model_uri is not None:
-        template_name = FINE_TUNE_TEMPLATE
         parameters["base-model-uri"] = request.base_model_uri
-    else:
-        template_name = TRAIN_REGISTER_TEMPLATE
-    result = argo_adapter.trigger_workflow(template_name, parameters)
+    result = argo_adapter.trigger_workflow(TRAIN_REGISTER_TEMPLATE, parameters)
     return TriggerTrainingResponse(workflow_name=result["metadata"]["name"])
 
 
@@ -143,7 +192,33 @@ def register_model(request: RegisterModelRequest) -> RegisterModelResponse:
     result = mlflow_adapter.register_model(
         request.name, request.artifact_uri, request.dataset_version
     )
+    # Tagged separately (not an IModelRegistryAdapter.register_model() param)
+    # so policy_check() can read it back at deploy time without Backstage
+    # having to resend taskType (mục 3.3).
+    mlflow_adapter.set_model_version_tag(
+        result["name"], result["version"], "task_type", request.task_type
+    )
     return RegisterModelResponse(**result)
+
+
+@router.post("/datasets/validate", response_model=list[CheckResultResponse])
+def validate_dataset(request: ValidateDatasetRequest) -> list[CheckResultResponse]:
+    csv_path = Path(request.dataset_uri.removeprefix("file://"))
+    df = pd.read_csv(csv_path)
+    results = run_checks(df, request.task_type, request.target_column, request.time_column)
+    return [CheckResultResponse.from_check_result(r) for r in results]
+
+
+@router.get("/models/{name}/{version}/summary", response_model=ModelVersionSummaryResponse)
+def get_model_version_summary(name: str, version: str) -> ModelVersionSummaryResponse:
+    details = mlflow_adapter.get_model_version_details(name, version)
+    return ModelVersionSummaryResponse(
+        name=name,
+        version=details["version"],
+        task_type=details["tags"].get("task_type"),
+        metrics=details["metrics"],
+        tags=details["tags"],
+    )
 
 
 @router.get("/models", response_model=list[ModelSummary])
@@ -180,20 +255,22 @@ def policy_check(request: PolicyCheckRequest) -> dict[str, object]:
     # against thresholds instead of routing through LLM-as-judge (no LiteLLM
     # cost). LLM/RAG artifacts still use evaluate_gate() (evaluations/gate.py).
     details = mlflow_adapter.get_model_version_details(request.model_name, request.model_version)
-    gate_result = evaluate_metrics_gate(details["metrics"])
+    task_type = details["tags"].get("task_type")
+    if task_type is None:
+        raise ValueError(
+            f"model version {request.model_name}:{request.model_version} has no task_type tag "
+            "— it was registered before task-type tagging was added"
+        )
+    gate_result = evaluate_metrics_gate(task_type, details["metrics"])
 
     # MLflow tags are strings — stringify every value before persisting.
     mlflow_adapter.set_model_version_tag(
         request.model_name, request.model_version, "gate_passed", str(gate_result["passed"])
     )
-    for metric_name in ("accuracy", "precision", "recall"):
-        if metric_name in details["metrics"]:
-            mlflow_adapter.set_model_version_tag(
-                request.model_name,
-                request.model_version,
-                f"gate_{metric_name}",
-                str(details["metrics"][metric_name]),
-            )
+    for metric_name, value in details["metrics"].items():
+        mlflow_adapter.set_model_version_tag(
+            request.model_name, request.model_version, f"gate_{metric_name}", str(value)
+        )
     return gate_result
 
 

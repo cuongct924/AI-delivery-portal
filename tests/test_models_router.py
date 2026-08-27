@@ -13,6 +13,8 @@ MlflowAdapter() singleton, which is unnecessary for these unit tests.
 import sys
 from unittest.mock import MagicMock, patch
 
+import pandas as pd
+
 sys.modules.setdefault("mlflow", MagicMock())
 sys.modules.setdefault("mlflow.tracking", MagicMock())
 
@@ -22,7 +24,9 @@ from routers.models import (  # noqa: E402
     RecordDeployRequest,
     RegisterModelRequest,
     TriggerTrainingRequest,
+    ValidateDatasetRequest,
     get_latest_version,
+    get_model_version_summary,
     get_training_status,
     list_models,
     list_recent_training_runs,
@@ -31,13 +35,16 @@ from routers.models import (  # noqa: E402
     record_deploy,
     register_model,
     trigger_training,
+    validate_dataset,
 )
 
 
-def test_trigger_training_uses_fine_tune_template_when_base_model_uri_given() -> None:
+def test_trigger_training_sets_mode_finetune_when_base_model_uri_given() -> None:
     request = TriggerTrainingRequest(
         model_name="fraud-detection",
         dataset_uri="file:///mnt/data/fraud-detection-sample.csv",
+        task_type="classification",
+        algorithm="LogisticRegression",
         base_model_uri="models:/fraud-detection/1",
     )
     with patch("routers.models.argo_adapter") as mock_argo:
@@ -45,19 +52,27 @@ def test_trigger_training_uses_fine_tune_template_when_base_model_uri_given() ->
         response = trigger_training(request)
 
     mock_argo.trigger_workflow.assert_called_once_with(
-        "fine-tune-golden-path",
+        "train-register-golden-path",
         {
             "model-name": "fraud-detection",
             "dataset-uri": "file:///mnt/data/fraud-detection-sample.csv",
+            "task-type": "classification",
+            "algorithm": "LogisticRegression",
+            "mode": "finetune",
             "base-model-uri": "models:/fraud-detection/1",
         },
     )
     assert response.workflow_name == "wf-123"
 
 
-def test_trigger_training_uses_train_register_template_without_base_model_uri() -> None:
+def test_trigger_training_sets_mode_train_without_base_model_uri() -> None:
     request = TriggerTrainingRequest(
-        model_name="fraud-detection", dataset_uri="file:///mnt/data/fraud-detection-sample.csv"
+        model_name="fraud-detection",
+        dataset_uri="file:///mnt/data/fraud-detection-sample.csv",
+        task_type="classification",
+        algorithm="LogisticRegression",
+        target_column="is_fraud",
+        time_column="transaction_time",
     )
     with patch("routers.models.argo_adapter") as mock_argo:
         mock_argo.trigger_workflow.return_value = {"metadata": {"name": "wf-456"}}
@@ -68,6 +83,11 @@ def test_trigger_training_uses_train_register_template_without_base_model_uri() 
         {
             "model-name": "fraud-detection",
             "dataset-uri": "file:///mnt/data/fraud-detection-sample.csv",
+            "task-type": "classification",
+            "algorithm": "LogisticRegression",
+            "mode": "train",
+            "target-column": "is_fraud",
+            "time-column": "transaction_time",
         },
     )
     assert response.workflow_name == "wf-456"
@@ -101,9 +121,12 @@ def test_list_recent_training_runs_maps_workflow_summaries() -> None:
     assert result[0].started_at == "2026-08-25T00:00:00Z"
 
 
-def test_register_model_passes_dataset_version_through() -> None:
+def test_register_model_passes_dataset_version_through_and_tags_task_type() -> None:
     request = RegisterModelRequest(
-        name="fraud-detection", artifact_uri="runs:/abc/model", dataset_version="d41d8cd9"
+        name="fraud-detection",
+        artifact_uri="runs:/abc/model",
+        task_type="classification",
+        dataset_version="d41d8cd9",
     )
     with patch("routers.models.mlflow_adapter") as mock_mlflow:
         mock_mlflow.register_model.return_value = {"name": "fraud-detection", "version": "3"}
@@ -112,12 +135,17 @@ def test_register_model_passes_dataset_version_through() -> None:
     mock_mlflow.register_model.assert_called_once_with(
         "fraud-detection", "runs:/abc/model", "d41d8cd9"
     )
+    mock_mlflow.set_model_version_tag.assert_called_once_with(
+        "fraud-detection", "3", "task_type", "classification"
+    )
     assert response.name == "fraud-detection"
     assert response.version == "3"
 
 
 def test_register_model_without_dataset_version_passes_none() -> None:
-    request = RegisterModelRequest(name="fraud-detection", artifact_uri="runs:/abc/model")
+    request = RegisterModelRequest(
+        name="fraud-detection", artifact_uri="runs:/abc/model", task_type="regression"
+    )
     with patch("routers.models.mlflow_adapter") as mock_mlflow:
         mock_mlflow.register_model.return_value = {"name": "fraud-detection", "version": "1"}
         register_model(request)
@@ -131,7 +159,7 @@ def test_policy_check_sets_tags_and_passes_when_metrics_meet_thresholds() -> Non
         mock_mlflow.get_model_version_details.return_value = {
             "version": "3",
             "run_id": "run-1",
-            "tags": {},
+            "tags": {"task_type": "classification"},
             "metrics": {"accuracy": 0.92, "precision": 0.85, "recall": 0.8},
             "status": "READY",
         }
@@ -154,7 +182,7 @@ def test_policy_check_fails_and_tags_gate_passed_false_below_threshold() -> None
         mock_mlflow.get_model_version_details.return_value = {
             "version": "3",
             "run_id": "run-1",
-            "tags": {},
+            "tags": {"task_type": "classification"},
             "metrics": {"accuracy": 0.4, "precision": 0.3, "recall": 0.3},
             "status": "READY",
         }
@@ -164,6 +192,55 @@ def test_policy_check_fails_and_tags_gate_passed_false_below_threshold() -> None
     mock_mlflow.set_model_version_tag.assert_any_call(
         "fraud-detection", "3", "gate_passed", "False"
     )
+
+
+def test_policy_check_raises_when_model_has_no_task_type_tag() -> None:
+    request = PolicyCheckRequest(model_name="fraud-detection", model_version="3")
+    with patch("routers.models.mlflow_adapter") as mock_mlflow:
+        mock_mlflow.get_model_version_details.return_value = {
+            "version": "3",
+            "run_id": "run-1",
+            "tags": {},
+            "metrics": {"accuracy": 0.9},
+            "status": "READY",
+        }
+        try:
+            policy_check(request)
+            raise AssertionError("expected ValueError")
+        except ValueError as exc:
+            assert "task_type" in str(exc)
+
+
+def test_validate_dataset_returns_check_results(tmp_path) -> None:
+    csv_path = tmp_path / "data.csv"
+    pd.DataFrame({"x": [1, 2, 3], "y": [0, 1, 0]}).to_csv(csv_path, index=False)
+    request = ValidateDatasetRequest(
+        dataset_uri=f"file://{csv_path}", task_type="classification", target_column="y"
+    )
+
+    results = validate_dataset(request)
+
+    names = {r.check_name for r in results}
+    assert "check_missing_values" in names
+    assert "check_duplicate_rows" in names
+    assert all(r.severity in ("blocking", "warning", "info") for r in results)
+
+
+def test_get_model_version_summary_reads_task_type_tag() -> None:
+    with patch("routers.models.mlflow_adapter") as mock_mlflow:
+        mock_mlflow.get_model_version_details.return_value = {
+            "version": "3",
+            "run_id": "run-1",
+            "tags": {"task_type": "regression"},
+            "metrics": {"r2": 0.8},
+            "status": "READY",
+        }
+        response = get_model_version_summary("house-price", "3")
+
+    assert response.name == "house-price"
+    assert response.version == "3"
+    assert response.task_type == "regression"
+    assert response.metrics == {"r2": 0.8}
 
 
 def test_list_models_aggregates_latest_version_details() -> None:
