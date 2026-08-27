@@ -53,7 +53,27 @@ spec:
         algorithm:
           title: Algorithm (architecture=sklearn)
           type: string
-          description: Options depend on the task type selected above.
+          description: >
+            Options depend on the task type selected above. Choose "custom"
+            for BYOC (mục 6b.3) — Dev-supplied training code instead of a
+            registry algorithm; fill in the 3 fields below when chosen.
+        codeRepoUrl:
+          title: Code repository (algorithm=custom)
+          type: string
+          description: Git repo URL containing your training script.
+        entrypointPath:
+          title: Entrypoint path (algorithm=custom)
+          type: string
+          description: >
+            Path, relative to the repo root, to the file defining
+            `def train(dataset: pd.DataFrame, config: dict) -> tuple[Any, dict[str, float]]`.
+        customConfig:
+          title: Config JSON (algorithm=custom)
+          type: string
+          description: >
+            JSON object of hyperparameters passed as `config` to your
+            train() function, e.g. {"lr": 0.01}.
+          default: "{}"
         hiddenLayers:
           title: Hidden layer sizes (architecture=mlp)
           type: array
@@ -139,6 +159,7 @@ spec:
                   - XGBClassifier
                   - LGBMClassifier
                   - CatBoostClassifier
+                  - custom
         - if:
             properties:
               taskType:
@@ -156,6 +177,7 @@ spec:
                   - XGBRegressor
                   - LGBMRegressor
                   - CatBoostRegressor
+                  - custom
         - if:
             properties:
               taskType:
@@ -168,6 +190,7 @@ spec:
                   - DBSCAN
                   - AgglomerativeClustering
                   - GaussianMixture
+                  - custom
         - if:
             properties:
               taskType:
@@ -206,6 +229,14 @@ spec:
               - epochs
               - batchSize
               - timeColumn
+        - if:
+            properties:
+              algorithm:
+                const: custom
+          then:
+            required:
+              - codeRepoUrl
+              - entrypointPath
 
   steps:
     - id: validate-dataset
@@ -238,6 +269,9 @@ spec:
         learningRate: ${{ parameters.learningRate }}
         epochs: ${{ parameters.epochs }}
         batchSize: ${{ parameters.batchSize }}
+        codeRepoUrl: ${{ parameters.codeRepoUrl }}
+        entrypointPath: ${{ parameters.entrypointPath }}
+        customConfig: ${{ parameters.customConfig }}
 
     - id: model-summary
       name: "Fetch the model version's metrics"

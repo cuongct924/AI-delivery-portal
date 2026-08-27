@@ -137,6 +137,39 @@ def test_trigger_training_forwards_dl_hyperparameters_for_non_sklearn_architectu
     assert response.workflow_name == "wf-789"
 
 
+def test_trigger_training_forwards_byoc_fields_for_custom_algorithm() -> None:
+    request = TriggerTrainingRequest(
+        model_name="custom-model",
+        dataset_uri="file:///mnt/data/fraud-detection-sample.csv",
+        task_type="classification",
+        algorithm="custom",
+        target_column="is_fraud",
+        code_repo_url="https://github.com/dev/my-training-code",
+        entrypoint_path="my_train.py",
+        custom_config='{"lr": 0.01}',
+    )
+    with patch("routers.models.argo_adapter") as mock_argo:
+        mock_argo.trigger_workflow.return_value = {"metadata": {"name": "wf-byoc"}}
+        response = trigger_training(request)
+
+    mock_argo.trigger_workflow.assert_called_once_with(
+        "train-register-golden-path",
+        {
+            "model-name": "custom-model",
+            "dataset-uri": "file:///mnt/data/fraud-detection-sample.csv",
+            "task-type": "classification",
+            "architecture": "sklearn",
+            "algorithm": "custom",
+            "mode": "train",
+            "target-column": "is_fraud",
+            "code-repo-url": "https://github.com/dev/my-training-code",
+            "entrypoint-path": "my_train.py",
+            "custom-config": '{"lr": 0.01}',
+        },
+    )
+    assert response.workflow_name == "wf-byoc"
+
+
 def test_get_training_status_returns_argo_status() -> None:
     with patch("routers.models.argo_adapter") as mock_argo:
         mock_argo.get_workflow_status.return_value = {

@@ -196,6 +196,42 @@ describe('orchestration:trigger-training', () => {
       batch_size: 16,
     });
   });
+
+  it('forwards BYOC fields to the orchestration API when algorithm is custom', async () => {
+    const fetchMock = mockFetchResponses([
+      { ok: true, body: { workflow_name: 'wf-5' } },
+      { ok: true, body: { name: 'wf-5', phase: 'Succeeded', message: null } },
+      { ok: true, body: { name: 'custom-model', version: '1' } },
+    ]);
+    const action = createTriggerTrainingAction({ config, pollIntervalMs: 1 });
+    const { ctx } = createMockContext<typeof action>(
+      {
+        modelName: 'custom-model',
+        datasetUri: 'file:///fraud.csv',
+        taskType: 'classification',
+        algorithm: 'custom',
+        targetColumn: 'is_fraud',
+        codeRepoUrl: 'https://github.com/dev/my-training-code',
+        entrypointPath: 'my_train.py',
+        customConfig: '{"lr": 0.01}',
+      },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(requestInit.body as string)).toEqual({
+      model_name: 'custom-model',
+      dataset_uri: 'file:///fraud.csv',
+      task_type: 'classification',
+      algorithm: 'custom',
+      target_column: 'is_fraud',
+      code_repo_url: 'https://github.com/dev/my-training-code',
+      entrypoint_path: 'my_train.py',
+      custom_config: '{"lr": 0.01}',
+    });
+  });
 });
 
 describe('orchestration:validate-dataset', () => {

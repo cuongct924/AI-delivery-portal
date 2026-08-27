@@ -73,6 +73,10 @@ class TriggerTrainingRequest(BaseModel):
     learning_rate: float | None = None
     epochs: int | None = None
     batch_size: int | None = None
+    # BYOC (mục 6b.3) — only used when algorithm="custom".
+    code_repo_url: str | None = None
+    entrypoint_path: str | None = None
+    custom_config: str | None = None
 
 
 class TriggerTrainingResponse(BaseModel):
@@ -216,6 +220,12 @@ def trigger_training(request: TriggerTrainingRequest) -> TriggerTrainingResponse
         parameters["epochs"] = str(request.epochs)
     if request.batch_size is not None:
         parameters["batch-size"] = str(request.batch_size)
+    if request.code_repo_url is not None:
+        parameters["code-repo-url"] = request.code_repo_url
+    if request.entrypoint_path is not None:
+        parameters["entrypoint-path"] = request.entrypoint_path
+    if request.custom_config is not None:
+        parameters["custom-config"] = request.custom_config
     result = argo_adapter.trigger_workflow(TRAIN_REGISTER_TEMPLATE, parameters)
     return TriggerTrainingResponse(workflow_name=result["metadata"]["name"])
 

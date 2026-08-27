@@ -173,6 +173,22 @@ export function createTriggerTrainingAction({
           z.number({ description: 'Optimizer learning rate — architecture=mlp/lstm' }).optional(),
         epochs: z => z.number({ description: 'Training epochs — architecture=mlp/lstm' }).optional(),
         batchSize: z => z.number({ description: 'Batch size — architecture=mlp/lstm' }).optional(),
+        codeRepoUrl: z =>
+          z
+            .string({ description: 'Git repo URL to clone — algorithm="custom" (BYOC)' })
+            .optional(),
+        entrypointPath: z =>
+          z
+            .string({
+              description: 'Path, relative to the repo root, to the file defining train() — algorithm="custom"',
+            })
+            .optional(),
+        customConfig: z =>
+          z
+            .string({
+              description: 'JSON object of hyperparameters passed to train()\'s config arg — algorithm="custom"',
+            })
+            .optional(),
       },
       output: {
         workflowName: z => z.string({ description: 'Name of the Argo Workflow that ran' }),
@@ -205,6 +221,9 @@ export function createTriggerTrainingAction({
           learning_rate: ctx.input.learningRate,
           epochs: ctx.input.epochs,
           batch_size: ctx.input.batchSize,
+          code_repo_url: ctx.input.codeRepoUrl,
+          entrypoint_path: ctx.input.entrypointPath,
+          custom_config: ctx.input.customConfig,
         });
       ctx.logger.info(`Triggered training workflow "${workflowName}"`);
 
