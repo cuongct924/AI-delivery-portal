@@ -14,16 +14,25 @@ from typing import Any, cast
 import mlflow
 import numpy as np
 import pandas as pd
+
+# Must load before xgboost/lightgbm/catboost (algorithm_registry, next
+# import): on macOS the reverse order loads two conflicting OpenMP runtimes
+# and segfaults on the first CrossEntropyLoss call. Harmless on Linux (the
+# actual training-image target).
+import torch  # noqa: F401
 from algorithm_registry import AlgorithmSpec, get_algorithm_spec
 from metrics import compute_metrics
 
 # Submodule imports, not `import mlflow` + `mlflow.sklearn.x` — mlflow's
-# top-level stub doesn't declare `sklearn`/`data` as exported attributes.
+# top-level stub doesn't declare `sklearn`/`data`/`pytorch` as exported
+# attributes.
 from mlflow import data as mlflow_data
+from mlflow import pytorch as mlflow_pytorch
 from mlflow import sklearn as mlflow_sklearn
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import TimeSeriesSplit, train_test_split
 from sklearn.preprocessing import StandardScaler
+from train_dl import train_and_evaluate as train_dl_and_evaluate
 
 # Below this row count, a single random holdout is too noisy to trust —
 # k-fold cross-validation averages over multiple splits instead.
@@ -176,25 +185,55 @@ def _fit(
     raise RuntimeError(f"unknown MODE {mode!r} — must be 'train' or 'finetune'")
 
 
+def _read_dl_hyperparameters() -> dict[str, object]:
+    """Reads the DL hyperparameter env vars set by train-register-template.yaml.
+    Only LEARNING_RATE/EPOCHS/BATCH_SIZE are common to both architectures
+    (mục 5.1) — the rest are architecture-specific and simply absent from
+    the dict when unset, letting train_dl.py fail loudly via KeyError if a
+    required one is genuinely missing instead of silently defaulting."""
+    hyperparameters: dict[str, object] = {
+        "learning_rate": float(os.environ["LEARNING_RATE"]),
+        "epochs": int(os.environ["EPOCHS"]),
+        "batch_size": int(os.environ["BATCH_SIZE"]),
+    }
+    if hidden_layers := os.environ.get("HIDDEN_LAYERS"):
+        hyperparameters["hidden_layers"] = [int(n) for n in hidden_layers.split(",") if n]
+    if dropout := os.environ.get("DROPOUT"):
+        hyperparameters["dropout"] = float(dropout)
+    if sequence_length := os.environ.get("SEQUENCE_LENGTH"):
+        hyperparameters["sequence_length"] = int(sequence_length)
+    if num_layers := os.environ.get("NUM_LAYERS"):
+        hyperparameters["num_layers"] = int(num_layers)
+    if hidden_size := os.environ.get("HIDDEN_SIZE"):
+        hyperparameters["hidden_size"] = int(hidden_size)
+    return hyperparameters
+
+
 def main() -> None:
     dataset_uri = os.environ["DATASET_URI"]
     task_type = os.environ["TASK_TYPE"]
     target_column = os.environ.get("TARGET_COLUMN") or None
     id_columns = [c for c in os.environ.get("ID_COLUMNS", "").split(",") if c]
-    algorithm = os.environ["ALGORITHM"]
+    architecture = os.environ.get("ARCHITECTURE") or "sklearn"
+    algorithm = os.environ.get("ALGORITHM") or None
     mode = os.environ.get("MODE", "train")
     base_model_uri = os.environ.get("BASE_MODEL_URI") or None
     time_column = os.environ.get("TIME_COLUMN") or None
 
     if task_type != "clustering" and target_column is None:
         raise RuntimeError(f"TARGET_COLUMN is required for task_type {task_type!r}")
+    if architecture == "sklearn" and algorithm is None:
+        raise RuntimeError("ALGORITHM is required when ARCHITECTURE=sklearn")
+    if architecture != "sklearn" and task_type == "clustering":
+        # dl_architecture_registry.py's DL_ARCHITECTURES only lists
+        # classification/regression hyperparameters (mục 5.1) — no DL
+        # clustering support.
+        raise RuntimeError(f"architecture {architecture!r} does not support task_type='clustering'")
 
     # Strip the "file://" scheme to get a real filesystem path pandas can open.
     csv_path = Path(dataset_uri.removeprefix("file://"))
     df = pd.read_csv(csv_path)
     dataset_digest = _read_dataset_digest(csv_path)
-
-    spec = get_algorithm_spec(task_type, algorithm)
 
     drop_columns = list(id_columns)
     if target_column is not None:
@@ -205,37 +244,67 @@ def main() -> None:
         os.environ.get("MLFLOW_TRACKING_URI", "http://host.docker.internal:5000")
     )
 
-    if task_type == "clustering":
-        # DBSCAN/AgglomerativeClustering are transductive (no .predict on
-        # new data) — clustering always fits+predicts on the full dataset,
-        # no train/test split (mục 3.1).
-        if mode != "train":
-            raise RuntimeError("clustering does not support MODE=finetune")
-        train_features, _ = _handle_missing_values(features, features, spec)
-        train_features, _ = _scale_features(train_features, train_features, spec)
-        model = spec.estimator_class()
-        labels = model.fit_predict(train_features)
-        metrics = compute_metrics(task_type, train_features, labels)
-    else:
-        # Validated non-None above (task_type != "clustering" requires it) —
-        # asserted again here so the type checker can narrow it too.
-        assert target_column is not None
-        labels_full = cast(pd.Series, df[target_column])
-        train_features, test_features, train_labels, test_labels = _split(
-            df, features, labels_full, task_type, time_column
-        )
-        train_features, test_features = _handle_missing_values(train_features, test_features, spec)
-        train_features, test_features = _scale_features(train_features, test_features, spec)
-        model = _fit(spec, mode, base_model_uri, train_features, train_labels)
-        predictions = model.predict(test_features)
-        metrics = compute_metrics(task_type, test_labels, predictions)
-
+    # Opened before fitting (not just before logging) so train_dl.py's
+    # per-epoch mlflow.log_metric(..., step=epoch) calls land in this run.
     with mlflow.start_run() as run:
         mlflow.set_tag("task_type", task_type)
-        mlflow.log_param("algorithm", algorithm)
+        mlflow.log_param("architecture", architecture)
         mlflow.log_param("mode", mode)
-        for metric_name, value in metrics.items():
-            mlflow.log_metric(metric_name, value)
+
+        if architecture == "sklearn":
+            spec = get_algorithm_spec(task_type, cast(str, algorithm))
+            mlflow.log_param("algorithm", algorithm)
+            if task_type == "clustering":
+                # DBSCAN/AgglomerativeClustering are transductive (no
+                # .predict on new data) — clustering always fits+predicts
+                # on the full dataset, no train/test split (mục 3.1).
+                if mode != "train":
+                    raise RuntimeError("clustering does not support MODE=finetune")
+                train_features, _ = _handle_missing_values(features, features, spec)
+                train_features, _ = _scale_features(train_features, train_features, spec)
+                model = spec.estimator_class()
+                labels = model.fit_predict(train_features)
+                metrics = compute_metrics(task_type, train_features, labels)
+            else:
+                # Validated non-None above (task_type != "clustering" requires it).
+                assert target_column is not None
+                labels_full = cast(pd.Series, df[target_column])
+                train_features, test_features, train_labels, test_labels = _split(
+                    df, features, labels_full, task_type, time_column
+                )
+                train_features, test_features = _handle_missing_values(
+                    train_features, test_features, spec
+                )
+                train_features, test_features = _scale_features(train_features, test_features, spec)
+                model = _fit(spec, mode, base_model_uri, train_features, train_labels)
+                predictions = model.predict(test_features)
+                metrics = compute_metrics(task_type, test_labels, predictions)
+            for metric_name, value in metrics.items():
+                mlflow.log_metric(metric_name, value)
+            mlflow_sklearn.log_model(model, artifact_path="model")
+        else:
+            # architecture != "sklearn" already ruled out task_type ==
+            # "clustering" above, so target_column is guaranteed set.
+            assert target_column is not None
+            labels_full = cast(pd.Series, df[target_column])
+            train_features, test_features, train_labels, test_labels = _split(
+                df, features, labels_full, task_type, time_column
+            )
+            hyperparameters = _read_dl_hyperparameters()
+            model, metrics = train_dl_and_evaluate(
+                train_features,
+                test_features,
+                train_labels,
+                test_labels,
+                task_type,
+                architecture,
+                hyperparameters,
+                mode,
+                base_model_uri,
+            )
+            for metric_name, value in metrics.items():
+                mlflow.log_metric(metric_name, value)
+            mlflow_pytorch.log_model(model, artifact_path="model")
 
         # mlflow.data's stub doesn't declare from_pandas even though it's a
         # real, documented function.
@@ -243,8 +312,6 @@ def main() -> None:
             df, source=dataset_uri, digest=dataset_digest
         )
         mlflow.log_input(dataset, context="training")
-
-        mlflow_sklearn.log_model(model, artifact_path="model")
         artifact_uri = f"runs:/{run.info.run_id}/model"
 
     # Argo reads these back via outputs.parameters to hand off to register-step.

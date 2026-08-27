@@ -14,8 +14,10 @@ the real data goes to the `storage` remote configured in `.dvc/config`.
 |---|---|---|
 | `fraud-detection-sample.csv` | classification | has an ID column (`transaction_id`) — pass it as `idColumns` |
 | `house-price-sample.csv` | regression | no ID column |
+| `sensor-timeseries-sample.csv` | regression | synthetic (trend+seasonality+noise, numpy, not downloaded), 500 rows, `timestamp` column — for Deep Learning (mục 5): the demo datasets above are too small (~10-15 rows) for MLP/LSTM to learn a real signal, and `timeColumn=timestamp` is required for `architecture=lstm`'s sequence windowing |
 
-Clustering test runs reuse either dataset with `targetColumn` left empty.
+Clustering test runs reuse either of the first two datasets with
+`targetColumn` left empty.
 
 ## First time (pull the demo datasets)
 

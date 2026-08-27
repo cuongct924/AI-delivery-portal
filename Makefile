@@ -58,11 +58,22 @@ install: venv
 ## works on any dev machine's OS/arch, not just Linux. Each service's own
 ## *.lock.txt stays pinned to linux/x86_64 (--python-platform) to match the
 ## Docker images and GitHub Actions runners those actually build/run on.
+## --index-strategy unsafe-best-match: training-image/requirements.txt's
+## --extra-index-url (torch CPU wheels) otherwise makes uv refuse to
+## resolve *any* package's version past what that one extra index offers
+## (e.g. its stale urllib3), even for packages that never touch torch —
+## both PyPI and download.pytorch.org are trusted here, so relaxing this
+## uv default (meant to guard against dependency-confusion attacks) is safe.
+## --emit-index-url writes --extra-index-url back into the generated
+## *.lock.txt so `uv pip install -r *.lock.txt` (each Dockerfile's builder
+## stage) can still find torch==...+cpu on its own — without this, the
+## lock file has no record of which index that pinned version came from
+## and the Docker build fails to resolve it.
 lock: venv
-	$(UV) pip compile $(SERVICE_REQS) --python-version 3.12 --universal -o dev.lock.txt
+	$(UV) pip compile $(SERVICE_REQS) --python-version 3.12 --universal --index-strategy unsafe-best-match --emit-index-url -o dev.lock.txt
 	@for f in $(SERVICE_REQS); do \
 		echo "Locking $$f..."; \
-		$(UV) pip compile "$$f" --python-version 3.12 --python-platform x86_64-unknown-linux-gnu -o "$${f%.txt}.lock.txt"; \
+		$(UV) pip compile "$$f" --python-version 3.12 --python-platform x86_64-unknown-linux-gnu --index-strategy unsafe-best-match --emit-index-url -o "$${f%.txt}.lock.txt"; \
 	done
 
 hooks:

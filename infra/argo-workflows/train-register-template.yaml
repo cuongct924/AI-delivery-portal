@@ -21,7 +21,12 @@ spec:
       - name: model-name
       - name: dataset-uri
       - name: task-type
+      # sklearn by default — mlp/lstm use dl_architecture_registry.py
+      # instead (mục 5.1) and don't need `algorithm` at all.
+      - name: architecture
+        value: sklearn
       - name: algorithm
+        value: ""
       # train from scratch unless the caller sets base-model-uri (see
       # routers/models.py trigger_training()).
       - name: mode
@@ -33,6 +38,23 @@ spec:
       - name: time-column
         value: ""
       - name: base-model-uri
+        value: ""
+      # DL hyperparameters (mục 5.1) — unused/empty for architecture=sklearn.
+      - name: hidden-layers
+        value: ""
+      - name: dropout
+        value: ""
+      - name: sequence-length
+        value: ""
+      - name: num-layers
+        value: ""
+      - name: hidden-size
+        value: ""
+      - name: learning-rate
+        value: ""
+      - name: epochs
+        value: ""
+      - name: batch-size
         value: ""
   templates:
     - name: train-and-register
@@ -46,6 +68,8 @@ spec:
                   value: '{{workflow.parameters.dataset-uri}}'
                 - name: task-type
                   value: '{{workflow.parameters.task-type}}'
+                - name: architecture
+                  value: '{{workflow.parameters.architecture}}'
                 - name: algorithm
                   value: '{{workflow.parameters.algorithm}}'
                 - name: mode
@@ -58,6 +82,22 @@ spec:
                   value: '{{workflow.parameters.time-column}}'
                 - name: base-model-uri
                   value: '{{workflow.parameters.base-model-uri}}'
+                - name: hidden-layers
+                  value: '{{workflow.parameters.hidden-layers}}'
+                - name: dropout
+                  value: '{{workflow.parameters.dropout}}'
+                - name: sequence-length
+                  value: '{{workflow.parameters.sequence-length}}'
+                - name: num-layers
+                  value: '{{workflow.parameters.num-layers}}'
+                - name: hidden-size
+                  value: '{{workflow.parameters.hidden-size}}'
+                - name: learning-rate
+                  value: '{{workflow.parameters.learning-rate}}'
+                - name: epochs
+                  value: '{{workflow.parameters.epochs}}'
+                - name: batch-size
+                  value: '{{workflow.parameters.batch-size}}'
           - name: register
             template: register-step
             dependencies: [train]
@@ -77,12 +117,21 @@ spec:
         parameters:
           - name: dataset-uri
           - name: task-type
+          - name: architecture
           - name: algorithm
           - name: mode
           - name: target-column
           - name: id-columns
           - name: time-column
           - name: base-model-uri
+          - name: hidden-layers
+          - name: dropout
+          - name: sequence-length
+          - name: num-layers
+          - name: hidden-size
+          - name: learning-rate
+          - name: epochs
+          - name: batch-size
       outputs:
         parameters:
           - name: artifact-uri
@@ -108,6 +157,8 @@ spec:
             value: '{{inputs.parameters.target-column}}'
           - name: ID_COLUMNS
             value: '{{inputs.parameters.id-columns}}'
+          - name: ARCHITECTURE
+            value: '{{inputs.parameters.architecture}}'
           - name: ALGORITHM
             value: '{{inputs.parameters.algorithm}}'
           - name: MODE
@@ -116,6 +167,22 @@ spec:
             value: '{{inputs.parameters.base-model-uri}}'
           - name: TIME_COLUMN
             value: '{{inputs.parameters.time-column}}'
+          - name: HIDDEN_LAYERS
+            value: '{{inputs.parameters.hidden-layers}}'
+          - name: DROPOUT
+            value: '{{inputs.parameters.dropout}}'
+          - name: SEQUENCE_LENGTH
+            value: '{{inputs.parameters.sequence-length}}'
+          - name: NUM_LAYERS
+            value: '{{inputs.parameters.num-layers}}'
+          - name: HIDDEN_SIZE
+            value: '{{inputs.parameters.hidden-size}}'
+          - name: LEARNING_RATE
+            value: '{{inputs.parameters.learning-rate}}'
+          - name: EPOCHS
+            value: '{{inputs.parameters.epochs}}'
+          - name: BATCH_SIZE
+            value: '{{inputs.parameters.batch-size}}'
           - name: MLFLOW_TRACKING_URI
             value: http://host.docker.internal:5000
         volumeMounts:

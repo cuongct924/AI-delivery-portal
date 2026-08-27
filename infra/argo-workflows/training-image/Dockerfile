@@ -10,7 +10,13 @@ RUN pip install --no-cache-dir uv
 COPY infra/argo-workflows/training-image/requirements.lock.txt .
 # Installed at build time, not by train-step at pod startup — a Docker
 # Desktop I/O error hit mid-download when this used to run on every job.
-RUN uv pip install --system --no-cache --target /deps -r requirements.lock.txt
+# --index-strategy unsafe-best-match: requirements.lock.txt embeds both
+# PyPI and download.pytorch.org (torch CPU wheels) as trusted indexes
+# (Makefile's `lock` target) — uv's dependency-confusion-safe default
+# otherwise refuses versions of unrelated packages past what the *first*
+# index offers.
+RUN uv pip install --system --no-cache --index-strategy unsafe-best-match \
+    --target /deps -r requirements.lock.txt
 
 # checkov:skip=CKV_DOCKER_2: batch job (Argo Workflow pod runs train.py once
 # and exits) — no long-running process to health-check, unlike a service.
