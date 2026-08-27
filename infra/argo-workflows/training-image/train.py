@@ -5,9 +5,11 @@ and hands the resulting artifact URI + dataset digest to `register-step` via
 /tmp files (Argo reads them back through `outputs.parameters`).
 """
 
+import json
 import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, cast
 
@@ -21,14 +23,17 @@ import pandas as pd
 # actual training-image target).
 import torch  # noqa: F401
 from algorithm_registry import AlgorithmSpec, get_algorithm_spec
+from byoc_runner import run_custom_training
 from metrics import compute_metrics
 
 # Submodule imports, not `import mlflow` + `mlflow.sklearn.x` — mlflow's
-# top-level stub doesn't declare `sklearn`/`data`/`pytorch` as exported
-# attributes.
+# top-level stub doesn't declare `sklearn`/`data`/`pytorch`/`pyfunc` as
+# exported attributes.
 from mlflow import data as mlflow_data
+from mlflow import pyfunc as mlflow_pyfunc
 from mlflow import pytorch as mlflow_pytorch
 from mlflow import sklearn as mlflow_sklearn
+from pyfunc_wrapper import GenericPyfuncWrapper
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import TimeSeriesSplit, train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -219,12 +224,21 @@ def main() -> None:
     mode = os.environ.get("MODE", "train")
     base_model_uri = os.environ.get("BASE_MODEL_URI") or None
     time_column = os.environ.get("TIME_COLUMN") or None
+    # BYOC (mục 6b.3) — "custom" bypasses the algorithm registry and DL
+    # architecture registry entirely, so it's checked ahead of both.
+    is_custom = algorithm == "custom"
+    code_repo_url = os.environ.get("CODE_REPO_URL") or None
+    entrypoint_path = os.environ.get("ENTRYPOINT_PATH") or None
 
+    if is_custom and (code_repo_url is None or entrypoint_path is None):
+        raise RuntimeError("CODE_REPO_URL and ENTRYPOINT_PATH are required when ALGORITHM=custom")
+    if is_custom and mode != "train":
+        raise RuntimeError("BYOC (ALGORITHM=custom) does not support MODE=finetune")
     if task_type != "clustering" and target_column is None:
         raise RuntimeError(f"TARGET_COLUMN is required for task_type {task_type!r}")
-    if architecture == "sklearn" and algorithm is None:
+    if not is_custom and architecture == "sklearn" and algorithm is None:
         raise RuntimeError("ALGORITHM is required when ARCHITECTURE=sklearn")
-    if architecture != "sklearn" and task_type == "clustering":
+    if not is_custom and architecture != "sklearn" and task_type == "clustering":
         # dl_architecture_registry.py's DL_ARCHITECTURES only lists
         # classification/regression hyperparameters (mục 5.1) — no DL
         # clustering support.
@@ -251,7 +265,22 @@ def main() -> None:
         mlflow.log_param("architecture", architecture)
         mlflow.log_param("mode", mode)
 
-        if architecture == "sklearn":
+        if is_custom:
+            # Validated non-None above.
+            assert code_repo_url is not None
+            assert entrypoint_path is not None
+            mlflow.log_param("algorithm", "custom")
+            mlflow.log_param("code_repo_url", code_repo_url)
+            config = cast(dict[str, Any], json.loads(os.environ.get("CUSTOM_CONFIG") or "{}"))
+            config["target_column"] = target_column
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                model, metrics = run_custom_training(
+                    df, config, code_repo_url, entrypoint_path, Path(tmp_dir) / "repo"
+                )
+            for metric_name, value in metrics.items():
+                mlflow.log_metric(metric_name, value)
+            mlflow_pyfunc.log_model(python_model=GenericPyfuncWrapper(model), artifact_path="model")
+        elif architecture == "sklearn":
             spec = get_algorithm_spec(task_type, cast(str, algorithm))
             mlflow.log_param("algorithm", algorithm)
             if task_type == "clustering":

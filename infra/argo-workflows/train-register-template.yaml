@@ -56,6 +56,13 @@ spec:
         value: ""
       - name: batch-size
         value: ""
+      # BYOC (mục 6b.3) — only used when algorithm=custom.
+      - name: code-repo-url
+        value: ""
+      - name: entrypoint-path
+        value: ""
+      - name: custom-config
+        value: "{}"
   templates:
     - name: train-and-register
       dag:
@@ -98,6 +105,12 @@ spec:
                   value: '{{workflow.parameters.epochs}}'
                 - name: batch-size
                   value: '{{workflow.parameters.batch-size}}'
+                - name: code-repo-url
+                  value: '{{workflow.parameters.code-repo-url}}'
+                - name: entrypoint-path
+                  value: '{{workflow.parameters.entrypoint-path}}'
+                - name: custom-config
+                  value: '{{workflow.parameters.custom-config}}'
           - name: register
             template: register-step
             dependencies: [train]
@@ -132,6 +145,9 @@ spec:
           - name: learning-rate
           - name: epochs
           - name: batch-size
+          - name: code-repo-url
+          - name: entrypoint-path
+          - name: custom-config
       outputs:
         parameters:
           - name: artifact-uri
@@ -183,6 +199,12 @@ spec:
             value: '{{inputs.parameters.epochs}}'
           - name: BATCH_SIZE
             value: '{{inputs.parameters.batch-size}}'
+          - name: CODE_REPO_URL
+            value: '{{inputs.parameters.code-repo-url}}'
+          - name: ENTRYPOINT_PATH
+            value: '{{inputs.parameters.entrypoint-path}}'
+          - name: CUSTOM_CONFIG
+            value: '{{inputs.parameters.custom-config}}'
           - name: MLFLOW_TRACKING_URI
             value: http://host.docker.internal:5000
         volumeMounts:

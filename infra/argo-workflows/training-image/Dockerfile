@@ -24,8 +24,10 @@ FROM python:3.12-slim
 WORKDIR /app
 RUN apt-get update && apt-get upgrade -y \
     # libgomp1: LightGBM's Linux wheel links against it at import time,
-    # doesn't bundle it — the only runtime (non-Python) dependency here.
-    && apt-get install -y --no-install-recommends libgomp1 \
+    # doesn't bundle it. git: byoc_runner.py shells out to it to clone a
+    # Dev's BYOC repo (mục 6b.3) — the only 2 runtime (non-Python)
+    # dependencies here.
+    && apt-get install -y --no-install-recommends libgomp1 git \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /deps /usr/local/lib/python3.12/site-packages
 COPY infra/argo-workflows/training-image/*.py .
