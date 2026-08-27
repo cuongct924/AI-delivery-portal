@@ -6,3 +6,6 @@ packages/*/src
 packages/*/node_modules
 plugins
 *.local.yaml
+.venv
+*.pdf
+data/*.csv
