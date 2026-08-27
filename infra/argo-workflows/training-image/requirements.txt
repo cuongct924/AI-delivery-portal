@@ -1,0 +1,7 @@
+mlflow==3.15.1
+pandas==2.3.3
+scikit-learn==1.7.2
+xgboost==3.0.5
+lightgbm==4.6.0
+catboost==1.2.8
+httpx==0.28.1

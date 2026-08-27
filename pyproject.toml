@@ -18,12 +18,12 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path"]
 
 [tool.pytest.ini_options]
-pythonpath = [".", "services/orchestration-api"]
+pythonpath = [".", "services/orchestration-api", "infra/argo-workflows/training-image"]
 testpaths = ["tests"]
 addopts = "--cov --cov-report=term-missing"
 
 [tool.coverage.run]
-source = ["adapters", "agents", "services/orchestration-api"]
+source = ["adapters", "agents", "services/orchestration-api", "infra/argo-workflows/training-image"]
 branch = true
 
 [tool.coverage.report]
@@ -38,7 +38,13 @@ exclude_lines = ["pragma: no cover", "if __name__ == .__main__.:"]
 pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"
-include = ["adapters", "agents", "services/orchestration-api", "tests"]
+include = [
+    "adapters",
+    "agents",
+    "services/orchestration-api",
+    "infra/argo-workflows/training-image",
+    "tests",
+]
 exclude = [
     "**/__pycache__",
     "**/node_modules",
@@ -51,6 +57,7 @@ exclude = [
 ]
 # extraPaths mirrors pytest's `pythonpath` above — services/orchestration-api's
 # own modules (core, routers, auth, evaluations) are imported unqualified from
-# inside that service, same as at runtime (uvicorn runs with cwd there).
-extraPaths = ["services/orchestration-api"]
+# inside that service, same as at runtime (uvicorn runs with cwd there); same
+# reasoning for the training image's algorithm_registry/metrics/train.
+extraPaths = ["services/orchestration-api", "infra/argo-workflows/training-image"]
 typeCheckingMode = "standard"

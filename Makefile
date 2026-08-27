@@ -24,7 +24,8 @@ SERVICE_REQS := requirements-dev.txt \
 	services/orchestration-api/requirements.txt \
 	agents/mcp-servers/mlops-server/requirements.txt \
 	agents/mcp-servers/k8s-server/requirements.txt \
-	agents/mcp-servers/metrics-server/requirements.txt
+	agents/mcp-servers/metrics-server/requirements.txt \
+	infra/argo-workflows/training-image/requirements.txt
 
 .PHONY: venv install lock hooks lint format format-check typecheck test check \
 	gitleaks checkov trivy security \
@@ -52,10 +53,13 @@ install: venv
 ## Regenerates dev.lock.txt (merged, local-venv-only) and every service's own
 ## requirements.lock.txt (what its Dockerfile installs from) after you edit a
 ## requirements.txt. Review the diff, then commit the *.lock.txt files too.
-## Pinned to linux/x86_64 (--python-platform) to match the Docker images and
-## GitHub Actions runners, regardless of what OS/arch `make lock` runs on.
+## dev.lock.txt uses --universal (keeps each package's own platform markers,
+## e.g. xgboost's Linux-only nvidia-nccl-cu12 dependency) so `make install`
+## works on any dev machine's OS/arch, not just Linux. Each service's own
+## *.lock.txt stays pinned to linux/x86_64 (--python-platform) to match the
+## Docker images and GitHub Actions runners those actually build/run on.
 lock: venv
-	$(UV) pip compile $(SERVICE_REQS) --python-version 3.12 --python-platform x86_64-unknown-linux-gnu -o dev.lock.txt
+	$(UV) pip compile $(SERVICE_REQS) --python-version 3.12 --universal -o dev.lock.txt
 	@for f in $(SERVICE_REQS); do \
 		echo "Locking $$f..."; \
 		$(UV) pip compile "$$f" --python-version 3.12 --python-platform x86_64-unknown-linux-gnu -o "$${f%.txt}.lock.txt"; \
