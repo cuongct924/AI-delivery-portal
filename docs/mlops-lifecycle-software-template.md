@@ -469,7 +469,7 @@ trong task list (mỗi phase `blockedBy` task cuối của phase trước):
 | 2 | Golden Path #2 — Deploy Strategy (mục 4) | #24–29 | **Đã code + commit** (`adapters/deploy_strategies.py`, KServe create-or-update fix, mục 4.5). Hạ tầng chạy thật (ArgoCD + Helm + KServe Serverless trên kind, mục 4b) cũng đã dựng xong — chạy thử end-to-end được ngay |
 | 3 | Deep Learning — MLP+LSTM (mục 5) | #19–23 | **Đã code + commit** (`dl_models.py`, `dl_architecture_registry.py`, `train_dl.py`, dispatch trong `train.py`, dataset `sensor-timeseries-sample.csv`, mục 5.5). `docker build` của `training-image` chưa verify lại lần cuối — máy dev hết dung lượng đĩa giữa chừng |
 | 4 | BYOC — custom script (mục 6b.3) | #30–34 | **Đã code + commit** (`byoc_runner.py`, `pyfunc_wrapper.py`, dispatch trong `train.py`, mục 6b.3.1). `docker build` chưa verify — máy dev hết dung lượng đĩa |
-| 5 | HPO — Grid/Random/Bayesian (mục 6c) | #35–37 | Đã duyệt, `blockedBy` #34 |
+| 5 | HPO — Grid/Random/Bayesian (mục 6c) | #35–37 | **Đã code + commit** (`hpo_strategies.py`, `hpo_runner.py`, dispatch trong `train.py`, mục 6c.5). `docker build` chưa verify — máy dev hết dung lượng đĩa |
 | 6 | NLP — text classification (mục 6b) | #38 | Roadmap, cần thiết kế chi tiết trước khi tách task nhỏ, `blockedBy` #37 |
 | 7 | CV — image classification (mục 6b) | #39 | Roadmap, cần thiết kế chi tiết trước, `blockedBy` #38 |
 | 8 | RecSys — Golden Path riêng (mục 6e, thiết kế đầy đủ) | #41–46 | Đã duyệt, `blockedBy` #39 |
@@ -700,6 +700,51 @@ Thêm `searchStrategy` (enum, mặc định `fixed`) + `numTrials` (chỉ hiện
 khác `fixed`) + mỗi hyperparameter đổi từ 1 field giá trị đơn sang field
 khoảng/tập giá trị khi `searchStrategy != fixed` — cùng kỹ thuật if/then
 JSON Schema đã dùng cho `algorithm`/`architecture`/`taskType`.
+
+### 6c.5 Đã code — tinh chỉnh so với 6c.1-6c.4 lúc triển khai thật
+
+- **Interface đầy đủ 3 method, không phải 1 method như 6c.1 phác thảo**:
+  thêm `trial_count(requested_trials, spaces) -> int` (Grid bỏ qua
+  `requested_trials` — số trial bị chốt bởi kích thước lưới, cần biết trước
+  để vòng lặp gọi đúng số lần) và `report_result(trial_number, value) ->
+  None` (Bayesian cần method riêng để nhận lại kết quả trial — TPE sampler
+  không thể "khôn" hơn nếu không có cách nào feed kết quả trial trước vào,
+  mà 6c.1 không có cơ chế này). `suggest_trial` giữ nguyên chữ ký gốc.
+- **Sống trong `infra/argo-workflows/training-image/hpo_strategies.py`,
+  không phải `adapters/interfaces.py`** như 6c.1 gợi ý theo nghĩa đen —
+  cùng lý do đã ghi ở mục 6b.3.1 cho BYOC: training-image là 1 image Docker
+  riêng, Dockerfile chỉ `COPY *.py` từ thư mục này, không có quyền truy cập
+  package `adapters/` ở top-level repo.
+- **Phạm vi HPO chỉ áp dụng cho DL hyperparameters (mục 5.1), chưa cho
+  sklearn** — sklearn hiện chưa có field hyperparameter nào để search
+  (`train.py` gọi `spec.estimator_class()` không tham số, dùng default của
+  từng thư viện) nên "mỗi hyperparameter đổi từ 1 field giá trị đơn sang
+  field khoảng/tập giá trị" (6c.4) hiện chỉ áp dụng đúng 7 field DL đã có.
+  `train.py` từ chối sớm (`RuntimeError`) nếu `SEARCH_STRATEGY != fixed`
+  cùng `ARCHITECTURE=sklearn` hoặc `ALGORITHM=custom`.
+- **1 field JSON `searchSpaceJson` thay vì nhân đôi từng field hyperparameter
+  thành cặp low/high hoặc field chọn tập giá trị** — 6c.4 mô tả "mỗi
+  hyperparameter đổi... sang field khoảng/tập giá trị", nghĩa đen sẽ cần
+  ~15 field mới (2-3 biến thể × 7 hyperparameter). Dùng 1 field JSON tự do
+  (cùng mẫu đã lập với `customConfig` ở BYOC, mục 6b.3) —
+  `{"learning_rate": {"low": ..., "high": ...}, "epochs": {"choices":
+  [...]}}` — hyperparameter nào không có trong JSON này vẫn giữ giá trị cố
+  định từ field gốc của nó, cho Dev search 1 phần, fix phần còn lại.
+- **Cần thêm `objectiveMetric`/`objectiveDirection`** — không có trong danh
+  sách form parameters gốc (6c.4), nhưng bắt buộc phải biết: so sánh trial
+  nào "tốt hơn" cần 1 metric cụ thể (Dev chọn, ví dụ "accuracy") và hướng
+  tối ưu (`maximize`/`minimize`, mặc định `maximize`) — không suy luận
+  ngầm được từ tên metric.
+- **Optuna pruning (trial sớm dừng giữa chừng) chưa nối vào
+  `train_dl.py`** — cần `train_dl.py`'s epoch loop tự gọi
+  `trial.report()`/`trial.should_prune()`, một tầng tích hợp sâu hơn
+  Strategy/SearchSpace thuần tuý. 6c.1 đã ghi rõ đây là phần tuỳ chọn — để
+  lại cho 1 lần sau, giá trị chính (TPE sampler dùng lịch sử trial) đã có.
+- **Mỗi trial log thành 1 nested MLflow child run** (`mlflow.start_run
+  (nested=True)`) đúng 6c.2/6c.3 — trial tốt nhất theo `objectiveMetric` có
+  model/metrics/hyperparameters được trả về cho `train.py` log ở run cha
+  (`best_*` params) và đăng ký như model chính thức, luồng
+  register→gate→deploy không đổi.
 
 ## 6d. Golden Path thứ 4 — "Setup Model Monitoring" (Phase 9)
 
