@@ -468,7 +468,7 @@ trong task list (mỗi phase `blockedBy` task cuối của phase trước):
 | 1 | Golden Path #1 — Classical ML (mục 3) | #9–18 | **Đã code + commit** (training image, data quality, gate, 5-step template) |
 | 2 | Golden Path #2 — Deploy Strategy (mục 4) | #24–29 | **Đã code + commit** (`adapters/deploy_strategies.py`, KServe create-or-update fix, mục 4.5). Hạ tầng chạy thật (ArgoCD + Helm + KServe Serverless trên kind, mục 4b) cũng đã dựng xong — chạy thử end-to-end được ngay |
 | 3 | Deep Learning — MLP+LSTM (mục 5) | #19–23 | **Đã code + commit** (`dl_models.py`, `dl_architecture_registry.py`, `train_dl.py`, dispatch trong `train.py`, dataset `sensor-timeseries-sample.csv`, mục 5.5). `docker build` của `training-image` chưa verify lại lần cuối — máy dev hết dung lượng đĩa giữa chừng |
-| 4 | BYOC — custom script (mục 6b.3) | #30–34 | Đã duyệt, `blockedBy` #23 |
+| 4 | BYOC — custom script (mục 6b.3) | #30–34 | **Đã code + commit** (`byoc_runner.py`, `pyfunc_wrapper.py`, dispatch trong `train.py`, mục 6b.3.1). `docker build` chưa verify — máy dev hết dung lượng đĩa |
 | 5 | HPO — Grid/Random/Bayesian (mục 6c) | #35–37 | Đã duyệt, `blockedBy` #34 |
 | 6 | NLP — text classification (mục 6b) | #38 | Roadmap, cần thiết kế chi tiết trước khi tách task nhỏ, `blockedBy` #37 |
 | 7 | CV — image classification (mục 6b) | #39 | Roadmap, cần thiết kế chi tiết trước, `blockedBy` #38 |
@@ -570,6 +570,58 @@ def train(dataset: pd.DataFrame, config: dict) -> tuple[Any, dict[str, float]]:
   hiện 2 field mới: `codeRepoUrl`, `entrypointPath` — cùng kỹ thuật if/then
   JSON Schema đã dùng cho `algorithm`/`architecture`, không phá cấu trúc
   form hiện có.
+
+### 6b.3.1 Đã code — tinh chỉnh so với 6b.3 lúc triển khai thật
+
+- **Git-clone chạy trong `train.py` qua `subprocess`
+  (`infra/argo-workflows/training-image/byoc_runner.py`), không phải 1 Argo
+  artifact-input step riêng.** Argo Workflows có cơ chế built-in
+  `inputs.artifacts[].git` đúng như 6b.3 mô tả, nhưng hành vi của nó khi
+  `code-repo-url` rỗng (mọi lần chạy KHÔNG chọn BYOC) không kiểm chứng được
+  nếu không có cluster thật để thử — `optional: true` trong tài liệu Argo
+  chỉ chắc chắn áp dụng cho S3/GCS/HTTP ("key không tồn tại ở nguồn"), không
+  rõ với git repo URL rỗng/không hợp lệ. `subprocess.run(["git", "clone",
+  ...], check=True)` bên trong `train.py` cho hành vi xác định, test được
+  bằng pytest thuần (mock `subprocess.run`), và lỗi rõ ràng
+  (`CalledProcessError` → thông báo "training failed: ..." — cùng cơ chế
+  fail hiện có). Đổi lại: image cần thêm gói `git` (đã thêm vào
+  `training-image/Dockerfile`, layer cùng `libgomp1`).
+- **`algorithm="custom"` được kiểm tra TRƯỚC `architecture`** trong dispatch
+  của `train.py::main()` — bỏ qua cả `algorithm_registry.py` lẫn
+  `dl_architecture_registry.py`. `architecture` field vẫn giữ giá trị mặc
+  định `sklearn` trên form (không dùng tới), tránh phải thêm 1 giá trị
+  `architecture=custom` chồng chéo ý nghĩa với `algorithm=custom`.
+- **Dataset truyền cho `train()` là `df` thô** (đọc thẳng từ `DATASET_URI`,
+  chưa qua `_encode_categoricals`/`_handle_missing_values`/`_scale_features`
+  của Golden Path #1) — Dev tự xử lý toàn bộ pipeline theo đúng tinh thần
+  "platform không cần hiểu code Dev viết gì". `target_column` không phải
+  tham số riêng của `train()` (chữ ký cố định chỉ có `dataset`/`config`) —
+  platform tự thêm key `target_column` vào `config` dict trước khi gọi, Dev
+  tự đọc ra.
+- **BYOC không hỗ trợ `MODE=finetune`** — hợp đồng `train()` không có tham
+  số nhận base model, và ý nghĩa "fine-tune" phụ thuộc hoàn toàn vào loại
+  model Dev tự chọn, không định nghĩa chung được. `train.py` từ chối sớm
+  bằng `RuntimeError` nếu Dev chọn `algorithm=custom` cùng
+  `baseModelUri`.
+- **`GenericPyfuncWrapper.model_input` cố tình để `Any`, không gõ kiểu
+  `pd.DataFrame`** (`pyfunc_wrapper.py`) — `mlflow.pyfunc.PythonModel.
+  __init_subclass__` tự động bọc `predict()` bằng validation dựa theo type
+  hint khi phát hiện type hint được hỗ trợ, có thể âm thầm biến đổi input
+  không đúng ý — model BYOC của Dev có thể nhận bất kỳ shape input nào họ tự
+  thiết kế, không riêng DataFrame.
+- **Lỗi hạ tầng test phát hiện lúc code** (không phải lỗi thiết kế):
+  `tests/test_mlflow_adapter.py`/`tests/test_models_router.py` stub
+  `sys.modules["mlflow"]` bằng `MagicMock()` ở module level để né import
+  mlflow thật (nặng) — vì pytest collect (import) toàn bộ file test trước
+  khi chạy bất kỳ test nào, stub này thắng "cuộc đua" và đầu độc
+  `sys.modules["mlflow"]` cho cả phiên chạy nếu file của nó được collect
+  trước. Vô hại với các lệnh gọi phẳng kiểu `mlflow.log_metric(...)` (tự
+  hạ cấp thành mock call), nhưng `GenericPyfuncWrapper` kế thừa
+  `mlflow.pyfunc.PythonModel` — 1 attribute bị mock không kế thừa đúng
+  được. Fix bằng cách thêm `import mlflow.pyfunc` vào đầu
+  `tests/conftest.py` (cạnh `import torch` đã có, cùng lý do thứ tự
+  collect) — đảm bảo mlflow thật được nạp trước khi bất kỳ file nào kịp
+  stub nó.
 
 ### 6b.4 Sequencing đề xuất (view kiến trúc, chưa phải quyết định cuối)
 
