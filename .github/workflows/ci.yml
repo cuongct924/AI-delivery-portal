@@ -108,7 +108,7 @@ jobs:
       - run: yarn lint:all
 
   # ---------------------------------------------------------------------
-  # Docker — build all 4 service images, then Trivy-scan each.
+  # Docker — build all 5 service images, then Trivy-scan each.
   # --ignore-unfixed: don't fail on upstream CVEs with no patch available yet
   # (e.g. perl-base in python:3.12-slim) — only on CVEs we can actually act
   # on. See docs/architecture.md for the one currently-tracked exception
@@ -140,9 +140,10 @@ jobs:
           docker build -t mlops-server:$SHORT_SHA -f agents/mcp-servers/mlops-server/Dockerfile .
           docker build -t k8s-server:$SHORT_SHA -f agents/mcp-servers/k8s-server/Dockerfile .
           docker build -t metrics-server:$SHORT_SHA -f agents/mcp-servers/metrics-server/Dockerfile .
+          docker build -t training-image:$SHORT_SHA -f infra/argo-workflows/training-image/Dockerfile .
       - name: Trivy scan
         run: |
-          for img in orchestration-api mlops-server k8s-server metrics-server; do
+          for img in orchestration-api mlops-server k8s-server metrics-server training-image; do
             echo "=== Trivy scan: $img ==="
             trivy image --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 "$img:$SHORT_SHA"
           done
@@ -156,7 +157,7 @@ jobs:
       - name: Push images
         if: github.ref == 'refs/heads/main'
         run: |
-          for img in orchestration-api mlops-server k8s-server metrics-server; do
+          for img in orchestration-api mlops-server k8s-server metrics-server training-image; do
             docker tag "$img:$SHORT_SHA" "ghcr.io/$REPO_LC/$img:$SHORT_SHA"
             docker tag "$img:$SHORT_SHA" "ghcr.io/$REPO_LC/$img:latest"
             docker push "ghcr.io/$REPO_LC/$img:$SHORT_SHA"

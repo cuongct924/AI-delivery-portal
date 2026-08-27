@@ -4,9 +4,10 @@ metadata:
   name: train-track-register
   title: "Train → Track → Register (Golden Path #1)"
   description: >
-    Trains (or fine-tunes) a model on the local Argo Workflows cluster,
-    tracks the run in MLflow, and registers the resulting model version —
-    calling services/orchestration-api the whole way, no mock steps.
+    Validates the dataset, trains (or fine-tunes) a model on the local Argo
+    Workflows cluster, tracks the run in MLflow, registers the resulting
+    model version, and opens a PR with its Catalog entry — calling
+    services/orchestration-api the whole way, no mock steps.
   tags:
     - mlops
 
@@ -19,6 +20,9 @@ spec:
       required:
         - modelName
         - datasetUri
+        - taskType
+        - algorithm
+        - repoUrl
       properties:
         modelName:
           title: Model name
@@ -32,32 +36,162 @@ spec:
             cluster mounts the repo's data/ directory at /mnt/data
             (infra/k8s-local-cluster/kind-config.yaml).
           default: file:///mnt/data/fraud-detection-sample.csv
+        taskType:
+          title: Task type
+          type: string
+          enum: [classification, regression, clustering]
+          default: classification
+        algorithm:
+          title: Algorithm
+          type: string
+          description: Options depend on the task type selected above.
+        targetColumn:
+          title: Target column
+          type: string
+          description: >
+            Label column to predict — required for classification/
+            regression, leave empty for clustering.
+        idColumns:
+          title: ID columns to exclude
+          type: array
+          items:
+            type: string
+          description: >
+            Identifier columns to drop before training (never used as a
+            feature), e.g. "transaction_id".
+        timeColumn:
+          title: Time column (optional)
+          type: string
+          description: >
+            Leave empty if the data has no time ordering. If set, training
+            always uses a chronological split (TimeSeriesSplit) instead of a
+            random one, to avoid leaking future rows into the training set.
         baseModelUri:
           title: Base model (leave empty to train from scratch)
           type: string
           description: >
-            MLflow model URI to fine-tune from — selects the
-            fine-tune-golden-path Argo WorkflowTemplate instead of
-            train-register-golden-path when set (see
+            MLflow model URI to fine-tune from — sets mode=finetune on the
+            same train-register-golden-path Argo WorkflowTemplate (see
             services/orchestration-api/routers/models.py trigger_training()).
+        repoUrl:
+          title: Repository
+          type: string
+          description: >
+            Target repo for the Catalog entry PR, in the format
+            github.com?owner=<org>&repo=<repo> (same shape
+            publish:github:pull-request expects). No RepoUrlPicker field
+            extension is confirmed available in this repo's frontend, so
+            this is a plain string field.
+      # Backstage Scaffolder v1beta3 JSON Schema conditionals — same
+      # if/then pattern used for other task-type-dependent fields.
+      allOf:
+        - if:
+            properties:
+              taskType:
+                const: classification
+          then:
+            properties:
+              algorithm:
+                enum:
+                  - LogisticRegression
+                  - RandomForestClassifier
+                  - GradientBoostingClassifier
+                  - KNeighborsClassifier
+                  - SVC
+                  - GaussianNB
+                  - XGBClassifier
+                  - LGBMClassifier
+                  - CatBoostClassifier
+        - if:
+            properties:
+              taskType:
+                const: regression
+          then:
+            properties:
+              algorithm:
+                enum:
+                  - LinearRegression
+                  - Ridge
+                  - Lasso
+                  - RandomForestRegressor
+                  - GradientBoostingRegressor
+                  - SVR
+                  - XGBRegressor
+                  - LGBMRegressor
+                  - CatBoostRegressor
+        - if:
+            properties:
+              taskType:
+                const: clustering
+          then:
+            properties:
+              algorithm:
+                enum:
+                  - KMeans
+                  - DBSCAN
+                  - AgglomerativeClustering
+                  - GaussianMixture
+        - if:
+            properties:
+              taskType:
+                enum: [classification, regression]
+          then:
+            required:
+              - targetColumn
 
   steps:
+    - id: validate-dataset
+      name: "Validate the dataset"
+      action: orchestration:validate-dataset
+      input:
+        datasetUri: ${{ parameters.datasetUri }}
+        taskType: ${{ parameters.taskType }}
+        targetColumn: ${{ parameters.targetColumn }}
+        timeColumn: ${{ parameters.timeColumn }}
+
     - id: trigger-training
       name: "Train and register the model"
       action: orchestration:trigger-training
       input:
         modelName: ${{ parameters.modelName }}
         datasetUri: ${{ parameters.datasetUri }}
+        taskType: ${{ parameters.taskType }}
+        algorithm: ${{ parameters.algorithm }}
+        targetColumn: ${{ parameters.targetColumn }}
+        idColumns: ${{ parameters.idColumns }}
+        timeColumn: ${{ parameters.timeColumn }}
         baseModelUri: ${{ parameters.baseModelUri }}
+
+    - id: model-summary
+      name: "Fetch the model version's metrics"
+      action: orchestration:model-summary
+      input:
+        modelName: ${{ parameters.modelName }}
+        modelVersion: ${{ steps['trigger-training'].output.modelVersion }}
 
     - id: render-catalog-info
       name: "Generate the model's catalog entity"
       action: fetch:template
       input:
         url: ./skeleton
+        targetPath: catalog-output
         values:
           modelName: ${{ parameters.modelName }}
           modelVersion: ${{ steps['trigger-training'].output.modelVersion }}
+
+    - id: publish-catalog-pr
+      name: "Open the catalog entry PR"
+      action: publish:github:pull-request
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        branchName: register-${{ parameters.modelName }}-${{ steps['trigger-training'].output.modelVersion }}
+        title: "Register ${{ parameters.modelName }}:${{ steps['trigger-training'].output.modelVersion }}"
+        description: >
+          Adds the Catalog entry for **${{ parameters.modelName }}** version
+          **${{ steps['trigger-training'].output.modelVersion }}**, trained
+          with ${{ parameters.algorithm }} (${{ parameters.taskType }}).
+        sourcePath: catalog-output
+        targetPath: catalog/${{ parameters.modelName }}
 
   output:
     links:
@@ -65,22 +199,20 @@ spec:
         url: http://localhost:5000
       - title: "Argo Workflow: ${{ steps['trigger-training'].output.workflowName }}"
         url: http://localhost:2746
+      - title: View catalog entry pull request
+        url: ${{ steps['publish-catalog-pr'].output.remoteUrl }}
     text:
       - title: Result
         content: |
           Trained and registered **${{ parameters.modelName }}** version
           **${{ steps['trigger-training'].output.modelVersion }}**
-          (Argo Workflow `${{ steps['trigger-training'].output.workflowName }}`,
-          finished as `${{ steps['trigger-training'].output.phase }}`).
+          (${{ parameters.algorithm }}, Argo Workflow
+          `${{ steps['trigger-training'].output.workflowName }}`, finished
+          as `${{ steps['trigger-training'].output.phase }}`).
 
-          A `catalog-info.yaml` for this model version was generated in this
-          run's workspace (see the step log / task download above) — it is
-          **not yet live in the Catalog**. Neither `catalog:register` nor
-          `catalog:write` can register content that only exists in the
-          Scaffolder's ephemeral workspace: `catalog:register` needs an
-          already-resolvable absolute URL (no template variable exposes the
-          workspace's filesystem path in this Backstage version, and Backstage's
-          UrlReaders don't resolve `file:` URLs anyway), and `catalog:write`
-          only writes the file — neither calls `catalog.addLocation`. Making
-          this entity durably browsable would need a `publish:github`-style
-          step first (like Golden Path #2's PR), which is out of scope here.
+          Metrics: `${{ steps['model-summary'].output.metrics }}`
+
+          Catalog entry PR opened:
+          ${{ steps['publish-catalog-pr'].output.remoteUrl }} — merge it to
+          make the entity discoverable (add its path to `catalog.locations`
+          per `CLAUDE.md`'s "Adding a Catalog entity" workflow rule).
