@@ -92,10 +92,17 @@ thật (không phải nhúng trong YAML) để lint/type-check/test được qua
     dụng hết lợi thế categorical-native của CatBoost ở bản đầu tiên; đây là
     điểm có thể tối ưu sau nếu cần, không phải lỗi thiết kế.
 - **`metrics.py`** — `compute_metrics(task_type, y_true, y_pred) -> dict`:
-  - classification: accuracy/precision/recall với `average="weighted"` (sửa
-    lỗi tổng quát hiện tại chỉ đúng cho binary).
+  - classification: accuracy/precision/recall/**f1** (bổ sung 2026-08-28,
+    theo yêu cầu review) với `average="weighted"` (sửa lỗi tổng quát hiện
+    tại chỉ đúng cho binary) — `f1` cũng có ngưỡng gate riêng (`minimum=0.6`,
+    khớp precision/recall), đúng metric phản ánh trực tiếp mất cân bằng lớp
+    mà `check_class_imbalance` (mục 6f) đã cảnh báo riêng.
   - regression: `r2_score` + `mean_absolute_percentage_error` — cả 2
     scale-free, đặt ngưỡng mặc định hợp lý mà không cần biết đơn vị dataset.
+    **Bổ sung `mean_absolute_error`** (2026-08-28) — CHỈ log, không có
+    ngưỡng gate (không scale-free, không đặt ngưỡng mặc định hợp lý được
+    nếu không biết đơn vị dataset — cùng cách xử lý `map_at_k` của RecSys,
+    mục 6e.3).
   - clustering: `silhouette_score` — bị chặn trong [-1,1], scale-free.
 - **`train.py`** — đọc `DATASET_URI`, `TASK_TYPE`, `TARGET_COLUMN` (rỗng nếu
   clustering), `ID_COLUMNS` (thay hardcode `transaction_id`), `ALGORITHM`,
@@ -443,7 +450,9 @@ Mở rộng `template.yaml`: thêm nhánh JSON Schema `if/then` cho `architectur
 - **LSTM windowing xảy ra sau `_split()`** — `build_sequences()` chạy riêng
   trên phần train và phần test, chấp nhận mất vài dòng biên thay vì
   windowing rồi mới chia.
-- **Optimizer cố định Adam**, `CrossEntropyLoss` dùng chung cho classification
+- **Optimizer ban đầu cố định Adam, sau đổi thành lựa chọn Dev-facing
+  `adam`/`sgd`** — xem điểm "đã CHỐT" ngay trước mục 7b.4 để biết quyết
+  định cuối và `optimizers.py`. `CrossEntropyLoss` dùng chung cho classification
   (kể cả nhị phân, qua `output_size = train_labels.nunique()`), target
   regression cũng được chuẩn hoá (mean/std lưu riêng, un-scale trước khi
   gọi `compute_metrics()` vì R2/MAPE cần giá trị đúng thang đo gốc).
@@ -473,7 +482,7 @@ trong task list (mỗi phase `blockedBy` task cuối của phase trước):
 | 6 | NLP — text classification (mục 6g, thiết kế chi tiết) | #38 | **Đã code + commit** (`train_nlp.py`, dispatch trong `train.py`, mục 6g.6). `docker build` đã verify thành công (cùng lần build mục 8, xem mục 6e.5) |
 | 7 | CV — image classification (mục 6h, thiết kế chi tiết) | #39 | **Đã code + commit** (`train_cv.py`, dispatch trong `train.py`, dataset `shapes-sample.zip`, mục 6h.6). `docker build` đã verify thành công (cùng lần build mục 8, xem mục 6e.5) |
 | 8 | RecSys — Golden Path riêng (mục 6e, thiết kế đầy đủ) | #41–46 | **Đã code + commit** (`rec_algorithm_registry.py`, `rec_metrics.py`, `train_rec.py`, `rec-train-register-template.yaml`, `routers/recommendations.py`, template `recommend-train-register`, mục 6e.5). `docker build training-image` đã verify thành công (bao gồm `implicit`/`scikit-surprise`) |
-| 9 | Model Monitoring — "Setup Model Monitoring" (mục 6d) | #47–50 | Đã duyệt, `blockedBy` #46 (phụ thuộc kỹ thuật thật chỉ là Phase 2 — có thể làm sớm hơn nếu muốn) |
+| 9 | Model Monitoring — "Setup Model Monitoring" (mục 6d) | #47–50 | **Đã code + commit** (`monitor_drift.py`, `monitor-drift-template.yaml`, `routers/monitoring.py`, `ArgoAdapter.create_cron_workflow()`, template `setup-model-monitoring`, mục 6d.7). `docker build` đang verify lại (evidently thêm SAU lần build trước, cần build lại) — xem cập nhật ở cuối phiên. CronWorkflow REST call chưa kiểm chứng với Argo Server thật |
 | — | RL | — | Không hỗ trợ — giới hạn kiến trúc |
 | — | LLMOps (`docs/llmops-lifecycle-plan-draft.md`) | Không tạo task | **Giữ nguyên DRAFT, chỉ bắt đầu sau khi toàn bộ 9 phase MLOps trên hoàn thành và verify xong** |
 
@@ -808,6 +817,44 @@ monitoring hoạt động như nhau bất kể model train bằng thuật toán 
 làm **Phase 9, cuối chuỗi hiện có** (`blockedBy` #40) để giữ nguyên chuỗi
 tuyến tính đã có — có thể làm sớm hơn (ngay sau Phase 2) nếu muốn, vì không
 có phụ thuộc kỹ thuật thật nào với Phase 3–8.
+
+### 6d.7 Đã code — tinh chỉnh so với 6d.1-6d.6 lúc triển khai thật
+
+- **Prerequisite mục 6d.3 (logging input lúc serving) CHƯA được nối dây
+  thật** — đây là cắt phạm vi có chủ đích, không phải bỏ sót. Instrument
+  input-logging đúng nghĩa cần sửa MỌI đường serving (sklearn/pytorch/
+  transformers flavor lẫn `GenericPyfuncWrapper`), thêm volume ghi được vào
+  `KServeAdapter.deploy_model()` + `kind-config.yaml`, và không kiểm chứng
+  được nếu không có cluster thật đang chạy để test volume mount. Thay vào
+  đó, `monitor_drift.py` nhận `PRODUCTION_DATA_URI` như 1 tham số Dev tự
+  cung cấp (trỏ vào đâu cũng được, miễn có dữ liệu production gần đây) —
+  cơ chế drift-check tự nó hoạt động đầy đủ, chỉ phần "tự động log input"
+  bị hoãn lại.
+- **`onDriftDetected=auto-retrain` dùng `retrainRequestJson` (Dev tự cung
+  cấp JSON body) thay vì tự suy luận lại từ metadata MLflow run** — tự động
+  tái tạo request gốc cần logic tra cứu khác nhau theo từng Golden Path/
+  architecture (`dataset_uri` khác `interactions_uri`, `task_type` là tag ở
+  1 số kiến trúc nhưng lại chưa từng được log ở kiến trúc khác) — không
+  đáng độ phức tạp so với việc Dev chỉ cần dán lại đúng JSON họ từng dùng
+  để trigger training thủ công. Cùng mẫu 1-field-JSON đã lập với
+  `customConfig`/`searchSpaceJson`/`hyperparametersJson`.
+- **`ArgoAdapter.create_cron_workflow()`** dùng REST API của Argo Server
+  (`POST`/`PUT /api/v1/cron-workflows/{namespace}`, cùng client `httpx` đã
+  dùng cho `trigger_workflow`) — không phải Kubernetes CustomObjectsApi như
+  `KServeAdapter` — chưa kiểm chứng được với Argo Server thật (không có
+  cluster chạy lúc code); tên CronWorkflow đặt tất định
+  (`monitor-<model-name>`) nên chạy lại Setup cho cùng model sẽ PUT cập
+  nhật lịch/ngưỡng thay vì tạo trùng.
+- **1 WorkflowTemplate tĩnh dùng chung** (`monitor-drift-golden-path`,
+  `infra/argo-workflows/monitor-drift-template.yaml`) cho MỌI model được
+  giám sát — mỗi lần Setup chỉ tạo 1 CronWorkflow mới tham chiếu template
+  này qua `workflowTemplateRef`, không tạo WorkflowTemplate riêng từng
+  model.
+- **`schedule` là field cron string tự do**, không phải dropdown preset +
+  field custom như 6d.5 phác thảo ban đầu ("hourly/daily") — đơn giản hoá
+  vì chưa kiểm chứng được cú pháp ternary `${{ ... ? ... : ... }}` của
+  Scaffolder nunjucks templating với 1 cluster Backstage thật đang chạy;
+  mô tả field liệt kê sẵn 3 preset phổ biến để Dev copy.
 
 ## 6e. Golden Path thứ 3 — Recommendation System (Phase 8), thiết kế chi tiết
 
@@ -1495,21 +1542,33 @@ Sau 20 trial, trial tốt nhất (r2 cao nhất) được đăng ký làm model 
    `model-summary`, tự quyết định deploy hay không; nếu sau đó thử deploy,
    `policy-check` (GP2) mới thật sự chặn nếu r2 dưới ngưỡng.
 
-**Điểm còn MỞ, chưa chốt — "thuật toán tối ưu" (optimizer):**
+**Điểm đã CHỐT (2026-08-28) — "thuật toán tối ưu" (optimizer) là 1 khái
+niệm khác hẳn "thuật toán học máy":**
 
 Với XGBoost/sklearn không có khái niệm optimizer tách rời (đã gộp trong
-chính thuật toán). Optimizer (Adam/SGD/RMSprop) chỉ xuất hiện ở tầng Deep
-Learning (`train_dl.py`, mục 5) — và **thiết kế hiện tại chưa liệt kê
-`optimizer` như 1 hyperparameter Dev chọn** (mục 5.1 chỉ có
-`hidden_layers/dropout/learning_rate/epochs/batch_size` cho MLP, tương tự
-cho LSTM). Theo đúng nguyên tắc "Dev-facing vs automatic" đã áp dụng xuyên
-suốt tài liệu này (mục 2): optimizer là 1 quyết định **kỹ thuật/cơ chế**
-(không phải đánh đổi rủi ro nghiệp vụ như chọn thuật toán/chiến lược
-deploy), nên đề xuất **cố định Adam** tự động trong `train_dl.py` (mặc
-định hợp lý cho hầu hết bài toán non-convex, ít cần tinh chỉnh tay hơn
-SGD) — không lộ ra form, giống cách `StandardScaler`/xử lý missing value
-đã tự động, không phải dropdown. Đây là quyết định cần bạn chốt, chưa tự
-ý thêm vào thiết kế mục 5.
+chính thuật toán — vd Decision Tree chỉ chia nhánh đệ quy, không gradient
+descent nào cả). Optimizer (Adam/SGD) chỉ có ý nghĩa ở tầng Deep Learning
+(`train_dl.py`/`train_nlp.py`/`train_cv.py`, mục 5/6g/6h) — kiến trúc
+(MLP/LSTM/resnet18/model NLP, Dev chọn) tách biệt hẳn khỏi cách nó được fit.
+
+Đề xuất ban đầu ở đây (đã code trong lúc triển khai Phase 3, TRƯỚC khi có
+quyết định chính thức) là **cố định Adam** tự động, không lộ ra form —
+theo nguyên tắc "Dev-facing vs automatic" (mục 2), coi optimizer là quyết
+định kỹ thuật/cơ chế, không phải đánh đổi rủi ro nghiệp vụ. Quyết định
+CUỐI CÙNG (sau khi review lại) đi ngược đề xuất này: **optimizer là 1 lựa
+chọn Dev-facing** — `adam`/`sgd`, mặc định `adam`, field `optimizer` mới
+trong Scaffolder form, áp dụng đồng nhất cho DL/NLP/CV
+(`infra/argo-workflows/training-image/optimizers.py`, dùng chung giữa
+`train_dl.py`/`train_cv.py`; `train_nlp.py` tự map sang chuỗi `optim=` của
+HuggingFace `TrainingArguments`, "adam" → `"adamw_torch"`). Không thêm các
+tham số tinh chỉnh khác của từng optimizer (momentum, weight_decay, ...) —
+chỉ đúng phạm vi được yêu cầu, dùng default riêng của mỗi optimizer cho
+mọi tham số khác.
+
+RecSys's `svd` (mục 6e) vẫn còn 1 điểm chưa nhất quán, ghi nhận nhưng CHƯA
+sửa: `lr_all`/`reg_all` (learning rate/regularization của SGD bên trong
+`scikit-surprise`) nằm chung, không phân biệt, với `n_factors`/`n_epochs`
+(hyperparameter thuộc về mô hình) trong cùng 1 field `hyperparametersJson`.
 
 Ví dụ minh hoạ DL cụ thể (có `batch_size`, trộn field search + field fixed
 trong cùng 1 lần chạy — bài toán fraud classification nhưng có tín hiệu
