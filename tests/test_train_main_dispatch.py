@@ -108,6 +108,81 @@ def test_main_dl_branch_dispatches_to_train_dl_when_architecture_set(
     mock_mlflow_pytorch.log_model.assert_called_once_with(fake_model, artifact_path="model")
 
 
+def test_main_nlp_branch_dispatches_to_train_nlp_and_evaluate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with (
+        patch("train.mlflow_transformers") as mock_mlflow_transformers,
+        patch("train.mlflow_data"),
+        patch("train.mlflow") as mock_mlflow,
+    ):
+        csv_path = tmp_path / "reviews.csv"
+        pd.DataFrame(
+            {
+                "review": ["great", "bad", "great", "bad", "great", "bad"],
+                "sentiment": ["pos", "neg", "pos", "neg", "pos", "neg"],
+            }
+        ).to_csv(csv_path, index=False)
+        (tmp_path / "reviews.csv.dvc").write_text("outs:\n- md5: deadbeef\n  path: reviews.csv\n")
+        mock_mlflow.start_run.return_value.__enter__.return_value.info.run_id = "run-nlp"
+        fake_model = {"model": MagicMock(), "tokenizer": MagicMock()}
+        mock_train_nlp = MagicMock(return_value=(fake_model, {"accuracy": 0.8}))
+        monkeypatch.setattr("train.train_nlp_and_evaluate", mock_train_nlp)
+        env = {
+            **_BASE_ENV,
+            "DATASET_URI": f"file://{csv_path}",
+            "TASK_TYPE": "classification",
+            "TARGET_COLUMN": "sentiment",
+            "TEXT_COLUMN": "review",
+            "BASE_MODEL_NAME": "distilbert-base-uncased",
+            "LEARNING_RATE": "0.001",
+            "EPOCHS": "1",
+            "BATCH_SIZE": "2",
+        }
+        for key, value in env.items():
+            monkeypatch.setenv(key, value)
+        monkeypatch.setenv("ARCHITECTURE", "nlp")
+        monkeypatch.chdir(tmp_path)
+
+        import train
+
+        train.main()
+
+        mock_train_nlp.assert_called_once()
+        call_args = mock_train_nlp.call_args.args
+        train_text, test_text = call_args[0], call_args[1]
+        assert set(train_text).issubset({"great", "bad"})
+        assert len(train_text) + len(test_text) == 6
+        mock_mlflow_transformers.log_model.assert_called_once_with(
+            fake_model, artifact_path="model"
+        )
+        mock_mlflow.log_metric.assert_any_call("accuracy", 0.8)
+
+
+def test_main_nlp_requires_text_column(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    csv_path = _write_dataset(tmp_path)
+    _set_env(monkeypatch, csv_path, tmp_path, TASK_TYPE="classification")
+    monkeypatch.setenv("ARCHITECTURE", "nlp")
+
+    import train
+
+    with pytest.raises(RuntimeError, match="TEXT_COLUMN is required"):
+        train.main()
+
+
+def test_main_nlp_rejects_non_classification_task_type(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    csv_path = _write_dataset(tmp_path)
+    _set_env(monkeypatch, csv_path, tmp_path, TEXT_COLUMN="f1")
+    monkeypatch.setenv("ARCHITECTURE", "nlp")
+
+    import train
+
+    with pytest.raises(RuntimeError, match="only supports TASK_TYPE=classification"):
+        train.main()
+
+
 def test_main_hpo_branch_dispatches_to_run_hpo_when_search_strategy_set(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

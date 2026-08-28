@@ -74,6 +74,11 @@ spec:
         value: ""
       - name: objective-direction
         value: maximize
+      # NLP (mục 6g) — only used when architecture=nlp.
+      - name: text-column
+        value: ""
+      - name: base-model-name
+        value: ""
   templates:
     - name: train-and-register
       dag:
@@ -132,6 +137,10 @@ spec:
                   value: '{{workflow.parameters.objective-metric}}'
                 - name: objective-direction
                   value: '{{workflow.parameters.objective-direction}}'
+                - name: text-column
+                  value: '{{workflow.parameters.text-column}}'
+                - name: base-model-name
+                  value: '{{workflow.parameters.base-model-name}}'
           - name: register
             template: register-step
             dependencies: [train]
@@ -174,6 +183,8 @@ spec:
           - name: search-space-json
           - name: objective-metric
           - name: objective-direction
+          - name: text-column
+          - name: base-model-name
       outputs:
         parameters:
           - name: artifact-uri
@@ -241,6 +252,10 @@ spec:
             value: '{{inputs.parameters.objective-metric}}'
           - name: OBJECTIVE_DIRECTION
             value: '{{inputs.parameters.objective-direction}}'
+          - name: TEXT_COLUMN
+            value: '{{inputs.parameters.text-column}}'
+          - name: BASE_MODEL_NAME
+            value: '{{inputs.parameters.base-model-name}}'
           - name: MLFLOW_TRACKING_URI
             value: http://host.docker.internal:5000
         volumeMounts:

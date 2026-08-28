@@ -3,6 +3,8 @@
 --index-url https://pypi.org/simple
 --extra-index-url https://download.pytorch.org/whl/cpu
 
+accelerate==1.11.0
+    # via -r infra/argo-workflows/training-image/requirements.txt
 aiobotocore==3.9.0
     # via
     #   dvc-s3
@@ -110,6 +112,7 @@ click==8.4.2
     #   feast
     #   flask
     #   gto
+    #   huggingface-hub
     #   mlflow-skinny
     #   uvicorn
 click-didyoumean==0.3.1
@@ -154,10 +157,15 @@ databricks-sdk==0.133.0
     # via
     #   mlflow-skinny
     #   mlflow-tracing
+datasets==5.0.1
+    # via -r infra/argo-workflows/training-image/requirements.txt
 dictdiffer==0.10.0
     # via dvc-data
 dill==0.3.9
-    # via feast
+    # via
+    #   datasets
+    #   feast
+    #   multiprocess
 diskcache==5.6.3
     # via dvc-data
 distlib==0.4.3
@@ -210,6 +218,8 @@ feast==0.66.0
     # via -r adapters/requirements.txt
 filelock==3.32.3
     # via
+    #   datasets
+    #   huggingface-hub
     #   iterative-telemetry
     #   python-discovery
     #   torch
@@ -232,14 +242,16 @@ frozenlist==1.8.0
     # via
     #   aiohttp
     #   aiosignal
-fsspec==2026.7.0
+fsspec==2026.6.0
     # via
     #   dask
+    #   datasets
     #   dvc
     #   dvc-data
     #   dvc-http
     #   dvc-objects
     #   dvc-s3
+    #   huggingface-hub
     #   s3fs
     #   scmrepo
     #   torch
@@ -287,6 +299,8 @@ h11==0.16.0
     #   uvicorn
 h2==4.4.1
     # via httpx
+hf-xet==1.6.0 ; platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'
+    # via huggingface-hub
 hpack==4.2.0
     # via h2
 httpcore==1.0.9
@@ -301,6 +315,8 @@ httpx==0.28.1
     #   -r agents/mcp-servers/metrics-server/requirements.txt
     #   -r infra/argo-workflows/training-image/requirements.txt
     #   -r services/orchestration-api/requirements.txt
+    #   datasets
+    #   huggingface-hub
     #   qdrant-client
 httpx2==2.12.0
     # via mcp
@@ -308,6 +324,12 @@ httpx2-jsfetch==1.0 ; sys_platform == 'emscripten'
     # via httpx2
 huey==3.3.4
     # via mlflow
+huggingface-hub==1.28.0
+    # via
+    #   accelerate
+    #   datasets
+    #   tokenizers
+    #   transformers
 hydra-core==1.3.5
     # via dvc
 hyperframe==6.1.0
@@ -403,6 +425,8 @@ multidict==6.7.1
     #   aiobotocore
     #   aiohttp
     #   yarl
+multiprocess==0.70.17
+    # via datasets
 mypy==2.3.1
     # via sqlalchemy
 mypy-extensions==1.1.0
@@ -419,9 +443,11 @@ nodeenv==1.10.0
     #   pyright
 numpy==2.5.2
     # via
+    #   accelerate
     #   catboost
     #   contourpy
     #   dask
+    #   datasets
     #   feast
     #   lightgbm
     #   matplotlib
@@ -432,6 +458,7 @@ numpy==2.5.2
     #   scikit-learn
     #   scipy
     #   skops
+    #   transformers
     #   xgboost
 nvidia-nccl-cu12==2.31.2 ; platform_machine != 'aarch64' and sys_platform == 'linux'
     # via xgboost
@@ -466,8 +493,11 @@ orjson==3.12.0 ; implementation_name == 'cpython'
     #   sqltrie
 packaging==26.3
     # via
+    #   accelerate
     #   dask
+    #   datasets
     #   dvc
+    #   huggingface-hub
     #   hydra-core
     #   kombu
     #   matplotlib
@@ -477,11 +507,13 @@ packaging==26.3
     #   plotly
     #   pytest
     #   skops
+    #   transformers
 pandas==2.3.3
     # via
     #   -r infra/argo-workflows/training-image/requirements.txt
     #   catboost
     #   dask
+    #   datasets
     #   feast
     #   mlflow
 partd==1.4.2
@@ -531,12 +563,14 @@ protobuf==6.33.6
     #   qdrant-client
 psutil==7.2.2
     # via
+    #   accelerate
     #   dvc
     #   feast
     #   flufl-lock
 pyarrow==25.0.1
     # via
     #   dask
+    #   datasets
     #   feast
     #   mlflow
 pyasn1==0.6.4
@@ -629,13 +663,17 @@ pywin32==312 ; sys_platform == 'win32'
     #   portalocker
 pyyaml==6.0.3
     # via
+    #   accelerate
     #   dask
+    #   datasets
     #   feast
+    #   huggingface-hub
     #   kubernetes
     #   mlflow-skinny
     #   omegaconf
     #   optuna
     #   pre-commit
+    #   transformers
     #   uvicorn
 qdrant-client==1.19.0
     # via -r adapters/requirements.txt
@@ -643,9 +681,12 @@ referencing==0.37.0
     # via
     #   jsonschema
     #   jsonschema-specifications
+regex==2026.7.19
+    # via transformers
 requests==2.34.2
     # via
     #   databricks-sdk
+    #   datasets
     #   docker
     #   dvc
     #   dvc-studio-client
@@ -673,8 +714,12 @@ ruamel-yaml==0.19.1
     #   gto
 ruff==0.16.4
     # via -r requirements-dev.txt
-s3fs==2026.7.0
+s3fs==2026.6.0
     # via dvc-s3
+safetensors==0.8.0
+    # via
+    #   accelerate
+    #   transformers
 scikit-learn==1.7.2
     # via
     #   -r infra/argo-workflows/training-image/requirements.txt
@@ -747,6 +792,8 @@ tenacity==8.5.0
     # via feast
 threadpoolctl==3.6.0
     # via scikit-learn
+tokenizers==0.22.2
+    # via transformers
 toml==0.10.2
     # via feast
 tomlkit==0.15.1
@@ -756,17 +803,26 @@ toolz==1.1.0
     #   dask
     #   partd
 torch==2.13.0 ; sys_platform == 'darwin'
-    # via -r infra/argo-workflows/training-image/requirements.txt
+    # via
+    #   -r infra/argo-workflows/training-image/requirements.txt
+    #   accelerate
 torch==2.13.0+cpu ; sys_platform != 'darwin'
-    # via -r infra/argo-workflows/training-image/requirements.txt
+    # via
+    #   -r infra/argo-workflows/training-image/requirements.txt
+    #   accelerate
 tqdm==4.70.0
     # via
+    #   datasets
     #   dvc
     #   dvc-data
     #   feast
     #   fsspec
+    #   huggingface-hub
     #   optuna
     #   scmrepo
+    #   transformers
+transformers==5.14.1
+    # via -r infra/argo-workflows/training-image/requirements.txt
 truststore==0.10.4 ; sys_platform != 'emscripten'
     # via
     #   httpcore2
@@ -774,7 +830,9 @@ truststore==0.10.4 ; sys_platform != 'emscripten'
 typeguard==4.6.0
     # via feast
 typer==0.27.1
-    # via mcp
+    # via
+    #   mcp
+    #   transformers
 typing-extensions==4.16.0
     # via
     #   aiohttp
@@ -786,6 +844,7 @@ typing-extensions==4.16.0
     #   graphene
     #   grpcio
     #   httpx2
+    #   huggingface-hub
     #   mcp
     #   mcp-types
     #   mlflow-skinny
@@ -868,6 +927,8 @@ wrapt==2.3.0
     # via aiobotocore
 xgboost==3.0.5
     # via -r infra/argo-workflows/training-image/requirements.txt
+xxhash==4.0.1
+    # via datasets
 yarl==1.24.5
     # via aiohttp
 zc-lockfile==4.0

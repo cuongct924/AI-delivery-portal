@@ -8,3 +8,6 @@ lightgbm==4.6.0
 catboost==1.2.8
 httpx==0.28.1
 optuna==4.1.0
+transformers==5.14.1
+datasets==5.0.1
+accelerate==1.11.0

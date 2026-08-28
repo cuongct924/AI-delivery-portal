@@ -3,10 +3,14 @@
 --index-url https://pypi.org/simple
 --extra-index-url https://download.pytorch.org/whl/cpu
 
+accelerate==1.11.0
+    # via -r infra/argo-workflows/training-image/requirements.txt
 aiohappyeyeballs==2.7.1
     # via aiohttp
 aiohttp==3.14.3
-    # via mlflow
+    # via
+    #   fsspec
+    #   mlflow
 aiosignal==1.4.0
     # via aiohttp
 alembic==1.19.1
@@ -14,7 +18,9 @@ alembic==1.19.1
     #   mlflow
     #   optuna
 annotated-doc==0.0.5
-    # via fastapi
+    # via
+    #   fastapi
+    #   typer
 annotated-types==0.8.0
     # via pydantic
 anyio==4.14.2
@@ -43,6 +49,7 @@ charset-normalizer==3.5.1
 click==8.5.0
     # via
     #   flask
+    #   huggingface-hub
     #   mlflow-skinny
     #   uvicorn
 cloudpickle==3.1.2
@@ -61,12 +68,21 @@ databricks-sdk==0.133.0
     # via
     #   mlflow-skinny
     #   mlflow-tracing
+datasets==5.0.1
+    # via -r infra/argo-workflows/training-image/requirements.txt
+dill==0.4.1
+    # via
+    #   datasets
+    #   multiprocess
 docker==7.2.0
     # via mlflow
 fastapi==0.141.1
     # via mlflow-skinny
 filelock==3.32.4
-    # via torch
+    # via
+    #   datasets
+    #   huggingface-hub
+    #   torch
 flask==3.1.3
     # via
     #   flask-cors
@@ -79,8 +95,11 @@ frozenlist==1.8.0
     # via
     #   aiohttp
     #   aiosignal
-fsspec==2026.7.0
-    # via torch
+fsspec==2026.6.0
+    # via
+    #   datasets
+    #   huggingface-hub
+    #   torch
 gitdb==4.0.12
     # via gitpython
 gitpython==3.1.60
@@ -105,12 +124,23 @@ h11==0.16.0
     # via
     #   httpcore
     #   uvicorn
+hf-xet==1.6.0
+    # via huggingface-hub
 httpcore==1.0.9
     # via httpx
 httpx==0.28.1
-    # via -r infra/argo-workflows/training-image/requirements.txt
+    # via
+    #   -r infra/argo-workflows/training-image/requirements.txt
+    #   datasets
+    #   huggingface-hub
 huey==3.3.4
     # via mlflow
+huggingface-hub==1.28.0
+    # via
+    #   accelerate
+    #   datasets
+    #   tokenizers
+    #   transformers
 idna==3.19
     # via
     #   anyio
@@ -133,6 +163,8 @@ lightgbm==4.6.0
     # via -r infra/argo-workflows/training-image/requirements.txt
 mako==1.4.1
     # via alembic
+markdown-it-py==4.2.0
+    # via rich
 markupsafe==3.0.3
     # via
     #   flask
@@ -143,6 +175,8 @@ matplotlib==3.11.1
     # via
     #   catboost
     #   mlflow
+mdurl==0.1.2
+    # via markdown-it-py
 mlflow==3.15.1
     # via -r infra/argo-workflows/training-image/requirements.txt
 mlflow-skinny==3.15.1
@@ -155,14 +189,18 @@ multidict==6.7.1
     # via
     #   aiohttp
     #   yarl
+multiprocess==0.70.19
+    # via datasets
 narwhals==2.25.0
     # via plotly
 networkx==3.6.1
     # via torch
 numpy==2.5.2
     # via
+    #   accelerate
     #   catboost
     #   contourpy
+    #   datasets
     #   lightgbm
     #   matplotlib
     #   mlflow
@@ -171,6 +209,7 @@ numpy==2.5.2
     #   scikit-learn
     #   scipy
     #   skops
+    #   transformers
     #   xgboost
 nvidia-nccl-cu12==2.31.2
     # via xgboost
@@ -194,16 +233,21 @@ optuna==4.1.0
     # via -r infra/argo-workflows/training-image/requirements.txt
 packaging==26.3
     # via
+    #   accelerate
+    #   datasets
+    #   huggingface-hub
     #   matplotlib
     #   mlflow-skinny
     #   mlflow-tracing
     #   optuna
     #   plotly
     #   skops
+    #   transformers
 pandas==2.3.3
     # via
     #   -r infra/argo-workflows/training-image/requirements.txt
     #   catboost
+    #   datasets
     #   mlflow
 pillow==12.3.0
     # via matplotlib
@@ -221,8 +265,12 @@ protobuf==6.33.6
     #   mlflow-skinny
     #   mlflow-tracing
     #   opentelemetry-proto
+psutil==7.2.2
+    # via accelerate
 pyarrow==25.0.1
-    # via mlflow
+    # via
+    #   datasets
+    #   mlflow
 pyasn1==0.6.4
     # via pyasn1-modules
 pyasn1-modules==0.4.2
@@ -236,6 +284,8 @@ pydantic==2.13.4
     #   mlflow-tracing
 pydantic-core==2.46.4
     # via pydantic
+pygments==2.21.0
+    # via rich
 pyparsing==3.3.2
     # via matplotlib
 python-dateutil==2.9.0.post0
@@ -249,13 +299,26 @@ pytz==2026.3.post1
     # via pandas
 pyyaml==6.0.3
     # via
+    #   accelerate
+    #   datasets
+    #   huggingface-hub
     #   mlflow-skinny
     #   optuna
+    #   transformers
+regex==2026.7.19
+    # via transformers
 requests==2.34.2
     # via
     #   databricks-sdk
+    #   datasets
     #   docker
     #   mlflow-skinny
+rich==15.0.0
+    # via typer
+safetensors==0.8.0
+    # via
+    #   accelerate
+    #   transformers
 scikit-learn==1.7.2
     # via
     #   -r infra/argo-workflows/training-image/requirements.txt
@@ -271,6 +334,8 @@ scipy==1.18.1
     #   xgboost
 setuptools==84.0.0
     # via torch
+shellingham==1.5.4
+    # via typer
 six==1.17.0
     # via
     #   catboost
@@ -294,10 +359,22 @@ sympy==1.14.0
     # via torch
 threadpoolctl==3.6.0
     # via scikit-learn
+tokenizers==0.22.2
+    # via transformers
 torch==2.13.0+cpu
-    # via -r infra/argo-workflows/training-image/requirements.txt
+    # via
+    #   -r infra/argo-workflows/training-image/requirements.txt
+    #   accelerate
 tqdm==4.70.0
-    # via optuna
+    # via
+    #   datasets
+    #   huggingface-hub
+    #   optuna
+    #   transformers
+transformers==5.14.1
+    # via -r infra/argo-workflows/training-image/requirements.txt
+typer==0.27.1
+    # via transformers
 typing-extensions==4.16.0
     # via
     #   aiohttp
@@ -306,6 +383,7 @@ typing-extensions==4.16.0
     #   anyio
     #   fastapi
     #   graphene
+    #   huggingface-hub
     #   mlflow-skinny
     #   opentelemetry-api
     #   opentelemetry-sdk
@@ -337,6 +415,8 @@ werkzeug==3.1.8
     #   flask-cors
 xgboost==3.0.5
     # via -r infra/argo-workflows/training-image/requirements.txt
+xxhash==4.0.1
+    # via datasets
 yarl==1.24.5
     # via aiohttp
 zipp==4.1.0

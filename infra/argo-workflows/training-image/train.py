@@ -29,17 +29,19 @@ from hpo_strategies import build_search_strategy
 from metrics import compute_metrics
 
 # Submodule imports, not `import mlflow` + `mlflow.sklearn.x` — mlflow's
-# top-level stub doesn't declare `sklearn`/`data`/`pytorch`/`pyfunc` as
-# exported attributes.
+# top-level stub doesn't declare `sklearn`/`data`/`pytorch`/`pyfunc`/
+# `transformers` as exported attributes.
 from mlflow import data as mlflow_data
 from mlflow import pyfunc as mlflow_pyfunc
 from mlflow import pytorch as mlflow_pytorch
 from mlflow import sklearn as mlflow_sklearn
+from mlflow import transformers as mlflow_transformers
 from pyfunc_wrapper import GenericPyfuncWrapper
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import TimeSeriesSplit, train_test_split
 from sklearn.preprocessing import StandardScaler
 from train_dl import train_and_evaluate as train_dl_and_evaluate
+from train_nlp import train_and_evaluate as train_nlp_and_evaluate
 
 # Below this row count, a single random holdout is too noisy to trust —
 # k-fold cross-validation averages over multiple splits instead.
@@ -216,6 +218,19 @@ def _read_dl_hyperparameters() -> dict[str, object]:
     return hyperparameters
 
 
+def _read_nlp_hyperparameters() -> dict[str, object]:
+    """Reads the NLP hyperparameter env vars (mục 6g.2). LEARNING_RATE/
+    EPOCHS/BATCH_SIZE are the same workflow parameters the DL path uses
+    (mục 5.1) — reused as-is since the 2 architectures never run in the
+    same job, no collision."""
+    return {
+        "base_model_name": os.environ["BASE_MODEL_NAME"],
+        "learning_rate": float(os.environ["LEARNING_RATE"]),
+        "epochs": int(os.environ["EPOCHS"]),
+        "batch_size": int(os.environ["BATCH_SIZE"]),
+    }
+
+
 def main() -> None:
     dataset_uri = os.environ["DATASET_URI"]
     task_type = os.environ["TASK_TYPE"]
@@ -235,6 +250,18 @@ def main() -> None:
     # completely unchanged, no nested runs, no Optuna involved at all.
     search_strategy_name = os.environ.get("SEARCH_STRATEGY") or "fixed"
     is_search = search_strategy_name != "fixed"
+    # NLP (mục 6g) — a 4th architecture, not an algorithm/BYOC value (mục
+    # 6g.1). text_column stays out of _encode_categoricals()'s reach (see
+    # the elif branch below) so the tokenizer gets raw strings.
+    is_nlp = architecture == "nlp"
+    text_column = os.environ.get("TEXT_COLUMN") or None
+
+    if is_nlp and text_column is None:
+        raise RuntimeError("TEXT_COLUMN is required when ARCHITECTURE=nlp")
+    if is_nlp and task_type != "classification":
+        raise RuntimeError("ARCHITECTURE=nlp only supports TASK_TYPE=classification (mục 6g.5)")
+    if is_nlp and mode != "train":
+        raise RuntimeError("ARCHITECTURE=nlp does not support MODE=finetune (mục 6g.5)")
 
     if is_custom and (code_repo_url is None or entrypoint_path is None):
         raise RuntimeError("CODE_REPO_URL and ENTRYPOINT_PATH are required when ALGORITHM=custom")
@@ -249,12 +276,12 @@ def main() -> None:
         # classification/regression hyperparameters (mục 5.1) — no DL
         # clustering support.
         raise RuntimeError(f"architecture {architecture!r} does not support task_type='clustering'")
-    if is_search and (is_custom or architecture == "sklearn"):
+    if is_search and (is_custom or is_nlp or architecture == "sklearn"):
         # HPO (mục 6c) is scoped to the DL hyperparameters (mục 5.1) — the
         # only ones with an existing single-value form field to search
-        # over. sklearn has no tunable field yet, and BYOC's train()
-        # contract has no room for the platform to inject search-sampled
-        # hyperparameters into.
+        # over. sklearn has no tunable field yet, BYOC's train() contract
+        # has no room for injected hyperparameters, and NLP is a separate
+        # tier not yet covered (mục 6g.5).
         raise RuntimeError("SEARCH_STRATEGY != 'fixed' requires ARCHITECTURE=mlp or lstm")
 
     # Strip the "file://" scheme to get a real filesystem path pandas can open.
@@ -324,8 +351,35 @@ def main() -> None:
             for metric_name, value in metrics.items():
                 mlflow.log_metric(metric_name, value)
             mlflow_sklearn.log_model(model, artifact_path="model")
+        elif is_nlp:
+            # Validated non-None above (TEXT_COLUMN/TARGET_COLUMN both
+            # required for ARCHITECTURE=nlp).
+            assert text_column is not None
+            assert target_column is not None
+            # df[[text_column]], not `features` — that went through
+            # _encode_categoricals() above, which would corrupt raw text
+            # into category codes (mục 6g.3). pandas-stubs doesn't resolve
+            # a 1-item list-of-str indexer to DataFrame confidently, same
+            # single-column stub gap as the `labels_full` cast below.
+            text_features = cast(pd.DataFrame, df[[text_column]])
+            labels_full = cast(pd.Series, df[target_column])
+            train_features, test_features, train_labels, test_labels = _split(
+                df, text_features, labels_full, task_type, time_column
+            )
+            hyperparameters = _read_nlp_hyperparameters()
+            mlflow.log_param("base_model_name", hyperparameters["base_model_name"])
+            model, metrics = train_nlp_and_evaluate(
+                cast(pd.Series, train_features[text_column]),
+                cast(pd.Series, test_features[text_column]),
+                train_labels,
+                test_labels,
+                hyperparameters,
+            )
+            for metric_name, value in metrics.items():
+                mlflow.log_metric(metric_name, value)
+            mlflow_transformers.log_model(model, artifact_path="model")
         else:
-            # architecture != "sklearn" already ruled out task_type ==
+            # architecture != "sklearn"/"nlp" already ruled out task_type ==
             # "clustering" above, so target_column is guaranteed set.
             assert target_column is not None
             labels_full = cast(pd.Series, df[target_column])
