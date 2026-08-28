@@ -6,7 +6,8 @@ workflow — it registers a periodic Argo CronWorkflow via
 
 from typing import Final
 
-from fastapi import APIRouter
+from auth.keycloak import get_current_user
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from adapters.argo_adapter import ArgoAdapter
@@ -38,7 +39,9 @@ class SetupMonitoringResponse(BaseModel):
 
 
 @router.post("/setup-monitoring", response_model=SetupMonitoringResponse)
-def setup_monitoring(request: SetupMonitoringRequest) -> SetupMonitoringResponse:
+def setup_monitoring(
+    request: SetupMonitoringRequest, user: dict = Depends(get_current_user)
+) -> SetupMonitoringResponse:
     if request.on_drift_detected == "auto-retrain" and request.retrain_request_json is None:
         raise ValueError("retrain_request_json is required when on_drift_detected='auto-retrain'")
 

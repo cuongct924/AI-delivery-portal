@@ -11,9 +11,10 @@ from pathlib import Path
 from typing import Final
 
 import pandas as pd
+from auth.keycloak import get_current_user
 from data_quality.checks import CheckResult
 from data_quality.registry import run_rec_checks
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from adapters.argo_adapter import ArgoAdapter
@@ -69,7 +70,9 @@ class CheckResultResponse(BaseModel):
 
 
 @router.post("/trigger-rec-training", response_model=TriggerRecTrainingResponse)
-def trigger_rec_training(request: TriggerRecTrainingRequest) -> TriggerRecTrainingResponse:
+def trigger_rec_training(
+    request: TriggerRecTrainingRequest, user: dict = Depends(get_current_user)
+) -> TriggerRecTrainingResponse:
     parameters = {
         "model-name": request.model_name,
         "interactions-uri": request.interactions_uri,
@@ -94,7 +97,9 @@ def trigger_rec_training(request: TriggerRecTrainingRequest) -> TriggerRecTraini
 
 
 @router.post("/rec-datasets/validate", response_model=list[CheckResultResponse])
-def validate_rec_dataset(request: ValidateRecDatasetRequest) -> list[CheckResultResponse]:
+def validate_rec_dataset(
+    request: ValidateRecDatasetRequest, user: dict = Depends(get_current_user)
+) -> list[CheckResultResponse]:
     csv_path = Path(request.interactions_uri.removeprefix("file://"))
     interactions = pd.read_csv(csv_path)
     results = run_rec_checks(interactions, request.user_id_column, request.item_id_column)

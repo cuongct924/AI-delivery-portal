@@ -1,13 +1,14 @@
 """Model Registry / Training / Deploy-prep API — the HTTP surface Golden Path
 #1 (Train -> Track -> Register) and #2 (Register -> Deploy) drive.
 
-Callers are deliberately mixed, unlike chat.py/prompts.py:
+Callers are deliberately mixed, unlike prompts.py/monitoring.py:
 - `/trigger-training*`, `/models` (list), `/policy-check`, `/deploy-model/*`
-  are called by Backstage Custom Scaffolder Actions (packages/backend).
-- `POST /models/register` is called by the `register-step` container running
-  *inside* an Argo workflow pod (see infra/argo-workflows/), not from
-  Backstage — it has no Keycloak user session, so (like this whole router)
-  it is intentionally left without a `Depends(get_current_user)` guard.
+  are called by Backstage Custom Scaffolder Actions (packages/backend), so
+  each of those routes carries a `Depends(get_current_user)` guard.
+- `POST /models/register` is the one exception — it's called by the
+  `register-step` container running *inside* an Argo workflow pod (see
+  infra/argo-workflows/), not from Backstage, so it has no Keycloak user
+  session to check.
 
 Business logic lives here, not in Backstage (CLAUDE.md) — this router only
 orchestrates calls into the Adapter layer (adapters/mlflow_adapter.py,
@@ -18,10 +19,11 @@ from pathlib import Path
 from typing import Final
 
 import pandas as pd
+from auth.keycloak import get_current_user
 from data_quality.checks import CheckResult
 from data_quality.registry import run_checks
 from evaluations.gate import evaluate_metrics_gate
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from jinja2 import Environment, FileSystemLoader
 from kubernetes.client.exceptions import ApiException
 from pydantic import BaseModel
@@ -201,7 +203,9 @@ class RecordDeployResponse(BaseModel):
 
 
 @router.post("/trigger-training", response_model=TriggerTrainingResponse)
-def trigger_training(request: TriggerTrainingRequest) -> TriggerTrainingResponse:
+def trigger_training(
+    request: TriggerTrainingRequest, user: dict = Depends(get_current_user)
+) -> TriggerTrainingResponse:
     parameters = {
         "model-name": request.model_name,
         "dataset-uri": request.dataset_uri,
@@ -262,13 +266,15 @@ def trigger_training(request: TriggerTrainingRequest) -> TriggerTrainingResponse
 
 
 @router.get("/trigger-training/{workflow_name}/status", response_model=WorkflowStatusResponse)
-def get_training_status(workflow_name: str) -> WorkflowStatusResponse:
+def get_training_status(
+    workflow_name: str, user: dict = Depends(get_current_user)
+) -> WorkflowStatusResponse:
     status = argo_adapter.get_workflow_status(workflow_name)
     return WorkflowStatusResponse(**status)
 
 
 @router.get("/trigger-training/recent", response_model=list[WorkflowSummary])
-def list_recent_training_runs() -> list[WorkflowSummary]:
+def list_recent_training_runs(user: dict = Depends(get_current_user)) -> list[WorkflowSummary]:
     return [
         WorkflowSummary(name=w.get("name"), phase=w.get("phase"), started_at=w.get("startedAt"))
         for w in argo_adapter.list_workflows()
@@ -290,7 +296,9 @@ def register_model(request: RegisterModelRequest) -> RegisterModelResponse:
 
 
 @router.post("/datasets/validate", response_model=list[CheckResultResponse])
-def validate_dataset(request: ValidateDatasetRequest) -> list[CheckResultResponse]:
+def validate_dataset(
+    request: ValidateDatasetRequest, user: dict = Depends(get_current_user)
+) -> list[CheckResultResponse]:
     csv_path = Path(request.dataset_uri.removeprefix("file://"))
     df = pd.read_csv(csv_path)
     results = run_checks(df, request.task_type, request.target_column, request.time_column)
@@ -298,7 +306,9 @@ def validate_dataset(request: ValidateDatasetRequest) -> list[CheckResultRespons
 
 
 @router.get("/models/{name}/{version}/summary", response_model=ModelVersionSummaryResponse)
-def get_model_version_summary(name: str, version: str) -> ModelVersionSummaryResponse:
+def get_model_version_summary(
+    name: str, version: str, user: dict = Depends(get_current_user)
+) -> ModelVersionSummaryResponse:
     details = mlflow_adapter.get_model_version_details(name, version)
     return ModelVersionSummaryResponse(
         name=name,
@@ -310,7 +320,7 @@ def get_model_version_summary(name: str, version: str) -> ModelVersionSummaryRes
 
 
 @router.get("/models", response_model=list[ModelSummary])
-def list_models() -> list[ModelSummary]:
+def list_models(user: dict = Depends(get_current_user)) -> list[ModelSummary]:
     summaries: list[ModelSummary] = []
     for model in mlflow_adapter.list_models():
         name = model["name"]
@@ -333,12 +343,14 @@ def list_models() -> list[ModelSummary]:
 
 
 @router.get("/models/{name}/latest-version", response_model=LatestVersionResponse)
-def get_latest_version(name: str) -> LatestVersionResponse:
+def get_latest_version(name: str, user: dict = Depends(get_current_user)) -> LatestVersionResponse:
     return LatestVersionResponse(name=name, version=mlflow_adapter.get_latest_version(name))
 
 
 @router.post("/policy-check")
-def policy_check(request: PolicyCheckRequest) -> dict[str, object]:
+def policy_check(
+    request: PolicyCheckRequest, user: dict = Depends(get_current_user)
+) -> dict[str, object]:
     # Classical ML models have ground-truth metrics — compare them directly
     # against thresholds instead of routing through LLM-as-judge (no LiteLLM
     # cost). LLM/RAG artifacts still use evaluate_gate() (evaluations/gate.py).
@@ -363,7 +375,9 @@ def policy_check(request: PolicyCheckRequest) -> dict[str, object]:
 
 
 @router.post("/deploy-model/prepare", response_model=PrepareDeployResponse)
-def prepare_deploy_manifest(request: PrepareDeployRequest) -> PrepareDeployResponse:
+def prepare_deploy_manifest(
+    request: PrepareDeployRequest, user: dict = Depends(get_current_user)
+) -> PrepareDeployResponse:
     # Canonical MLflow Model Registry URI — resolvable by any MLflow-aware
     # loader (mlflow.pyfunc.load_model, KServe's "mlflow" modelFormat) without
     # needing the run's underlying artifact path.
@@ -384,7 +398,7 @@ def prepare_deploy_manifest(request: PrepareDeployRequest) -> PrepareDeployRespo
         # Canary/A-B/Blue-Green only make sense with a prior deploy to
         # compare/rollback against — Backstage Scaffolder v1beta3 can't
         # gate form fields on live cluster state, so it's enforced here
-        # instead (mục Context #2, docs/mlops-lifecycle-software-template.md).
+        # instead.
         assert kserve_adapter is not None
         try:
             kserve_adapter.get_inference_status(request.model_name)
@@ -423,7 +437,9 @@ def prepare_deploy_manifest(request: PrepareDeployRequest) -> PrepareDeployRespo
 
 
 @router.post("/deploy-model/record", response_model=RecordDeployResponse)
-def record_deploy(request: RecordDeployRequest) -> RecordDeployResponse:
+def record_deploy(
+    request: RecordDeployRequest, user: dict = Depends(get_current_user)
+) -> RecordDeployResponse:
     # No PR for an Instant release — nothing to tag.
     if request.pr_url:
         mlflow_adapter.set_model_version_tag(

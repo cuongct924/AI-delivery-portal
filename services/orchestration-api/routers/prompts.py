@@ -7,7 +7,8 @@ Demo version: in-memory data. For production, replace with a DB (Postgres)
 or Git to store each prompt's version history.
 """
 
-from fastapi import APIRouter, HTTPException
+from auth.keycloak import get_current_user
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/prompts", tags=["prompts"])
@@ -43,12 +44,12 @@ _PROMPTS: list[PromptVersion] = [
 
 
 @router.get("", response_model=list[PromptVersion])
-def list_prompts() -> list[PromptVersion]:
+def list_prompts(user: dict = Depends(get_current_user)) -> list[PromptVersion]:
     return _PROMPTS
 
 
 @router.get("/{prompt_id}", response_model=PromptVersion)
-def get_prompt(prompt_id: str) -> PromptVersion:
+def get_prompt(prompt_id: str, user: dict = Depends(get_current_user)) -> PromptVersion:
     for p in _PROMPTS:
         if p.id == prompt_id:
             return p
