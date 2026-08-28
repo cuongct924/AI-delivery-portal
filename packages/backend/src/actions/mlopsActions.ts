@@ -209,6 +209,12 @@ export function createTriggerTrainingAction({
           z
             .string({ description: '"maximize" (default) or "minimize" — searchStrategy!=fixed' })
             .optional(),
+        textColumn: z =>
+          z.string({ description: 'Column containing the text to classify — architecture="nlp"' }).optional(),
+        baseModelName: z =>
+          z
+            .string({ description: 'HuggingFace Hub model id to fine-tune — architecture="nlp"' })
+            .optional(),
       },
       output: {
         workflowName: z => z.string({ description: 'Name of the Argo Workflow that ran' }),
@@ -249,6 +255,8 @@ export function createTriggerTrainingAction({
           search_space_json: ctx.input.searchSpaceJson,
           objective_metric: ctx.input.objectiveMetric,
           objective_direction: ctx.input.objectiveDirection,
+          text_column: ctx.input.textColumn,
+          base_model_name: ctx.input.baseModelName,
         });
       ctx.logger.info(`Triggered training workflow "${workflowName}"`);
 

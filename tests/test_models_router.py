@@ -202,6 +202,31 @@ def test_trigger_training_forwards_hpo_fields_for_non_fixed_search_strategy() ->
     assert response.workflow_name == "wf-hpo"
 
 
+def test_trigger_training_forwards_nlp_fields_for_nlp_architecture() -> None:
+    request = TriggerTrainingRequest(
+        model_name="review-sentiment",
+        dataset_uri="file:///mnt/data/reviews-sample.csv",
+        task_type="classification",
+        architecture="nlp",
+        target_column="sentiment",
+        text_column="review",
+        base_model_name="distilbert-base-uncased",
+        learning_rate=5e-5,
+        epochs=3,
+        batch_size=16,
+    )
+    with patch("routers.models.argo_adapter") as mock_argo:
+        mock_argo.trigger_workflow.return_value = {"metadata": {"name": "wf-nlp"}}
+        response = trigger_training(request)
+
+    call_args = mock_argo.trigger_workflow.call_args.args
+    assert call_args[1]["architecture"] == "nlp"
+    assert call_args[1]["text-column"] == "review"
+    assert call_args[1]["base-model-name"] == "distilbert-base-uncased"
+    assert call_args[1]["learning-rate"] == "5e-05"
+    assert response.workflow_name == "wf-nlp"
+
+
 def test_get_training_status_returns_argo_status() -> None:
     with patch("routers.models.argo_adapter") as mock_argo:
         mock_argo.get_workflow_status.return_value = {

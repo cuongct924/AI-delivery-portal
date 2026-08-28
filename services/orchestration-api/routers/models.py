@@ -84,6 +84,9 @@ class TriggerTrainingRequest(BaseModel):
     search_space_json: str | None = None
     objective_metric: str | None = None
     objective_direction: str | None = None
+    # NLP (mục 6g) — only used when architecture="nlp".
+    text_column: str | None = None
+    base_model_name: str | None = None
 
 
 class TriggerTrainingResponse(BaseModel):
@@ -243,6 +246,10 @@ def trigger_training(request: TriggerTrainingRequest) -> TriggerTrainingResponse
         parameters["objective-metric"] = request.objective_metric
     if request.objective_direction is not None:
         parameters["objective-direction"] = request.objective_direction
+    if request.text_column is not None:
+        parameters["text-column"] = request.text_column
+    if request.base_model_name is not None:
+        parameters["base-model-name"] = request.base_model_name
     result = argo_adapter.trigger_workflow(TRAIN_REGISTER_TEMPLATE, parameters)
     return TriggerTrainingResponse(workflow_name=result["metadata"]["name"])
 

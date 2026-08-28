@@ -266,6 +266,37 @@ describe('orchestration:trigger-training', () => {
     expect(body.objective_metric).toBe('r2');
     expect(body.objective_direction).toBe('maximize');
   });
+
+  it('forwards NLP fields to the orchestration API when architecture is nlp', async () => {
+    const fetchMock = mockFetchResponses([
+      { ok: true, body: { workflow_name: 'wf-7' } },
+      { ok: true, body: { name: 'wf-7', phase: 'Succeeded', message: null } },
+      { ok: true, body: { name: 'review-sentiment', version: '1' } },
+    ]);
+    const action = createTriggerTrainingAction({ config, pollIntervalMs: 1 });
+    const { ctx } = createMockContext<typeof action>(
+      {
+        modelName: 'review-sentiment',
+        datasetUri: 'file:///reviews.csv',
+        taskType: 'classification',
+        architecture: 'nlp',
+        targetColumn: 'sentiment',
+        textColumn: 'review',
+        baseModelName: 'distilbert-base-uncased',
+        learningRate: 5e-5,
+        epochs: 3,
+        batchSize: 16,
+      },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(requestInit.body as string);
+    expect(body.text_column).toBe('review');
+    expect(body.base_model_name).toBe('distilbert-base-uncased');
+  });
 });
 
 describe('orchestration:validate-dataset', () => {

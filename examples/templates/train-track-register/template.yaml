@@ -43,13 +43,15 @@ spec:
         architecture:
           title: Architecture
           type: string
-          enum: [sklearn, mlp, lstm]
+          enum: [sklearn, mlp, lstm, nlp]
           default: sklearn
           description: >
             "sklearn" trains a classical algorithm (choose it below). "mlp"/
             "lstm" train a neural network instead (mục 5) — no clustering
             support, and "lstm" requires a time column for sequence
-            windowing.
+            windowing. "nlp" fine-tunes a pretrained HuggingFace text-
+            classification model (mục 6g) — taskType must be
+            "classification", and requires textColumn/baseModelName below.
         algorithm:
           title: Algorithm (architecture=sklearn)
           type: string
@@ -137,6 +139,15 @@ spec:
           type: string
           enum: [maximize, minimize]
           default: maximize
+        textColumn:
+          title: Text column (architecture=nlp)
+          type: string
+          description: Column containing the text to classify.
+        baseModelName:
+          title: Base model (architecture=nlp)
+          type: string
+          default: distilbert-base-uncased
+          description: HuggingFace Hub model id to fine-tune.
         targetColumn:
           title: Target column
           type: string
@@ -266,6 +277,17 @@ spec:
               - timeColumn
         - if:
             properties:
+              architecture:
+                const: nlp
+          then:
+            required:
+              - textColumn
+              - baseModelName
+              - learningRate
+              - epochs
+              - batchSize
+        - if:
+            properties:
               algorithm:
                 const: custom
           then:
@@ -326,6 +348,8 @@ spec:
         searchSpaceJson: ${{ parameters.searchSpaceJson }}
         objectiveMetric: ${{ parameters.objectiveMetric }}
         objectiveDirection: ${{ parameters.objectiveDirection }}
+        textColumn: ${{ parameters.textColumn }}
+        baseModelName: ${{ parameters.baseModelName }}
 
     - id: model-summary
       name: "Fetch the model version's metrics"
