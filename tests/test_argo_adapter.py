@@ -70,3 +70,52 @@ def test_list_workflows_returns_empty_list_when_no_items() -> None:
         result = adapter.list_workflows()
 
     assert result == []
+
+
+def test_create_cron_workflow_posts_the_expected_body() -> None:
+    adapter = ArgoAdapter(base_url="http://argo.test")
+    response = _mock_response({"metadata": {"name": "monitor-fraud-detection"}})
+
+    with patch("adapters.argo_adapter.httpx.post", return_value=response) as mock_post:
+        result = adapter.create_cron_workflow(
+            "monitor-fraud-detection",
+            "0 * * * *",
+            "monitor-drift-golden-path",
+            {"model-name": "fraud-detection", "drift-threshold": "0.5"},
+        )
+
+    mock_post.assert_called_once()
+    url, kwargs = mock_post.call_args.args[0], mock_post.call_args.kwargs
+    assert url == "http://argo.test/api/v1/cron-workflows/default"
+    cron_workflow = kwargs["json"]["cronWorkflow"]
+    assert cron_workflow["metadata"]["name"] == "monitor-fraud-detection"
+    assert cron_workflow["spec"]["schedule"] == "0 * * * *"
+    assert cron_workflow["spec"]["workflowSpec"]["workflowTemplateRef"] == {
+        "name": "monitor-drift-golden-path"
+    }
+    assert {"name": "model-name", "value": "fraud-detection"} in cron_workflow["spec"][
+        "workflowSpec"
+    ]["arguments"]["parameters"]
+    assert result == {"metadata": {"name": "monitor-fraud-detection"}}
+
+
+def test_create_cron_workflow_updates_via_put_when_already_exists() -> None:
+    adapter = ArgoAdapter(base_url="http://argo.test")
+    conflict_response = MagicMock()
+    conflict_response.status_code = 409
+    updated_response = _mock_response({"metadata": {"name": "monitor-fraud-detection"}})
+
+    with (
+        patch("adapters.argo_adapter.httpx.post", return_value=conflict_response),
+        patch("adapters.argo_adapter.httpx.put", return_value=updated_response) as mock_put,
+    ):
+        result = adapter.create_cron_workflow(
+            "monitor-fraud-detection", "0 * * * *", "monitor-drift-golden-path", {}
+        )
+
+    mock_put.assert_called_once()
+    assert (
+        mock_put.call_args.args[0]
+        == "http://argo.test/api/v1/cron-workflows/default/monitor-fraud-detection"
+    )
+    assert result == {"metadata": {"name": "monitor-fraud-detection"}}

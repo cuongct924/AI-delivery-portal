@@ -46,6 +46,52 @@ class ArgoAdapter(IWorkflowAdapter):
             "message": data.get("status", {}).get("message"),
         }
 
+    def create_cron_workflow(
+        self, name: str, schedule: str, workflow_template_name: str, parameters: dict
+    ) -> dict:
+        """Creates (or replaces) a CronWorkflow — same CRD family as
+        WorkflowTemplate, no new infra (mục 6d.2). Used by "Setup Model
+        Monitoring" (Phase 9) to register a periodic drift-check job; `name`
+        is deterministic (1 CronWorkflow per model name) so re-running Setup
+        updates the existing schedule/threshold instead of creating a
+        duplicate.
+
+        Not part of IWorkflowAdapter — same precedent as list_workflows().
+        """
+        body = {
+            "cronWorkflow": {
+                "apiVersion": "argoproj.io/v1alpha1",
+                "kind": "CronWorkflow",
+                "metadata": {"name": name},
+                "spec": {
+                    "schedule": schedule,
+                    "concurrencyPolicy": "Replace",
+                    "workflowSpec": {
+                        "workflowTemplateRef": {"name": workflow_template_name},
+                        "arguments": {
+                            "parameters": [{"name": k, "value": v} for k, v in parameters.items()]
+                        },
+                    },
+                },
+            }
+        }
+        response = httpx.post(
+            f"{self.base_url}/api/v1/cron-workflows/{self.namespace}",
+            json=body,
+            timeout=10,
+        )
+        if response.status_code == 409:
+            # Already exists — mục 6d.5/6d.6: re-running "Setup Model
+            # Monitoring" for the same model updates its schedule/threshold
+            # in place instead of erroring.
+            response = httpx.put(
+                f"{self.base_url}/api/v1/cron-workflows/{self.namespace}/{name}",
+                json=body,
+                timeout=10,
+            )
+        response.raise_for_status()
+        return response.json()
+
     def list_workflows(self) -> list[dict]:
         # Convenience method, not part of IWorkflowAdapter — same precedent
         # as QdrantAdapter.ensure_collection() in vector_db_adapter.py.

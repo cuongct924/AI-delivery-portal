@@ -26,7 +26,11 @@ annotated-types==0.8.0
 anyio==4.14.2
     # via
     #   httpx
+    #   litestar
     #   starlette
+    #   watchfiles
+appdirs==1.4.4
+    # via iterative-telemetry
 attrs==26.1.0
     # via aiohttp
 blinker==1.9.0
@@ -39,6 +43,7 @@ catboost==1.2.8
     # via -r infra/argo-workflows/training-image/requirements.txt
 certifi==2026.7.22
     # via
+    #   evidently
     #   httpcore
     #   httpx
     #   requests
@@ -50,7 +55,10 @@ click==8.5.0
     # via
     #   flask
     #   huggingface-hub
+    #   litestar
     #   mlflow-skinny
+    #   nltk
+    #   rich-click
     #   uvicorn
 cloudpickle==3.1.2
     # via mlflow-skinny
@@ -60,6 +68,7 @@ contourpy==1.3.3
     # via matplotlib
 cryptography==49.0.0
     # via
+    #   evidently
     #   google-auth
     #   mlflow
 cycler==0.12.1
@@ -70,18 +79,31 @@ databricks-sdk==0.133.0
     #   mlflow-tracing
 datasets==5.0.1
     # via -r infra/argo-workflows/training-image/requirements.txt
+defusedxml==0.7.1
+    # via nltk
+deprecation==2.1.0
+    # via evidently
 dill==0.4.1
     # via
     #   datasets
     #   multiprocess
+distro==1.9.0
+    # via iterative-telemetry
 docker==7.2.0
     # via mlflow
+dynaconf==3.3.5
+    # via evidently
+evidently==0.7.21
+    # via -r infra/argo-workflows/training-image/requirements.txt
+faker==40.37.0
+    # via polyfactory
 fastapi==0.141.1
     # via mlflow-skinny
 filelock==3.32.4
     # via
     #   datasets
     #   huggingface-hub
+    #   iterative-telemetry
     #   torch
 flask==3.1.3
     # via
@@ -91,6 +113,8 @@ flask-cors==6.0.5
     # via mlflow
 fonttools==4.63.0
     # via matplotlib
+formulaic==1.2.2
+    # via statsmodels
 frozenlist==1.8.0
     # via
     #   aiohttp
@@ -98,6 +122,7 @@ frozenlist==1.8.0
 fsspec==2026.6.0
     # via
     #   datasets
+    #   evidently
     #   huggingface-hub
     #   torch
 gitdb==4.0.12
@@ -128,11 +153,14 @@ hf-xet==1.6.0
     # via huggingface-hub
 httpcore==1.0.9
     # via httpx
+httptools==0.8.0
+    # via uvicorn
 httpx==0.28.1
     # via
     #   -r infra/argo-workflows/training-image/requirements.txt
     #   datasets
     #   huggingface-hub
+    #   litestar
 huey==3.3.4
     # via mlflow
 huggingface-hub==1.28.0
@@ -151,6 +179,10 @@ implicit==0.7.3
     # via -r infra/argo-workflows/training-image/requirements.txt
 importlib-metadata==9.0.0
     # via mlflow-skinny
+interface-meta==2.0.1
+    # via formulaic
+iterative-telemetry==0.0.10
+    # via evidently
 itsdangerous==2.2.0
     # via flask
 jinja2==3.1.6
@@ -159,12 +191,17 @@ jinja2==3.1.6
     #   torch
 joblib==1.5.3
     # via
+    #   nltk
     #   scikit-learn
     #   scikit-surprise
 kiwisolver==1.5.0
     # via matplotlib
 lightgbm==4.6.0
     # via -r infra/argo-workflows/training-image/requirements.txt
+litestar==2.24.0
+    # via evidently
+litestar-htmx==0.5.0
+    # via litestar
 mako==1.4.1
     # via alembic
 markdown-it-py==4.2.0
@@ -189,32 +226,45 @@ mlflow-tracing==3.15.1
     # via mlflow
 mpmath==1.3.0
     # via sympy
+msgspec==0.21.1
+    # via litestar
 multidict==6.7.1
     # via
     #   aiohttp
+    #   litestar
     #   yarl
+multipart==2.0.0
+    # via litestar
 multiprocess==0.70.19
     # via datasets
+mypy-extensions==1.1.0
+    # via typing-inspect
 narwhals==2.25.0
-    # via plotly
+    # via formulaic
 networkx==3.6.1
     # via torch
+nltk==3.10.3
+    # via evidently
 numpy==2.5.2
     # via
     #   accelerate
     #   catboost
     #   contourpy
     #   datasets
+    #   evidently
+    #   formulaic
     #   implicit
     #   lightgbm
     #   matplotlib
     #   mlflow
     #   optuna
     #   pandas
+    #   patsy
     #   scikit-learn
     #   scikit-surprise
     #   scipy
     #   skops
+    #   statsmodels
     #   torchvision
     #   transformers
     #   xgboost
@@ -228,6 +278,7 @@ opentelemetry-api==1.44.0
     #   opentelemetry-semantic-conventions
 opentelemetry-proto==1.44.0
     # via
+    #   evidently
     #   mlflow-skinny
     #   mlflow-tracing
 opentelemetry-sdk==1.44.0
@@ -242,6 +293,7 @@ packaging==26.3
     # via
     #   accelerate
     #   datasets
+    #   deprecation
     #   huggingface-hub
     #   matplotlib
     #   mlflow-skinny
@@ -249,19 +301,29 @@ packaging==26.3
     #   optuna
     #   plotly
     #   skops
+    #   statsmodels
     #   transformers
 pandas==2.3.3
     # via
     #   -r infra/argo-workflows/training-image/requirements.txt
     #   catboost
     #   datasets
+    #   evidently
+    #   formulaic
     #   mlflow
+    #   statsmodels
+patsy==1.0.2
+    # via statsmodels
 pillow==12.3.0
     # via
     #   matplotlib
     #   torchvision
-plotly==7.0.0
-    # via catboost
+plotly==5.24.1
+    # via
+    #   catboost
+    #   evidently
+polyfactory==3.3.0
+    # via litestar
 prettytable==3.18.0
     # via skops
 propcache==0.5.2
@@ -280,6 +342,7 @@ pyarrow==25.0.1
     # via
     #   datasets
     #   mlflow
+    #   pandas
 pyasn1==0.6.4
     # via pyasn1-modules
 pyasn1-modules==0.4.2
@@ -288,6 +351,7 @@ pycparser==3.0
     # via cffi
 pydantic==2.13.4
     # via
+    #   evidently
     #   fastapi
     #   mlflow-skinny
     #   mlflow-tracing
@@ -303,27 +367,42 @@ python-dateutil==2.9.0.post0
     #   matplotlib
     #   pandas
 python-dotenv==1.2.3
-    # via mlflow-skinny
+    # via
+    #   mlflow-skinny
+    #   uvicorn
 pytz==2026.3.post1
     # via pandas
 pyyaml==6.0.3
     # via
     #   accelerate
     #   datasets
+    #   evidently
     #   huggingface-hub
+    #   litestar
     #   mlflow-skinny
     #   optuna
     #   transformers
+    #   uvicorn
 regex==2026.7.19
-    # via transformers
+    # via
+    #   nltk
+    #   transformers
 requests==2.34.2
     # via
     #   databricks-sdk
     #   datasets
     #   docker
+    #   evidently
+    #   iterative-telemetry
     #   mlflow-skinny
 rich==15.0.0
-    # via typer
+    # via
+    #   evidently
+    #   litestar
+    #   rich-click
+    #   typer
+rich-click==1.9.8
+    # via litestar
 safetensors==0.8.0
     # via
     #   accelerate
@@ -331,6 +410,7 @@ safetensors==0.8.0
 scikit-learn==1.7.2
     # via
     #   -r infra/argo-workflows/training-image/requirements.txt
+    #   evidently
     #   mlflow
     #   skops
 scikit-surprise==1.1.5
@@ -339,12 +419,15 @@ scipy==1.18.1
     # via
     #   -r infra/argo-workflows/training-image/requirements.txt
     #   catboost
+    #   evidently
+    #   formulaic
     #   implicit
     #   lightgbm
     #   mlflow
     #   scikit-learn
     #   scikit-surprise
     #   skops
+    #   statsmodels
     #   xgboost
 setuptools==84.0.0
     # via torch
@@ -358,6 +441,8 @@ skops==0.14.0
     # via mlflow
 smmap==5.0.3
     # via gitdb
+sniffio==1.3.1
+    # via litestar
 sqlalchemy==2.0.52
     # via
     #   alembic
@@ -369,8 +454,12 @@ starlette==1.6.0
     # via
     #   fastapi
     #   mlflow-skinny
+statsmodels==0.15.0
+    # via evidently
 sympy==1.14.0
     # via torch
+tenacity==9.1.4
+    # via plotly
 threadpoolctl==3.6.0
     # via
     #   implicit
@@ -389,12 +478,15 @@ tqdm==4.70.0
     #   datasets
     #   huggingface-hub
     #   implicit
+    #   nltk
     #   optuna
     #   transformers
 transformers==5.14.1
     # via -r infra/argo-workflows/training-image/requirements.txt
 typer==0.27.1
-    # via transformers
+    # via
+    #   evidently
+    #   transformers
 typing-extensions==4.16.0
     # via
     #   aiohttp
@@ -402,37 +494,60 @@ typing-extensions==4.16.0
     #   alembic
     #   anyio
     #   fastapi
+    #   formulaic
     #   graphene
     #   huggingface-hub
+    #   litestar
     #   mlflow-skinny
     #   opentelemetry-api
     #   opentelemetry-sdk
     #   opentelemetry-semantic-conventions
+    #   polyfactory
     #   pydantic
     #   pydantic-core
     #   sqlalchemy
     #   starlette
     #   torch
+    #   typing-inspect
     #   typing-inspection
+typing-inspect==0.9.0
+    # via evidently
 typing-inspection==0.4.4
     # via
     #   fastapi
     #   pydantic
 tzdata==2026.3
     # via pandas
+ujson==5.13.0
+    # via evidently
 urllib3==2.7.0
     # via
     #   databricks-sdk
     #   docker
+    #   evidently
     #   requests
+uuid6==2025.0.1
+    # via evidently
 uvicorn==0.52.4
-    # via mlflow-skinny
+    # via
+    #   evidently
+    #   mlflow-skinny
+uvloop==0.22.1
+    # via uvicorn
+watchdog==6.0.0
+    # via evidently
+watchfiles==1.2.0
+    # via uvicorn
 wcwidth==0.8.2
     # via prettytable
+websockets==17.1
+    # via uvicorn
 werkzeug==3.1.8
     # via
     #   flask
     #   flask-cors
+wrapt==2.3.0
+    # via formulaic
 xgboost==3.0.5
     # via -r infra/argo-workflows/training-image/requirements.txt
 xxhash==4.0.1
