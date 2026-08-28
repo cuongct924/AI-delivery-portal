@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
+import pytest
 
 
 class _FakeTokenizer:
@@ -69,7 +70,7 @@ def test_train_and_evaluate_encodes_labels_consistently_and_returns_metrics(
     # [1, 0] means ["positive", "negative"] vs. true ["negative", "positive"]
     # — both wrong, accuracy 0.
     assert metrics["accuracy"] == 0.0
-    assert set(metrics) == {"accuracy", "precision", "recall"}
+    assert set(metrics) == {"accuracy", "precision", "recall", "f1"}
 
 
 @patch("train_nlp.Trainer")
@@ -106,3 +107,58 @@ def test_train_and_evaluate_passes_hyperparameters_to_training_args(
     assert training_args.num_train_epochs == 3
     assert training_args.per_device_train_batch_size == 8
     assert training_args.learning_rate == 0.001
+    assert training_args.optim == "adamw_torch"  # default optimizer="adam"
+
+
+@patch("train_nlp.Trainer")
+@patch("train_nlp.AutoModelForSequenceClassification")
+@patch("train_nlp.AutoTokenizer")
+def test_train_and_evaluate_maps_sgd_to_the_hf_optim_name(
+    mock_auto_tokenizer: MagicMock,
+    mock_auto_model: MagicMock,
+    mock_trainer_cls: MagicMock,
+) -> None:
+    mock_auto_tokenizer.from_pretrained.return_value = _FakeTokenizer()
+    mock_trainer = MagicMock()
+    mock_trainer.predict.return_value = MagicMock(predictions=np.array([[0.9, 0.1]]))
+    mock_trainer_cls.return_value = mock_trainer
+
+    from train_nlp import train_and_evaluate
+
+    hyperparameters = {
+        "base_model_name": "distilbert-base-uncased",
+        "learning_rate": 0.001,
+        "epochs": 1,
+        "batch_size": 8,
+        "optimizer": "sgd",
+    }
+    train_and_evaluate(
+        pd.Series(["a", "b"]),
+        pd.Series(["c"]),
+        pd.Series(["x", "y"]),
+        pd.Series(["x"]),
+        hyperparameters,
+    )
+
+    _, kwargs = mock_trainer_cls.call_args
+    assert kwargs["args"].optim == "sgd"
+
+
+def test_train_and_evaluate_rejects_unknown_optimizer() -> None:
+    from train_nlp import train_and_evaluate
+
+    hyperparameters = {
+        "base_model_name": "distilbert-base-uncased",
+        "learning_rate": 0.001,
+        "epochs": 1,
+        "batch_size": 8,
+        "optimizer": "rmsprop",
+    }
+    with pytest.raises(ValueError, match="unknown optimizer"):
+        train_and_evaluate(
+            pd.Series(["a", "b"]),
+            pd.Series(["c"]),
+            pd.Series(["x", "y"]),
+            pd.Series(["x"]),
+            hyperparameters,
+        )

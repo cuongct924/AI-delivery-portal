@@ -30,13 +30,19 @@ def test_evaluate_gate_respects_custom_thresholds():
 
 
 def test_evaluate_metrics_gate_passes_when_all_thresholds_met():
-    metrics = {"accuracy": 0.9, "precision": 0.8, "recall": 0.8}
+    metrics = {"accuracy": 0.9, "precision": 0.8, "recall": 0.8, "f1": 0.8}
     result = evaluate_metrics_gate("classification", metrics)
     assert result["passed"] is True
 
 
 def test_evaluate_metrics_gate_fails_when_accuracy_below_threshold():
-    metrics = {"accuracy": 0.4, "precision": 0.9, "recall": 0.9}
+    metrics = {"accuracy": 0.4, "precision": 0.9, "recall": 0.9, "f1": 0.9}
+    result = evaluate_metrics_gate("classification", metrics)
+    assert result["passed"] is False
+
+
+def test_evaluate_metrics_gate_fails_when_f1_below_threshold():
+    metrics = {"accuracy": 0.9, "precision": 0.9, "recall": 0.9, "f1": 0.4}
     result = evaluate_metrics_gate("classification", metrics)
     assert result["passed"] is False
 

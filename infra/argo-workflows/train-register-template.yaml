@@ -56,6 +56,10 @@ spec:
         value: ""
       - name: batch-size
         value: ""
+      # Dev-facing optimizer choice (optimizers.py) — only used for
+      # architecture=mlp/lstm/nlp/cv, defaults to "adam" when unset.
+      - name: optimizer
+        value: ""
       # BYOC (mục 6b.3) — only used when algorithm=custom.
       - name: code-repo-url
         value: ""
@@ -121,6 +125,8 @@ spec:
                   value: '{{workflow.parameters.epochs}}'
                 - name: batch-size
                   value: '{{workflow.parameters.batch-size}}'
+                - name: optimizer
+                  value: '{{workflow.parameters.optimizer}}'
                 - name: code-repo-url
                   value: '{{workflow.parameters.code-repo-url}}'
                 - name: entrypoint-path
@@ -175,6 +181,7 @@ spec:
           - name: learning-rate
           - name: epochs
           - name: batch-size
+          - name: optimizer
           - name: code-repo-url
           - name: entrypoint-path
           - name: custom-config
@@ -236,6 +243,8 @@ spec:
             value: '{{inputs.parameters.epochs}}'
           - name: BATCH_SIZE
             value: '{{inputs.parameters.batch-size}}'
+          - name: OPTIMIZER
+            value: '{{inputs.parameters.optimizer}}'
           - name: CODE_REPO_URL
             value: '{{inputs.parameters.code-repo-url}}'
           - name: ENTRYPOINT_PATH

@@ -16,6 +16,7 @@ from metrics import compute_metrics
 # mlflow.pytorch's stub has the same gaps as mlflow.sklearn/mlflow.data
 # (see train.py) — submodule import instead of attribute access.
 from mlflow import pytorch as mlflow_pytorch
+from optimizers import build_optimizer
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -121,7 +122,8 @@ def train_and_evaluate(
         )
 
     loss_fn: nn.Module = nn.MSELoss() if is_regression else nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer_name = str(hyperparameters.get("optimizer", "adam"))
+    optimizer = build_optimizer(optimizer_name, model.parameters(), learning_rate)
     loader = DataLoader(TensorDataset(train_x, train_y), batch_size=batch_size, shuffle=True)
 
     model.train()

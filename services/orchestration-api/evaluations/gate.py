@@ -58,6 +58,7 @@ TASK_TYPE_THRESHOLDS: Final[dict[str, list[MetricThreshold]]] = {
         MetricThreshold("accuracy", minimum=0.7),
         MetricThreshold("precision", minimum=0.6),
         MetricThreshold("recall", minimum=0.6),
+        MetricThreshold("f1", minimum=0.6),
     ],
     "regression": [
         MetricThreshold("r2", minimum=0.5),

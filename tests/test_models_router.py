@@ -137,6 +137,28 @@ def test_trigger_training_forwards_dl_hyperparameters_for_non_sklearn_architectu
     assert response.workflow_name == "wf-789"
 
 
+def test_trigger_training_forwards_optimizer_when_set() -> None:
+    request = TriggerTrainingRequest(
+        model_name="sensor-forecast",
+        dataset_uri="file:///mnt/data/sensor-timeseries-sample.csv",
+        task_type="regression",
+        architecture="mlp",
+        target_column="target",
+        hidden_layers=[8],
+        dropout=0.0,
+        learning_rate=0.01,
+        epochs=5,
+        batch_size=16,
+        optimizer="sgd",
+    )
+    with patch("routers.models.argo_adapter") as mock_argo:
+        mock_argo.trigger_workflow.return_value = {"metadata": {"name": "wf-opt"}}
+        trigger_training(request)
+
+    call_args = mock_argo.trigger_workflow.call_args.args
+    assert call_args[1]["optimizer"] == "sgd"
+
+
 def test_trigger_training_forwards_byoc_fields_for_custom_algorithm() -> None:
     request = TriggerTrainingRequest(
         model_name="custom-model",
@@ -294,7 +316,7 @@ def test_policy_check_sets_tags_and_passes_when_metrics_meet_thresholds() -> Non
             "version": "3",
             "run_id": "run-1",
             "tags": {"task_type": "classification"},
-            "metrics": {"accuracy": 0.92, "precision": 0.85, "recall": 0.8},
+            "metrics": {"accuracy": 0.92, "precision": 0.85, "recall": 0.8, "f1": 0.82},
             "status": "READY",
         }
         result = policy_check(request)
@@ -308,6 +330,7 @@ def test_policy_check_sets_tags_and_passes_when_metrics_meet_thresholds() -> Non
         "fraud-detection", "3", "gate_precision", "0.85"
     )
     mock_mlflow.set_model_version_tag.assert_any_call("fraud-detection", "3", "gate_recall", "0.8")
+    mock_mlflow.set_model_version_tag.assert_any_call("fraud-detection", "3", "gate_f1", "0.82")
 
 
 def test_policy_check_fails_and_tags_gate_passed_false_below_threshold() -> None:

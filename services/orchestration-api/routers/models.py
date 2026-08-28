@@ -73,6 +73,9 @@ class TriggerTrainingRequest(BaseModel):
     learning_rate: float | None = None
     epochs: int | None = None
     batch_size: int | None = None
+    # Dev-facing optimizer choice ("adam"/"sgd", optimizers.py) — only used
+    # for architecture="mlp"/"lstm"/"nlp"/"cv", defaults to "adam" when unset.
+    optimizer: str | None = None
     # BYOC (mục 6b.3) — only used when algorithm="custom".
     code_repo_url: str | None = None
     entrypoint_path: str | None = None
@@ -232,6 +235,8 @@ def trigger_training(request: TriggerTrainingRequest) -> TriggerTrainingResponse
         parameters["epochs"] = str(request.epochs)
     if request.batch_size is not None:
         parameters["batch-size"] = str(request.batch_size)
+    if request.optimizer is not None:
+        parameters["optimizer"] = request.optimizer
     if request.code_repo_url is not None:
         parameters["code-repo-url"] = request.code_repo_url
     if request.entrypoint_path is not None:

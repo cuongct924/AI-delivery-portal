@@ -15,6 +15,7 @@ from typing import Any, cast
 import pandas as pd
 import torch
 from metrics import compute_metrics
+from optimizers import build_optimizer
 from PIL import Image
 from torch import nn
 from torch.utils.data import DataLoader, random_split
@@ -69,7 +70,10 @@ def train_and_evaluate(
     Args:
         dataset_zip_path: Path to the (already-downloaded) dataset zip.
         hyperparameters: `learning_rate`, `epochs`, `batch_size` — same
-            names/meaning as the DL path (mục 5.1), reused as-is.
+            names/meaning as the DL path (mục 5.1), reused as-is. Optional
+            `optimizer` ("adam"/"sgd", default "adam") — same Dev-facing
+            choice as train_dl.py, applied to just the replaced head's
+            parameters since the backbone stays frozen.
 
     Returns:
         (CVModel, metrics) — `metrics` from the same
@@ -98,7 +102,8 @@ def train_and_evaluate(
             param.requires_grad = False
         backbone.fc = nn.Linear(backbone.fc.in_features, len(class_names))
 
-        optimizer = torch.optim.Adam(backbone.fc.parameters(), lr=learning_rate)
+        optimizer_name = str(hyperparameters.get("optimizer", "adam"))
+        optimizer = build_optimizer(optimizer_name, backbone.fc.parameters(), learning_rate)
         criterion = nn.CrossEntropyLoss()
         train_loader = DataLoader(cast(Any, train_dataset), batch_size=batch_size, shuffle=True)
 

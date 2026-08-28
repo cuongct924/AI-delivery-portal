@@ -94,6 +94,7 @@ def test_main_dl_branch_dispatches_to_train_dl_when_architecture_set(
         BATCH_SIZE="4",
         HIDDEN_LAYERS="8,4",
         DROPOUT="0.0",
+        OPTIMIZER="sgd",
     )
     monkeypatch.setenv("ARCHITECTURE", "mlp")
 
@@ -105,6 +106,7 @@ def test_main_dl_branch_dispatches_to_train_dl_when_architecture_set(
     called_args = mock_dl.call_args.args
     assert called_args[4] == "regression"  # task_type
     assert called_args[5] == "mlp"  # architecture
+    assert called_args[6]["optimizer"] == "sgd"  # hyperparameters
     mock_mlflow_pytorch.log_model.assert_called_once_with(fake_model, artifact_path="model")
 
 

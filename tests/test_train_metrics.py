@@ -9,15 +9,17 @@ def test_classification_metrics_shape() -> None:
     y_true = np.array([1, 0, 1, 1, 0])
     y_pred = np.array([1, 0, 1, 0, 0])
     result = compute_metrics("classification", y_true, y_pred)
-    assert set(result) == {"accuracy", "precision", "recall"}
+    assert set(result) == {"accuracy", "precision", "recall", "f1"}
     assert 0.0 <= result["accuracy"] <= 1.0
+    assert 0.0 <= result["f1"] <= 1.0
 
 
 def test_regression_metrics_shape() -> None:
     y_true = np.array([100.0, 200.0, 300.0])
     y_pred = np.array([110.0, 190.0, 305.0])
     result = compute_metrics("regression", y_true, y_pred)
-    assert set(result) == {"r2", "mean_absolute_percentage_error"}
+    assert set(result) == {"r2", "mean_absolute_percentage_error", "mean_absolute_error"}
+    assert result["mean_absolute_error"] == pytest.approx(25 / 3)
 
 
 def test_clustering_metrics_shape() -> None:

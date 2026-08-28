@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from dl_models import MLPModel
+from optimizers import build_optimizer
 from train_dl import build_sequences, train_and_evaluate
 
 
@@ -78,7 +79,7 @@ def test_train_and_evaluate_mlp_regression(mock_mlflow: MagicMock) -> None:
     )
 
     assert isinstance(model, MLPModel)
-    assert set(metrics) == {"r2", "mean_absolute_percentage_error"}
+    assert set(metrics) == {"r2", "mean_absolute_percentage_error", "mean_absolute_error"}
     assert mock_mlflow.log_metric.call_count == 3  # once per epoch
 
 
@@ -106,7 +107,7 @@ def test_train_and_evaluate_mlp_classification(mock_mlflow: MagicMock) -> None:
         None,
     )
 
-    assert set(metrics) == {"accuracy", "precision", "recall"}
+    assert set(metrics) == {"accuracy", "precision", "recall", "f1"}
 
 
 @patch("train_dl.mlflow")
@@ -134,7 +135,93 @@ def test_train_and_evaluate_lstm_windows_before_training(mock_mlflow: MagicMock)
         None,
     )
 
-    assert set(metrics) == {"r2", "mean_absolute_percentage_error"}
+    assert set(metrics) == {"r2", "mean_absolute_percentage_error", "mean_absolute_error"}
+
+
+@patch("train_dl.mlflow")
+def test_train_and_evaluate_defaults_to_adam_when_optimizer_unset(mock_mlflow: MagicMock) -> None:
+    del mock_mlflow
+    train_features, test_features, train_labels, test_labels = _regression_data()
+    hyperparameters = {
+        "hidden_layers": [4],
+        "dropout": 0.0,
+        "learning_rate": 0.05,
+        "epochs": 1,
+        "batch_size": 16,
+    }
+
+    with patch("train_dl.build_optimizer", wraps=build_optimizer) as mock_build:
+        train_and_evaluate(
+            train_features,
+            test_features,
+            train_labels,
+            test_labels,
+            "regression",
+            "mlp",
+            hyperparameters,
+            "train",
+            None,
+        )
+
+    assert mock_build.call_args.args[0] == "adam"
+
+
+@patch("train_dl.mlflow")
+def test_train_and_evaluate_uses_sgd_when_requested(mock_mlflow: MagicMock) -> None:
+    del mock_mlflow
+    train_features, test_features, train_labels, test_labels = _classification_data()
+    hyperparameters = {
+        "hidden_layers": [4],
+        "dropout": 0.0,
+        "learning_rate": 0.05,
+        "epochs": 1,
+        "batch_size": 16,
+        "optimizer": "sgd",
+    }
+
+    with patch("train_dl.build_optimizer", wraps=build_optimizer) as mock_build:
+        model, _ = train_and_evaluate(
+            train_features,
+            test_features,
+            train_labels,
+            test_labels,
+            "classification",
+            "mlp",
+            hyperparameters,
+            "train",
+            None,
+        )
+
+    assert mock_build.call_args.args[0] == "sgd"
+    assert isinstance(model, MLPModel)
+
+
+def test_train_and_evaluate_rejects_unknown_optimizer() -> None:
+    train_features, test_features, train_labels, test_labels = _classification_data()
+    hyperparameters = {
+        "hidden_layers": [4],
+        "dropout": 0.0,
+        "learning_rate": 0.05,
+        "epochs": 1,
+        "batch_size": 16,
+        "optimizer": "rmsprop",
+    }
+
+    with (
+        patch("train_dl.mlflow"),
+        pytest.raises(ValueError, match="unknown optimizer"),
+    ):
+        train_and_evaluate(
+            train_features,
+            test_features,
+            train_labels,
+            test_labels,
+            "classification",
+            "mlp",
+            hyperparameters,
+            "train",
+            None,
+        )
 
 
 @patch("train_dl.mlflow_pytorch")

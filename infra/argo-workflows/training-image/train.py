@@ -216,6 +216,11 @@ def _read_dl_hyperparameters() -> dict[str, object]:
         hyperparameters["num_layers"] = int(num_layers)
     if hidden_size := os.environ.get("HIDDEN_SIZE"):
         hyperparameters["hidden_size"] = int(hidden_size)
+    # Dev-facing optimizer choice (optimizers.py) — absent means
+    # train_dl.py/train_cv.py's own "adam" default applies, same convention
+    # as every other optional hyperparameter above.
+    if optimizer := os.environ.get("OPTIMIZER"):
+        hyperparameters["optimizer"] = optimizer
     return hyperparameters
 
 
@@ -224,12 +229,15 @@ def _read_nlp_hyperparameters() -> dict[str, object]:
     EPOCHS/BATCH_SIZE are the same workflow parameters the DL path uses
     (mục 5.1) — reused as-is since the 2 architectures never run in the
     same job, no collision."""
-    return {
+    hyperparameters: dict[str, object] = {
         "base_model_name": os.environ["BASE_MODEL_NAME"],
         "learning_rate": float(os.environ["LEARNING_RATE"]),
         "epochs": int(os.environ["EPOCHS"]),
         "batch_size": int(os.environ["BATCH_SIZE"]),
     }
+    if optimizer := os.environ.get("OPTIMIZER"):
+        hyperparameters["optimizer"] = optimizer
+    return hyperparameters
 
 
 def main() -> None:

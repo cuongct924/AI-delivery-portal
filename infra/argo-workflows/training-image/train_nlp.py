@@ -5,7 +5,7 @@ role as `train_dl.py`/`byoc_runner.py`: a separate script `train.py`
 dispatches into, not a rewrite of the shared split/gate/register flow.
 """
 
-from typing import Any, cast
+from typing import Any, Final, cast
 
 import numpy as np
 import pandas as pd
@@ -17,6 +17,13 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
+
+# Dev-facing "adam"/"sgd" (same vocabulary as optimizers.py, used by
+# train_dl.py/train_cv.py) mapped to the transformers.TrainingArguments
+# `optim` string HuggingFace's Trainer actually expects — "adam" maps to
+# the decoupled-weight-decay AdamW variant (plain non-decoupled Adam isn't
+# one of transformers' supported optimizer names).
+_OPTIM_NAMES: Final[dict[str, str]] = {"adam": "adamw_torch", "sgd": "sgd"}
 
 
 def train_and_evaluate(
@@ -37,13 +44,19 @@ def train_and_evaluate(
         train_labels: Label column (string classes), train split.
         test_labels: Label column, test split.
         hyperparameters: `base_model_name` (HuggingFace Hub model id),
-            `learning_rate`, `epochs`, `batch_size` — mục 6g.2.
+            `learning_rate`, `epochs`, `batch_size` — mục 6g.2. Optional
+            `optimizer` ("adam"/"sgd", default "adam").
 
     Returns:
         (transformers model, metrics) — `metrics` from the same
         `compute_metrics("classification", ...)` the sklearn/DL paths use.
     """
     base_model_name = cast(str, hyperparameters["base_model_name"])
+    optimizer_name = str(hyperparameters.get("optimizer", "adam"))
+    if optimizer_name not in _OPTIM_NAMES:
+        raise ValueError(
+            f"unknown optimizer {optimizer_name!r} — must be one of {sorted(_OPTIM_NAMES)}"
+        )
     # Both splits' label sets combined so a class only present in the test
     # split still gets a stable code, and codes agree between splits.
     label_dtype = pd.CategoricalDtype(categories=sorted(set(train_labels) | set(test_labels)))
@@ -72,6 +85,7 @@ def train_and_evaluate(
         per_device_train_batch_size=int(cast(int, hyperparameters["batch_size"])),
         per_device_eval_batch_size=int(cast(int, hyperparameters["batch_size"])),
         learning_rate=float(cast(float, hyperparameters["learning_rate"])),
+        optim=_OPTIM_NAMES[optimizer_name],
         eval_strategy="epoch",
         logging_strategy="epoch",
         # train.py already owns the mlflow.start_run() for this job — the

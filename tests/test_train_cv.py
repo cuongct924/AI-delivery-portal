@@ -67,7 +67,7 @@ def test_train_and_evaluate_returns_model_and_metrics(
         )
 
     assert isinstance(model, CVModel)
-    assert set(metrics) == {"accuracy", "precision", "recall"}
+    assert set(metrics) == {"accuracy", "precision", "recall", "f1"}
     assert 0.0 <= metrics["accuracy"] <= 1.0
 
 
@@ -121,3 +121,23 @@ def test_cv_model_predict_decodes_base64_images_and_returns_class_names(
 
     assert predictions == [predictions[0], predictions[0]]
     assert predictions[0] in {"circle", "square"}
+
+
+@patch("train_cv.resnet18")
+def test_train_and_evaluate_uses_sgd_when_requested(
+    mock_resnet18: MagicMock, tmp_path: Path, _tiny_transform: transforms.Compose
+) -> None:
+    mock_resnet18.return_value = _TinyBackbone()
+    zip_path = tmp_path / "shapes.zip"
+    _make_shapes_zip(zip_path, classes=["circle", "square"], images_per_class=6)
+
+    with patch("train_cv._TRANSFORM", _tiny_transform):
+        from optimizers import build_optimizer
+        from train_cv import train_and_evaluate
+
+        with patch("train_cv.build_optimizer", wraps=build_optimizer) as mock_build:
+            train_and_evaluate(
+                zip_path, {"learning_rate": 0.01, "epochs": 1, "batch_size": 2, "optimizer": "sgd"}
+            )
+
+    assert mock_build.call_args.args[0] == "sgd"
