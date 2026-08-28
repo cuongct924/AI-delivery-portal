@@ -16,6 +16,9 @@ from data_quality.checks import (
     check_duplicate_rows,
     check_high_cardinality,
     check_missing_values,
+    check_rec_cold_start_ratio,
+    check_rec_duplicate_interactions,
+    check_rec_ids_present,
     check_target_leakage_correlation,
     check_time_gaps,
 )
@@ -68,3 +71,16 @@ def run_checks(
     if time_column is not None:
         results.append(check_time_gaps(df, time_column))
     return results
+
+
+def run_rec_checks(
+    interactions: pd.DataFrame, user_id_column: str, item_id_column: str
+) -> list[CheckResult]:
+    """RecSys's own entry point (mục 6e.2/6f.5) — doesn't fit `run_checks()`'s
+    shared `(df, target_column=...)` shape (2 required id columns, no
+    single target), so it isn't in TASK_TYPE_CHECKS."""
+    return [
+        check_rec_ids_present(interactions, user_id_column, item_id_column),
+        check_rec_duplicate_interactions(interactions, user_id_column, item_id_column),
+        check_rec_cold_start_ratio(interactions, user_id_column, item_id_column),
+    ]

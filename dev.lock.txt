@@ -343,6 +343,8 @@ idna==3.19
     #   httpx2
     #   requests
     #   yarl
+implicit==0.7.3
+    # via -r infra/argo-workflows/training-image/requirements.txt
 importlib-metadata==9.0.0
     # via mlflow-skinny
 iniconfig==2.3.0
@@ -362,7 +364,9 @@ jmespath==1.1.0
     #   aiobotocore
     #   botocore
 joblib==1.5.3
-    # via scikit-learn
+    # via
+    #   scikit-learn
+    #   scikit-surprise
 jsonschema==4.26.0
     # via mcp
 jsonschema-specifications==2025.9.1
@@ -449,6 +453,7 @@ numpy==2.5.2
     #   dask
     #   datasets
     #   feast
+    #   implicit
     #   lightgbm
     #   matplotlib
     #   mlflow
@@ -456,6 +461,7 @@ numpy==2.5.2
     #   pandas
     #   qdrant-client
     #   scikit-learn
+    #   scikit-surprise
     #   scipy
     #   skops
     #   torchvision
@@ -728,12 +734,17 @@ scikit-learn==1.7.2
     #   -r infra/argo-workflows/training-image/requirements.txt
     #   mlflow
     #   skops
-scipy==1.18.0
+scikit-surprise==1.1.5
+    # via -r infra/argo-workflows/training-image/requirements.txt
+scipy==1.18.1
     # via
+    #   -r infra/argo-workflows/training-image/requirements.txt
     #   catboost
+    #   implicit
     #   lightgbm
     #   mlflow
     #   scikit-learn
+    #   scikit-surprise
     #   skops
     #   xgboost
 scmrepo==3.6.2
@@ -794,7 +805,9 @@ tabulate==0.10.0
 tenacity==8.5.0
     # via feast
 threadpoolctl==3.6.0
-    # via scikit-learn
+    # via
+    #   implicit
+    #   scikit-learn
 tokenizers==0.22.2
     # via transformers
 toml==0.10.2
@@ -827,6 +840,7 @@ tqdm==4.70.0
     #   feast
     #   fsspec
     #   huggingface-hub
+    #   implicit
     #   optuna
     #   scmrepo
     #   transformers

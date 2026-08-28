@@ -1,0 +1,151 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: rec-train-register-golden-path
+  namespace: default
+spec:
+  entrypoint: train-and-register
+  # Same least-privilege ServiceAccount as Golden Path #1 (mục 3.1) — no
+  # new cluster-level permissions needed for Golden Path #3.
+  serviceAccountName: train-register-workflow
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  volumes:
+    - name: dataset
+      hostPath:
+        path: /mnt/data
+        type: Directory
+  arguments:
+    parameters:
+      - name: model-name
+      - name: interactions-uri
+      # Only required for algorithm=tfidf_cosine (mục 6e.1/6e.2).
+      - name: item-features-uri
+        value: ""
+      - name: user-id-column
+      - name: item-id-column
+      - name: timestamp-column
+      # Required for algorithm=svd/knn (explicit feedback), unused otherwise.
+      - name: rating-column
+        value: ""
+      # Both required together, only for algorithm=tfidf_cosine.
+      - name: item-id-column-features
+        value: ""
+      - name: item-text-column
+        value: ""
+      - name: algorithm
+      - name: k
+        value: "10"
+      # Free-form per-algorithm hyperparameters (mục 6e.5 — 1 JSON field
+      # instead of a form field per algorithm's own hyperparameter names,
+      # same pattern as BYOC's customConfig/HPO's searchSpaceJson).
+      - name: hyperparameters-json
+        value: "{}"
+  templates:
+    - name: train-and-register
+      dag:
+        tasks:
+          - name: train
+            template: rec-train-step
+            arguments:
+              parameters:
+                - name: interactions-uri
+                  value: '{{workflow.parameters.interactions-uri}}'
+                - name: item-features-uri
+                  value: '{{workflow.parameters.item-features-uri}}'
+                - name: user-id-column
+                  value: '{{workflow.parameters.user-id-column}}'
+                - name: item-id-column
+                  value: '{{workflow.parameters.item-id-column}}'
+                - name: timestamp-column
+                  value: '{{workflow.parameters.timestamp-column}}'
+                - name: rating-column
+                  value: '{{workflow.parameters.rating-column}}'
+                - name: item-id-column-features
+                  value: '{{workflow.parameters.item-id-column-features}}'
+                - name: item-text-column
+                  value: '{{workflow.parameters.item-text-column}}'
+                - name: algorithm
+                  value: '{{workflow.parameters.algorithm}}'
+                - name: k
+                  value: '{{workflow.parameters.k}}'
+                - name: hyperparameters-json
+                  value: '{{workflow.parameters.hyperparameters-json}}'
+          - name: register
+            # Reuses train-register-golden-path's register-step unchanged
+            # (mục 3.4) — it only cares about model-name/task-type/
+            # artifact-uri/dataset-digest, all identical in shape here.
+            templateRef:
+              name: train-register-golden-path
+              template: register-step
+            dependencies: [train]
+            arguments:
+              parameters:
+                - name: model-name
+                  value: '{{workflow.parameters.model-name}}'
+                - name: task-type
+                  value: ranking
+                - name: artifact-uri
+                  value: '{{tasks.train.outputs.parameters.artifact-uri}}'
+                - name: dataset-digest
+                  value: '{{tasks.train.outputs.parameters.dataset-digest}}'
+
+    - name: rec-train-step
+      inputs:
+        parameters:
+          - name: interactions-uri
+          - name: item-features-uri
+          - name: user-id-column
+          - name: item-id-column
+          - name: timestamp-column
+          - name: rating-column
+          - name: item-id-column-features
+          - name: item-text-column
+          - name: algorithm
+          - name: k
+          - name: hyperparameters-json
+      outputs:
+        parameters:
+          - name: artifact-uri
+            valueFrom:
+              path: /tmp/artifact-uri
+          - name: dataset-digest
+            valueFrom:
+              path: /tmp/dataset-digest
+      container:
+        # Same image as Golden Path #1 (infra/argo-workflows/training-image/)
+        # — train_rec.py is 1 more *.py file the Dockerfile already copies
+        # in, not a separate image to build/maintain.
+        image: training-image:local
+        imagePullPolicy: IfNotPresent
+        command: [python, train_rec.py]
+        env:
+          - name: INTERACTIONS_URI
+            value: '{{inputs.parameters.interactions-uri}}'
+          - name: ITEM_FEATURES_URI
+            value: '{{inputs.parameters.item-features-uri}}'
+          - name: USER_ID_COLUMN
+            value: '{{inputs.parameters.user-id-column}}'
+          - name: ITEM_ID_COLUMN
+            value: '{{inputs.parameters.item-id-column}}'
+          - name: TIMESTAMP_COLUMN
+            value: '{{inputs.parameters.timestamp-column}}'
+          - name: RATING_COLUMN
+            value: '{{inputs.parameters.rating-column}}'
+          - name: ITEM_ID_COLUMN_FEATURES
+            value: '{{inputs.parameters.item-id-column-features}}'
+          - name: ITEM_TEXT_COLUMN
+            value: '{{inputs.parameters.item-text-column}}'
+          - name: ALGORITHM
+            value: '{{inputs.parameters.algorithm}}'
+          - name: K
+            value: '{{inputs.parameters.k}}'
+          - name: HYPERPARAMETERS_JSON
+            value: '{{inputs.parameters.hyperparameters-json}}'
+          - name: MLFLOW_TRACKING_URI
+            value: http://host.docker.internal:5000
+        volumeMounts:
+          - name: dataset
+            mountPath: /mnt/data
+            readOnly: true

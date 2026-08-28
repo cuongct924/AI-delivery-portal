@@ -147,6 +147,8 @@ idna==3.19
     #   httpx
     #   requests
     #   yarl
+implicit==0.7.3
+    # via -r infra/argo-workflows/training-image/requirements.txt
 importlib-metadata==9.0.0
     # via mlflow-skinny
 itsdangerous==2.2.0
@@ -156,7 +158,9 @@ jinja2==3.1.6
     #   flask
     #   torch
 joblib==1.5.3
-    # via scikit-learn
+    # via
+    #   scikit-learn
+    #   scikit-surprise
 kiwisolver==1.5.0
     # via matplotlib
 lightgbm==4.6.0
@@ -201,12 +205,14 @@ numpy==2.5.2
     #   catboost
     #   contourpy
     #   datasets
+    #   implicit
     #   lightgbm
     #   matplotlib
     #   mlflow
     #   optuna
     #   pandas
     #   scikit-learn
+    #   scikit-surprise
     #   scipy
     #   skops
     #   torchvision
@@ -327,12 +333,17 @@ scikit-learn==1.7.2
     #   -r infra/argo-workflows/training-image/requirements.txt
     #   mlflow
     #   skops
+scikit-surprise==1.1.5
+    # via -r infra/argo-workflows/training-image/requirements.txt
 scipy==1.18.1
     # via
+    #   -r infra/argo-workflows/training-image/requirements.txt
     #   catboost
+    #   implicit
     #   lightgbm
     #   mlflow
     #   scikit-learn
+    #   scikit-surprise
     #   skops
     #   xgboost
 setuptools==84.0.0
@@ -361,7 +372,9 @@ starlette==1.6.0
 sympy==1.14.0
     # via torch
 threadpoolctl==3.6.0
-    # via scikit-learn
+    # via
+    #   implicit
+    #   scikit-learn
 tokenizers==0.22.2
     # via transformers
 torch==2.13.0+cpu
@@ -375,6 +388,7 @@ tqdm==4.70.0
     # via
     #   datasets
     #   huggingface-hub
+    #   implicit
     #   optuna
     #   transformers
 transformers==5.14.1

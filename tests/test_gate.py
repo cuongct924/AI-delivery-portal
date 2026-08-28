@@ -65,6 +65,20 @@ def test_evaluate_metrics_gate_uses_clustering_thresholds():
     assert result["passed"] is True
 
 
+def test_evaluate_metrics_gate_uses_ranking_thresholds():
+    metrics = {"recall_at_k": 0.25, "ndcg_at_k": 0.35}
+    result = evaluate_metrics_gate("ranking", metrics)
+    assert result["passed"] is True
+
+
+def test_evaluate_metrics_gate_ranking_ignores_optional_map_at_k():
+    # map_at_k has no threshold entry (mục 6e.3) — logging it shouldn't
+    # affect pass/fail either way.
+    metrics = {"recall_at_k": 0.25, "ndcg_at_k": 0.35, "map_at_k": 0.01}
+    result = evaluate_metrics_gate("ranking", metrics)
+    assert result["passed"] is True
+
+
 def test_evaluate_metrics_gate_rejects_unknown_task_type():
     with pytest.raises(ValueError, match="unknown task_type"):
         evaluate_metrics_gate("not-a-task-type", {})
