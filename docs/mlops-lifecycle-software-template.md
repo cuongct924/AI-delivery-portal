@@ -470,7 +470,7 @@ trong task list (mỗi phase `blockedBy` task cuối của phase trước):
 | 3 | Deep Learning — MLP+LSTM (mục 5) | #19–23 | **Đã code + commit** (`dl_models.py`, `dl_architecture_registry.py`, `train_dl.py`, dispatch trong `train.py`, dataset `sensor-timeseries-sample.csv`, mục 5.5). `docker build` của `training-image` chưa verify lại lần cuối — máy dev hết dung lượng đĩa giữa chừng |
 | 4 | BYOC — custom script (mục 6b.3) | #30–34 | **Đã code + commit** (`byoc_runner.py`, `pyfunc_wrapper.py`, dispatch trong `train.py`, mục 6b.3.1). `docker build` chưa verify — máy dev hết dung lượng đĩa |
 | 5 | HPO — Grid/Random/Bayesian (mục 6c) | #35–37 | **Đã code + commit** (`hpo_strategies.py`, `hpo_runner.py`, dispatch trong `train.py`, mục 6c.5). `docker build` chưa verify — máy dev hết dung lượng đĩa |
-| 6 | NLP — text classification (mục 6b) | #38 | Roadmap, cần thiết kế chi tiết trước khi tách task nhỏ, `blockedBy` #37 |
+| 6 | NLP — text classification (mục 6g, thiết kế chi tiết) | #38 | **Đã code + commit** (`train_nlp.py`, dispatch trong `train.py`, mục 6g.6). `docker build` chưa verify — máy dev hết dung lượng đĩa |
 | 7 | CV — image classification (mục 6b) | #39 | Roadmap, cần thiết kế chi tiết trước, `blockedBy` #38 |
 | 8 | RecSys — Golden Path riêng (mục 6e, thiết kế đầy đủ) | #41–46 | Đã duyệt, `blockedBy` #39 |
 | 9 | Model Monitoring — "Setup Model Monitoring" (mục 6d) | #47–50 | Đã duyệt, `blockedBy` #46 (phụ thuộc kỹ thuật thật chỉ là Phase 2 — có thể làm sớm hơn nếu muốn) |
@@ -529,7 +529,7 @@ Dashboard).
 |---|---|---|---|
 | 1. Paved road — Classical ML | Team làm bài toán bảng biểu phổ biến (fraud, churn, giá) | `algorithm_registry.py` (sklearn) | Đã duyệt — mục 3 |
 | 2. Paved road mở rộng — Deep Learning | Team cần hàm phi tuyến phức tạp hơn trên dữ liệu bảng/time-series | `dl_architecture_registry.py` (MLP+LSTM) | Đã duyệt — mục 5 (Phase 3) |
-| 3a. Paved road chuyên biệt — NLP | Team làm text classification | HuggingFace `Trainer`, `mlflow.transformers` | Đề xuất — Phase 4a |
+| 3a. Paved road chuyên biệt — NLP | Team làm text classification | HuggingFace `Trainer`, `mlflow.transformers` | Đã code — Phase 6, mục 6g |
 | 3b. Paved road chuyên biệt — CV | Team làm image classification | torchvision, custom pyfunc wrapper | Đề xuất — Phase 4b |
 | 4. Escape hatch — BYOC | Team có nhu cầu không khớp preset nào | Custom script (contract cố định) trong base image có sẵn | Đề xuất — Phase 5, thiết kế ở 6b.3 |
 | 5. Golden Path riêng — RecSys | Team recommendation | Template riêng, dataset/gate riêng | Đề xuất — Phase 6 |
@@ -1004,6 +1004,107 @@ Task #9 (`handles_missing_natively` + `data_quality` module), #12
 (`/datasets/validate` trả `list[CheckResult]` có cấu trúc thay vì chỉ pass/
 fail), #14 (output text hiển thị theo severity), #42 (3 check RecSys đã
 thiết kế trở thành entry trong `TASK_TYPE_CHECKS["recsys"]`).
+
+## 6g. NLP — Text Classification (Phase 6), thiết kế chi tiết
+
+Hiện thực hoá tầng 3a của bảng phân tầng (mục 6b.2) — kết luận nghiên cứu ở
+6b.1 ("chỉ text classification, HuggingFace `Trainer`, gần như tái dùng
+nguyên CSV + `targetColumn`, chỉ thêm `textColumn`").
+
+### 6g.1 1 giá trị `architecture` mới (`nlp`), không phải `algorithm`/BYOC
+
+Cùng lý do DL đã tách khỏi `algorithm` (mục 5.1): NLP không có interface
+đồng nhất với sklearn (`fit`/`predict`) hay với DL hiện có (kiến trúc mạng
+khác hẳn, dùng model pretrained + fine-tune thay vì train from scratch) —
+thêm `architecture: nlp` (enum `[sklearn, mlp, lstm, nlp]`). Không phải
+BYOC vì đây là paved road platform tự quản lý training loop, Dev chỉ chọn
+tham số, không tự viết code.
+
+### 6g.2 Script train riêng — `train_nlp.py`
+
+Cùng pattern `train_dl.py`/`byoc_runner.py` — 1 file riêng trong training-
+image, `train.py` dispatch vào khi `architecture == "nlp"`:
+
+- Tokenize bằng `AutoTokenizer.from_pretrained(base_model_name)`, model
+  bằng `AutoModelForSequenceClassification.from_pretrained(base_model_name,
+  num_labels=...)`.
+- Label là string (`targetColumn`, ví dụ "positive"/"negative") — encode
+  thành class index (`pd.Categorical` codes, cùng kỹ thuật
+  `_encode_categoricals` dùng cho feature) trước khi đưa vào `Trainer`,
+  giữ bảng ánh xạ để log lại (`mlflow.log_dict` — tái dùng lúc serving cần
+  giải mã ngược).
+- Fine-tune toàn bộ model (full fine-tuning) — **không** LoRA/PEFT dù 6b.1
+  có nhắc tới như 1 lựa chọn tuỳ chọn (xem 6g.5, phạm vi cắt).
+- `compute_metrics` (metrics.py) dùng lại nguyên vẹn — text classification
+  vẫn là `task_type="classification"`, accuracy/precision/recall không
+  quan tâm nhãn là string hay đã encode thành int, miễn nhất quán 2 phía.
+- Log model qua `mlflow.transformers.log_model()` — flavor có sẵn (6b.1),
+  chạy trên KServe runtime `"mlflow"` hiện có, không cần runtime mới.
+
+### 6g.3 Dataset — thêm `textColumn`, tái dùng CSV + `targetColumn`
+
+Không đổi ingest contract (vẫn 1 file CSV qua `DATASET_URI`) — chỉ thêm 1
+cột bắt buộc mới `textColumn` (cột chứa văn bản cần phân loại). **Quan
+trọng**: cột text phải giữ nguyên dạng string thô khi đưa vào tokenizer —
+`train.py`'s `_encode_categoricals()` (áp cho mọi cột `object` dtype còn
+lại sau khi drop id/target) sẽ biến text thành category code nếu dùng
+chung `features` — nhánh `architecture=="nlp"` trong `train.py` tự trích
+`df[[text_column]]` trực tiếp từ `df` gốc (không qua `_encode_
+categoricals`), tách hẳn khỏi luồng `features` dùng chung cho sklearn/DL
+(xem 6g.6 — chi tiết triển khai thật).
+
+### 6g.4 Tái dùng nguyên vẹn, không thiết kế lại
+
+`evaluations/gate.py` (`task_type="classification"`, ngưỡng
+`TASK_TYPE_THRESHOLDS["classification"]` không đổi), `IDeployTrafficStrategy`/
+`IReleaseStrategy` (mục 4), 5 bước của `train-track-register/template.yaml`
+(mục 3.4), `adapters/kserve_adapter.py` — NLP chỉ là 1 architecture khác
+trong classification, giống DL đã kết luận ở mục 5 ("Đính chính quan
+trọng").
+
+### 6g.5 Phạm vi v1 — cắt bớt so với 6b.1
+
+- **Không LoRA/PEFT** — 6b.1 chỉ nhắc "tuỳ chọn"; full fine-tuning đã đủ
+  khả thi CPU cho base model nhỏ (`distilbert-base-uncased`, mục tiêu demo/
+  paved-road, không phải production-scale LLM), tránh thêm dependency
+  `peft` + thêm 2 field form (`useLora`/`loraRank`) chưa chắc cần.
+- **Không HPO (mục 6c)** — HPO hiện chỉ bao phủ DL hyperparameters (mục
+  5.1, xem lý do phạm vi ở 6c.5); NLP hyperparameters không nằm trong
+  `SEARCH_SPACE_JSON` cho lần triển khai này.
+- **Không hỗ trợ NER/multi-label** — chỉ single-label text classification,
+  đúng kết luận 6b.1.
+
+### 6g.6 Đã code — tinh chỉnh so với 6g.1-6g.5 lúc triển khai thật
+
+- **Không hỗ trợ `MODE=finetune`** — chỉ `MODE=train` (luôn fine-tune từ
+  `baseModelName` gốc trên HuggingFace Hub). Tiếp tục fine-tune từ 1 model
+  đã đăng ký trước (`BASE_MODEL_URI`) cần `mlflow.transformers.load_model()`
+  round-trip qua định dạng `{"model":..., "tokenizer":...}` — rủi ro không
+  kiểm chứng được nếu không tải model thật (không có mạng trong sandbox
+  code), nên cắt khỏi phạm vi lần này, cùng tinh thần cắt của BYOC (mục
+  6b.3.1) và HPO (mục 6c.5).
+- **Nhãn được encode qua `pd.CategoricalDtype` xây từ union nhãn train+test**
+  trước khi đưa vào `Trainer` — HuggingFace cần class index nguyên, không
+  nhận string trực tiếp; `compute_metrics()` (metrics.py) vẫn dùng lại
+  nguyên vẹn vì accuracy/precision/recall không quan tâm nhãn là string hay
+  đã encode, miễn nhất quán 2 phía.
+- **Cần thêm dependency mới phát hiện lúc code**: `accelerate` —
+  `transformers.Trainer`/`TrainingArguments` gọi `_setup_devices` lúc khởi
+  tạo, đòi `accelerate>=1.1.0` dù không có ở khai báo phụ thuộc trực tiếp
+  nào của `transformers`. Không phát hiện được nếu không thực sự import và
+  khởi tạo `TrainingArguments` — đúng giá trị của việc "code xong rồi mới
+  build image" (im lặng nếu chỉ đọc doc HuggingFace, image build cũng
+  không tự báo lỗi này rõ ràng bằng chạy thử unit test thật).
+- **Pin `transformers==5.14.1`** (không phải bản mới nhất `5.16.x` lúc
+  code) — theo đúng dải phiên bản `mlflow.transformers.log_model()` công bố
+  tương thích (`4.43.4 <= transformers <= 5.14.1`), tránh lỗi tương thích
+  ẩn lúc log/load model qua MLflow.
+- **`text_column` tách hẳn khỏi biến `features` dùng chung** — trích trực
+  tiếp `df[[text_column]]` (bọc `cast(pd.DataFrame, ...)` vì pandas-stubs
+  không suy luận chắc chắn kiểu trả về cho indexer là 1 list 1 phần tử,
+  cùng loại giới hạn stub đã gặp ở `labels_full = cast(pd.Series,
+  df[target_column])` có sẵn) — không tái dùng `_split()`'s `features`
+  chung, đúng thiết kế đã ghi ở 6g.3.
 
 ## 7b. Luồng end-to-end: UI → Scaffolder Action → orchestration-api → Adapter
 
