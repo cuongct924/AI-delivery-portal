@@ -467,12 +467,12 @@ trong task list (mỗi phase `blockedBy` task cuối của phase trước):
 |---|---|---|---|
 | 1 | Golden Path #1 — Classical ML (mục 3) | #9–18 | **Đã code + commit** (training image, data quality, gate, 5-step template) |
 | 2 | Golden Path #2 — Deploy Strategy (mục 4) | #24–29 | **Đã code + commit** (`adapters/deploy_strategies.py`, KServe create-or-update fix, mục 4.5). Hạ tầng chạy thật (ArgoCD + Helm + KServe Serverless trên kind, mục 4b) cũng đã dựng xong — chạy thử end-to-end được ngay |
-| 3 | Deep Learning — MLP+LSTM (mục 5) | #19–23 | **Đã code + commit** (`dl_models.py`, `dl_architecture_registry.py`, `train_dl.py`, dispatch trong `train.py`, dataset `sensor-timeseries-sample.csv`, mục 5.5). `docker build` của `training-image` chưa verify lại lần cuối — máy dev hết dung lượng đĩa giữa chừng |
-| 4 | BYOC — custom script (mục 6b.3) | #30–34 | **Đã code + commit** (`byoc_runner.py`, `pyfunc_wrapper.py`, dispatch trong `train.py`, mục 6b.3.1). `docker build` chưa verify — máy dev hết dung lượng đĩa |
-| 5 | HPO — Grid/Random/Bayesian (mục 6c) | #35–37 | **Đã code + commit** (`hpo_strategies.py`, `hpo_runner.py`, dispatch trong `train.py`, mục 6c.5). `docker build` chưa verify — máy dev hết dung lượng đĩa |
-| 6 | NLP — text classification (mục 6g, thiết kế chi tiết) | #38 | **Đã code + commit** (`train_nlp.py`, dispatch trong `train.py`, mục 6g.6). `docker build` chưa verify — máy dev hết dung lượng đĩa |
-| 7 | CV — image classification (mục 6h, thiết kế chi tiết) | #39 | **Đã code + commit** (`train_cv.py`, dispatch trong `train.py`, dataset `shapes-sample.zip`, mục 6h.6). `docker build` chưa verify — máy dev hết dung lượng đĩa |
-| 8 | RecSys — Golden Path riêng (mục 6e, thiết kế đầy đủ) | #41–46 | Đã duyệt, `blockedBy` #39 |
+| 3 | Deep Learning — MLP+LSTM (mục 5) | #19–23 | **Đã code + commit** (`dl_models.py`, `dl_architecture_registry.py`, `train_dl.py`, dispatch trong `train.py`, dataset `sensor-timeseries-sample.csv`, mục 5.5). `docker build` của `training-image` đã verify thành công (image build cùng lúc với các phụ thuộc Phase 4-8, xem mục 6e.5) |
+| 4 | BYOC — custom script (mục 6b.3) | #30–34 | **Đã code + commit** (`byoc_runner.py`, `pyfunc_wrapper.py`, dispatch trong `train.py`, mục 6b.3.1). `docker build` đã verify thành công (cùng lần build mục 8, xem mục 6e.5) |
+| 5 | HPO — Grid/Random/Bayesian (mục 6c) | #35–37 | **Đã code + commit** (`hpo_strategies.py`, `hpo_runner.py`, dispatch trong `train.py`, mục 6c.5). `docker build` đã verify thành công (cùng lần build mục 8, xem mục 6e.5) |
+| 6 | NLP — text classification (mục 6g, thiết kế chi tiết) | #38 | **Đã code + commit** (`train_nlp.py`, dispatch trong `train.py`, mục 6g.6). `docker build` đã verify thành công (cùng lần build mục 8, xem mục 6e.5) |
+| 7 | CV — image classification (mục 6h, thiết kế chi tiết) | #39 | **Đã code + commit** (`train_cv.py`, dispatch trong `train.py`, dataset `shapes-sample.zip`, mục 6h.6). `docker build` đã verify thành công (cùng lần build mục 8, xem mục 6e.5) |
+| 8 | RecSys — Golden Path riêng (mục 6e, thiết kế đầy đủ) | #41–46 | **Đã code + commit** (`rec_algorithm_registry.py`, `rec_metrics.py`, `train_rec.py`, `rec-train-register-template.yaml`, `routers/recommendations.py`, template `recommend-train-register`, mục 6e.5). `docker build training-image` đã verify thành công (bao gồm `implicit`/`scikit-surprise`) |
 | 9 | Model Monitoring — "Setup Model Monitoring" (mục 6d) | #47–50 | Đã duyệt, `blockedBy` #46 (phụ thuộc kỹ thuật thật chỉ là Phase 2 — có thể làm sớm hơn nếu muốn) |
 | — | RL | — | Không hỗ trợ — giới hạn kiến trúc |
 | — | LLMOps (`docs/llmops-lifecycle-plan-draft.md`) | Không tạo task | **Giữ nguyên DRAFT, chỉ bắt đầu sau khi toàn bộ 9 phase MLOps trên hoàn thành và verify xong** |
@@ -906,6 +906,75 @@ model.
   offline — nhưng vì thiết kế đã cố tình KHÔNG tự động promote/rollback
   (con người xem dashboard rồi quyết định — mục 4.3), không cần đổi gì
   trong cơ chế, chỉ con người nhìn đúng dashboard (Grafana, đã có sẵn).
+
+### 6e.5 Đã code — tinh chỉnh so với 6e.1-6e.4 lúc triển khai thật
+
+- **Bỏ `lightfm`/hybrid family hoàn toàn** — cài thử lúc code, build thất
+  bại: `AttributeError: 'dict' object has no attribute
+  '__LIGHTFM_SETUP__'`, lỗi tương thích thật giữa `setup.py` kiểu cũ của
+  lightfm với setuptools hiện đại trên Python 3.12, không sửa được từ phía
+  repo này (không hạ cấp Python xuống dưới 3.12+ — vi phạm chuẩn team đã
+  chốt ở `.claude/rules/python-standards.md`). `implicit` (als/bpr) và
+  `scikit-surprise` (svd/knn) cài và chạy được bình thường, giữ nguyên. Còn
+  6/7 entry gốc — chỉ mất family "hybrid".
+- **1 field JSON `hyperparametersJson`** thay vì field riêng cho từng
+  hyperparameter của từng thuật toán (factors/regularization/iterations
+  cho als/bpr, n_factors/n_epochs/lr_all/reg_all cho svd, k/sim_option cho
+  knn — mỗi family 1 bộ tên khác nhau) — cùng mẫu đã lập với
+  `customConfig` (BYOC, mục 6b.3) / `searchSpaceJson` (HPO, mục 6c.5),
+  tránh nhân UI ra 4 bộ field riêng biệt.
+- **`train_rec.py` là entrypoint HOÀN TOÀN riêng** (`command: [python,
+  train_rec.py]` ghi đè `CMD` mặc định của image trong Argo step) — không
+  đi qua `train.py`'s dispatch (đúng tinh thần "Golden Path hoàn toàn
+  riêng"). `register-step` được tái dùng qua Argo `templateRef` trỏ sang
+  `train-register-golden-path` thay vì chép lại logic POST
+  `/models/register` — cùng image, cùng script, không có gì RecSys-riêng ở
+  bước đó.
+- **Data Quality RecSys (mục 6e.2) cắt còn 2/5 check** — giữ
+  `check_rec_ids_present` (id tồn tại/không null) và
+  `check_rec_duplicate_interactions` (cặp user/item trùng), cộng thêm
+  `check_rec_cold_start_ratio` (k-core, đã có trong 6e.2). **Bỏ**: kiểm tra
+  rating hợp lệ và tính nhất quán khoá ngoại với file feature phụ — 2 check
+  còn lại này cần thêm logic thẩm định theo từng field cấu hình cụ thể hơn,
+  cắt để giữ phạm vi Phase 8 trong tầm kiểm soát. 3 check hiện có không đi
+  qua `registry.run_checks()`/`TASK_TYPE_CHECKS` (shape `(df,
+  target_column=...)` không khớp — RecSys có 2 cột id bắt buộc, không có
+  1 target) — có hàm riêng `run_rec_checks()`, gọi trực tiếp từ
+  `routers/recommendations.py`.
+- **Router mới `routers/recommendations.py`**, không nhét vào
+  `routers/models.py` — request/response shape khác hẳn (multi-file
+  manifest, không phải 1 `datasetUri`), tách file giữ `models.py` không bị
+  phình thêm field không liên quan đến Golden Path #1/#2.
+  `/models/register`, `/policy-check`, `/deploy-model/*` (đã có ở
+  `models.py`) dùng lại nguyên vẹn — chỉ cần gọi với `task_type="ranking"`.
+- **Cắt hẳn `servingMode=batch-precompute`** (Argo CronWorkflow tính trước
+  gợi ý theo lịch, mục 6e.4) — chỉ triển khai `realtime` (KServe, tái dùng
+  100% cơ chế Golden Path #2 hiện có). CronWorkflow + bảng tra cứu là 1
+  tính năng đủ lớn để tự thành phạm vi riêng, để lại cho 1 lần sau.
+- **Global temporal split cố định 80/20** (không phải Dev-facing) — cắt
+  thành 1 hằng số `_TRAIN_FRACTION`, không thêm field `testFraction` vào
+  form; `timestampColumn` được coi là **bắt buộc** trong triển khai thật
+  (mục 6e.2 ghi "tuỳ chọn" nhưng cùng đoạn lại chốt global temporal split
+  là chiến lược split DUY NHẤT — 2 câu mâu thuẫn nhau nếu không có cột thời
+  gian; chọn theo chiến lược split đã chốt).
+- **Dataset mẫu mới**: `data/interactions-sample.csv` (122 dòng, 30 user ×
+  20 item, rating 1-5, phân bố độ phổ biến lệch kiểu Zipf qua
+  `random.paretovariate`) + `data/item-features-sample.csv` (20 item, có
+  cột `description` cho `tfidf_cosine`) — track qua DVC giống mọi dataset
+  khác.
+- **`docker build` của `training-image` verify thành công** (đĩa đã fix,
+  2026-08-28) — bao gồm toàn bộ phụ thuộc tích luỹ từ Phase 3-8 (torch,
+  xgboost/lightgbm/catboost, optuna, transformers/datasets/accelerate,
+  torchvision, implicit, scikit-surprise). Xác nhận thêm: `git` có sẵn
+  trong image (cần cho BYOC's `byoc_runner.py`), `torch.cuda.is_available()
+  == False` (đúng mục tiêu CPU-only), và toàn bộ module Python
+  (`train.py`, `train_dl.py`, `train_nlp.py`, `train_cv.py`,
+  `train_rec.py`, `byoc_runner.py`, `hpo_runner.py`, `hpo_strategies.py`,
+  `pyfunc_wrapper.py`, `rec_algorithm_registry.py`, `rec_metrics.py`,
+  `algorithm_registry.py`, `dl_architecture_registry.py`) import được
+  bên trong container thật (`docker run training-image:local python -c
+  "import train; ..."`) — smoke test import-level, chưa chạy thử end-to-end
+  qua Argo/kind cluster thật.
 
 ## 6f. Data Quality / EDA — thiết kế xuyên suốt mọi phase
 
