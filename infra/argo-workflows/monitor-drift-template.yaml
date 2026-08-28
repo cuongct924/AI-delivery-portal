@@ -5,8 +5,8 @@ metadata:
   namespace: default
 spec:
   entrypoint: monitor-drift
-  # Same least-privilege ServiceAccount as every other Golden Path (mục
-  # 3.1) — no new cluster-level permissions for monitoring.
+  # Same least-privilege ServiceAccount as every other Golden Path — no
+  # new cluster-level permissions for monitoring.
   serviceAccountName: train-register-workflow
   securityContext:
     runAsNonRoot: true

@@ -56,9 +56,9 @@ def compute_ranking_metrics(
         k: Cutoff — must match how `recommendations` were generated.
 
     Returns:
-        `dict` with exactly `recall_at_k`/`ndcg_at_k`/`map_at_k` (mục
-        6e.3 — `map_at_k` has no gate threshold but is still logged, since
-        it's cheap to compute alongside the other 2).
+        `dict` with exactly `recall_at_k`/`ndcg_at_k`/`map_at_k` —
+        `map_at_k` has no gate threshold but is still logged, since it's
+        cheap to compute alongside the other 2.
 
     Raises:
         ValueError: `ground_truth` is empty — nothing to average over.

@@ -465,8 +465,8 @@ def main() -> None:
             mlflow_pytorch.log_model(model, artifact_path="model")
 
         if is_cv:
-            # No pandas DataFrame to build an mlflow.data.Dataset from (mục
-            # 6h.1/6h.5) — params carry the same lineage info instead.
+            # No pandas DataFrame to build an mlflow.data.Dataset from —
+            # params carry the same lineage info instead.
             mlflow.log_param("dataset_uri", dataset_uri)
             mlflow.log_param("dataset_digest", dataset_digest)
         else:

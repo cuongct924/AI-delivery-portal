@@ -54,6 +54,12 @@ interface LatestVersionResponse {
   readonly version: string;
 }
 
+/** Response body of `POST {baseUrl}/models/register`. */
+interface RegisterModelResponse {
+  readonly name: string;
+  readonly version: string;
+}
+
 /** One entry of `POST {baseUrl}/datasets/validate`'s response array. */
 interface CheckResultItem {
   readonly check_name: string;
@@ -396,6 +402,55 @@ export function createValidateDatasetAction({ config }: ActionDeps) {
 }
 
 /**
+ * `orchestration:register-model` — registers an existing MLflow run's
+ * logged model into the Model Registry. Reuses `POST /models/register`
+ * unchanged, the same endpoint the Golden Path #1/#3 Argo Workflow's
+ * register-step calls — this is the entry point for a model trained
+ * outside any Golden Path (e.g. interactively in AI Notebook).
+ */
+export function createRegisterModelAction({ config }: ActionDeps) {
+  return createTemplateAction({
+    id: 'orchestration:register-model',
+    description: "Registers an existing MLflow run's logged model into the Model Registry.",
+    schema: {
+      input: {
+        modelName: z => z.string({ description: 'Name to register the model under' }),
+        artifactUri: z =>
+          z.string({
+            description:
+              'Logged model URI, e.g. "runs:/<run_id>/<artifact_path>" — printed as model_info.model_uri by mlflow.<flavor>.log_model()',
+          }),
+        taskType: z =>
+          z.string({ description: 'classification, regression, or clustering' }),
+        datasetVersion: z =>
+          z
+            .string({
+              description: 'Dataset version — a DVC digest if available, otherwise any free-text identifier',
+            })
+            .optional(),
+      },
+      output: {
+        modelName: z => z.string({ description: 'Registered model name' }),
+        modelVersion: z =>
+          z.string({ description: 'MLflow version number assigned to the new registration' }),
+      },
+    },
+    async handler(ctx) {
+      const baseUrl = getBaseUrl(config);
+      const result = await postJson<RegisterModelResponse>(`${baseUrl}/models/register`, {
+        name: ctx.input.modelName,
+        artifact_uri: ctx.input.artifactUri,
+        task_type: ctx.input.taskType,
+        dataset_version: ctx.input.datasetVersion,
+      });
+      ctx.logger.info(`Registered "${result.name}" as version ${result.version}`);
+      ctx.output('modelName', result.name);
+      ctx.output('modelVersion', result.version);
+    },
+  });
+}
+
+/**
  * `orchestration:model-summary` — fetches a registered model version's
  * task type, metrics, and tags for display mid-template.
  */
@@ -575,9 +630,9 @@ export function createRecordDeployAction({ config }: ActionDeps) {
 }
 
 /**
- * `orchestration:validate-rec-dataset` — RecSys's own dataset checks (mục
- * 6e.2), a separate endpoint from `orchestration:validate-dataset` since
- * the shape (interactions, no target column) doesn't match.
+ * `orchestration:validate-rec-dataset` — RecSys's own dataset checks, a
+ * separate endpoint from `orchestration:validate-dataset` since the shape
+ * (interactions, no target column) doesn't match.
  */
 export function createValidateRecDatasetAction({ config }: ActionDeps) {
   return createTemplateAction({

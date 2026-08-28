@@ -60,13 +60,19 @@ catalog:
       rules:
         - allow: [Template]
 
-    # AI Delivery Portal — Golden Path #3 (Recommend→Track→Register, mục 6e)
+    # AI Delivery Portal — Register External Run
+    - type: file
+      target: ./examples/templates/register-external-run/template.yaml
+      rules:
+        - allow: [Template]
+
+    # AI Delivery Portal — Golden Path #3 (Recommend→Track→Register)
     - type: file
       target: ./examples/templates/recommend-train-register/template.yaml
       rules:
         - allow: [Template]
 
-    # AI Delivery Portal — Setup Model Monitoring (Phase 9, mục 6d)
+    # AI Delivery Portal — Setup Model Monitoring
     - type: file
       target: ./examples/templates/setup-model-monitoring/template.yaml
       rules:

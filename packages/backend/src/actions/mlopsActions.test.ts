@@ -7,6 +7,7 @@ import {
   createPolicyCheckAction,
   createPrepareDeployManifestAction,
   createRecordDeployAction,
+  createRegisterModelAction,
   createTriggerRecTrainingAction,
   createTriggerTrainingAction,
   createValidateDatasetAction,
@@ -383,6 +384,57 @@ describe('orchestration:validate-dataset', () => {
     );
 
     await expect(action.handler(ctx)).rejects.toThrow('check_missing_values');
+  });
+});
+
+describe('orchestration:register-model', () => {
+  it('posts the artifact URI and outputs the registered name/version', async () => {
+    const fetchMock = mockFetchResponses([
+      { ok: true, body: { name: 'churn-classifier', version: '1' } },
+    ]);
+    const action = createRegisterModelAction({ config });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      {
+        modelName: 'churn-classifier',
+        artifactUri: 'runs:/abc123/churn-classifier',
+        taskType: 'classification',
+        datasetVersion: 'churn-2026-08-27',
+      },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.modelName).toBe('churn-classifier');
+    expect(outputs.modelVersion).toBe('1');
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${BASE_URL}/models/register`,
+      expect.objectContaining({
+        body: JSON.stringify({
+          name: 'churn-classifier',
+          artifact_uri: 'runs:/abc123/churn-classifier',
+          task_type: 'classification',
+          dataset_version: 'churn-2026-08-27',
+        }),
+      }),
+    );
+  });
+
+  it('omits datasetVersion when not provided', async () => {
+    mockFetchResponses([{ ok: true, body: { name: 'churn-classifier', version: '2' } }]);
+    const action = createRegisterModelAction({ config });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      {
+        modelName: 'churn-classifier',
+        artifactUri: 'runs:/def456/churn-classifier',
+        taskType: 'classification',
+      },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.modelVersion).toBe('2');
   });
 });
 
