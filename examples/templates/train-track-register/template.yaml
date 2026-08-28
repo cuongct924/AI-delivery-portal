@@ -200,9 +200,39 @@ spec:
             publish:github:pull-request expects). No RepoUrlPicker field
             extension is confirmed available in this repo's frontend, so
             this is a plain string field.
+        useFeast:
+          title: Enrich with Feast features
+          type: boolean
+          default: false
+          description: >
+            Merges precomputed features from the Feature Store
+            (infra/feature-store/) into datasetUri before training. Most
+            runs leave this off.
+        entityIdColumn:
+          title: Entity id column (useFeast=true)
+          type: string
+          description: >
+            Column identifying each row for the Feast lookup, e.g.
+            "transaction_id".
+        featureNames:
+          title: Feature names (useFeast=true)
+          type: array
+          items:
+            type: string
+          description: >
+            Feast "<feature_view>:<feature>" references, e.g.
+            "transaction_features:amount".
       # Backstage Scaffolder v1beta3 JSON Schema conditionals — same
       # if/then pattern used for other task-type-dependent fields.
       allOf:
+        - if:
+            properties:
+              useFeast:
+                const: true
+          then:
+            required:
+              - entityIdColumn
+              - featureNames
         - if:
             properties:
               taskType:
@@ -337,6 +367,15 @@ spec:
               - numTrials
 
   steps:
+    - id: enrich-features
+      name: "Enrich dataset with Feast features"
+      action: orchestration:enrich-dataset-features
+      if: ${{ parameters.useFeast }}
+      input:
+        datasetUri: ${{ parameters.datasetUri }}
+        entityIdColumn: ${{ parameters.entityIdColumn }}
+        featureNames: ${{ parameters.featureNames }}
+
     - id: validate-dataset
       name: "Validate the dataset"
       action: orchestration:validate-dataset
@@ -344,7 +383,7 @@ spec:
       # datasetUri is a .zip of images, skip this step.
       if: ${{ parameters.architecture !== 'cv' }}
       input:
-        datasetUri: ${{ parameters.datasetUri }}
+        datasetUri: ${{ parameters.useFeast and steps['enrich-features'].output.datasetUri or parameters.datasetUri }}
         taskType: ${{ parameters.taskType }}
         targetColumn: ${{ parameters.targetColumn }}
         timeColumn: ${{ parameters.timeColumn }}
@@ -354,7 +393,7 @@ spec:
       action: orchestration:trigger-training
       input:
         modelName: ${{ parameters.modelName }}
-        datasetUri: ${{ parameters.datasetUri }}
+        datasetUri: ${{ parameters.useFeast and steps['enrich-features'].output.datasetUri or parameters.datasetUri }}
         taskType: ${{ parameters.taskType }}
         architecture: ${{ parameters.architecture }}
         algorithm: ${{ parameters.algorithm }}

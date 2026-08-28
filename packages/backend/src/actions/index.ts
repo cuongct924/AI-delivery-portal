@@ -8,6 +8,7 @@
 import { coreServices, createBackendModule } from '@backstage/backend-plugin-api';
 import { scaffolderActionsExtensionPoint } from '@backstage/plugin-scaffolder-node';
 import {
+  createEnrichDatasetFeaturesAction,
   createModelSummaryAction,
   createPolicyCheckAction,
   createPrepareDeployManifestAction,
@@ -32,6 +33,7 @@ export default createBackendModule({
       async init({ scaffolder, config }) {
         scaffolder.addActions(
           createValidateDatasetAction({ config }),
+          createEnrichDatasetFeaturesAction({ config }),
           createTriggerTrainingAction({ config }),
           createRegisterModelAction({ config }),
           createModelSummaryAction({ config }),

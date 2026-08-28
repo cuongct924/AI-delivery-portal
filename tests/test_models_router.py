@@ -21,12 +21,14 @@ sys.modules.setdefault("mlflow", MagicMock())
 sys.modules.setdefault("mlflow.tracking", MagicMock())
 
 from routers.models import (  # noqa: E402
+    EnrichDatasetFeaturesRequest,
     PolicyCheckRequest,
     PrepareDeployRequest,
     RecordDeployRequest,
     RegisterModelRequest,
     TriggerTrainingRequest,
     ValidateDatasetRequest,
+    enrich_dataset_features,
     get_latest_version,
     get_model_version_summary,
     get_training_status,
@@ -381,6 +383,53 @@ def test_validate_dataset_returns_check_results(tmp_path) -> None:
     assert "check_missing_values" in names
     assert "check_duplicate_rows" in names
     assert all(r.severity in ("blocking", "warning", "info") for r in results)
+
+
+def test_enrich_dataset_features_merges_feast_features_into_dataset(tmp_path) -> None:
+    csv_path = tmp_path / "data.csv"
+    pd.DataFrame({"transaction_id": [1001, 1002], "label": [0, 1]}).to_csv(csv_path, index=False)
+    request = EnrichDatasetFeaturesRequest(
+        dataset_uri=f"file://{csv_path}",
+        entity_id_column="transaction_id",
+        feature_names=["transaction_features:amount", "transaction_features:merchant_category"],
+    )
+    with patch("routers.models.feast_adapter") as mock_feast:
+        mock_feast.get_offline_features.return_value = [
+            {"entity_id": "1001", "amount": 42.5, "merchant_category": "grocery"},
+            {"entity_id": "1002", "amount": 1500.0, "merchant_category": "electronics"},
+        ]
+        response = enrich_dataset_features(request)
+
+    mock_feast.get_offline_features.assert_called_once_with(
+        ["1001", "1002"],
+        ["transaction_features:amount", "transaction_features:merchant_category"],
+    )
+    enriched = pd.read_csv(response.dataset_uri.removeprefix("file://"))
+    assert list(enriched.columns) == ["transaction_id", "label", "amount", "merchant_category"]
+    assert enriched.loc[enriched["transaction_id"] == 1002, "amount"].item() == 1500.0
+    assert (
+        enriched.loc[enriched["transaction_id"] == 1002, "merchant_category"].item()
+        == "electronics"
+    )
+
+
+def test_enrich_dataset_features_overwrites_existing_column_with_feast_value(tmp_path) -> None:
+    # amount already present (e.g. re-enriching) — Feast's value must win,
+    # not pandas' default _x/_y suffixing on the name collision.
+    csv_path = tmp_path / "data.csv"
+    pd.DataFrame({"transaction_id": [1001], "amount": [0.0]}).to_csv(csv_path, index=False)
+    request = EnrichDatasetFeaturesRequest(
+        dataset_uri=f"file://{csv_path}",
+        entity_id_column="transaction_id",
+        feature_names=["transaction_features:amount"],
+    )
+    with patch("routers.models.feast_adapter") as mock_feast:
+        mock_feast.get_offline_features.return_value = [{"entity_id": "1001", "amount": 42.5}]
+        response = enrich_dataset_features(request)
+
+    enriched = pd.read_csv(response.dataset_uri.removeprefix("file://"))
+    assert list(enriched.columns) == ["transaction_id", "amount"]
+    assert enriched["amount"].item() == 42.5
 
 
 def test_get_model_version_summary_reads_task_type_tag() -> None:

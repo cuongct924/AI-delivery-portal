@@ -35,6 +35,7 @@ from adapters.deploy_strategies import (
     PRGatedStrategy,
     TrafficSplitStrategy,
 )
+from adapters.feature_store_adapter import FeastAdapter
 from adapters.interfaces import IDeployTrafficStrategy, IReleaseStrategy
 from adapters.kserve_adapter import KServeAdapter
 from adapters.mlflow_adapter import MlflowAdapter
@@ -44,6 +45,7 @@ router = APIRouter(tags=["models"])
 # Module-level singletons — same convention as agents/mcp-servers/mlops-server/server.py.
 mlflow_adapter = MlflowAdapter()
 argo_adapter = ArgoAdapter()
+feast_adapter = FeastAdapter()
 
 # Single Argo WorkflowTemplate (infra/argo-workflows/train-register-template.yaml)
 # now covers both train and fine-tune — mode is a workflow parameter, not a
@@ -105,6 +107,17 @@ class ValidateDatasetRequest(BaseModel):
     task_type: str
     target_column: str | None = None
     time_column: str | None = None
+
+
+class EnrichDatasetFeaturesRequest(BaseModel):
+    dataset_uri: str
+    entity_id_column: str
+    # Feast "<feature_view>:<feature>" references, e.g. "transaction_features:amount".
+    feature_names: list[str]
+
+
+class EnrichDatasetFeaturesResponse(BaseModel):
+    dataset_uri: str
 
 
 class CheckResultResponse(BaseModel):
@@ -303,6 +316,33 @@ def validate_dataset(
     df = pd.read_csv(csv_path)
     results = run_checks(df, request.task_type, request.target_column, request.time_column)
     return [CheckResultResponse.from_check_result(r) for r in results]
+
+
+@router.post("/datasets/enrich-features", response_model=EnrichDatasetFeaturesResponse)
+def enrich_dataset_features(
+    request: EnrichDatasetFeaturesRequest, user: dict = Depends(get_current_user)
+) -> EnrichDatasetFeaturesResponse:
+    csv_path = Path(request.dataset_uri.removeprefix("file://"))
+    df = pd.read_csv(csv_path)
+    entity_ids = df[request.entity_id_column].astype(str).tolist()
+
+    features = feast_adapter.get_offline_features(entity_ids, request.feature_names)
+    # get_offline_features() also returns Feast's own "event_timestamp" —
+    # only "entity_id" (the join key) and the requested features belong in
+    # the enriched training dataset.
+    feature_columns = [name.split(":", 1)[1] for name in request.feature_names]
+    features_df = pd.DataFrame(features)[["entity_id", *feature_columns]]
+
+    # Feast's values take precedence over any same-named column already in
+    # the dataset — otherwise pandas silently suffixes both as _x/_y.
+    df = df.drop(columns=[c for c in feature_columns if c in df.columns])
+    df["_feast_entity_id"] = df[request.entity_id_column].astype(str)
+    enriched = df.merge(features_df, left_on="_feast_entity_id", right_on="entity_id", how="left")
+    enriched = enriched.drop(columns=["_feast_entity_id", "entity_id"])
+
+    enriched_path = csv_path.with_stem(f"{csv_path.stem}-enriched")
+    enriched.to_csv(enriched_path, index=False)
+    return EnrichDatasetFeaturesResponse(dataset_uri=f"file://{enriched_path}")
 
 
 @router.get("/models/{name}/{version}/summary", response_model=ModelVersionSummaryResponse)

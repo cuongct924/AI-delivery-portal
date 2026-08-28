@@ -60,6 +60,11 @@ interface RegisterModelResponse {
   readonly version: string;
 }
 
+/** Response body of `POST {baseUrl}/datasets/enrich-features`. */
+interface EnrichDatasetFeaturesResponse {
+  readonly dataset_uri: string;
+}
+
 /** One entry of `POST {baseUrl}/datasets/validate`'s response array. */
 interface CheckResultItem {
   readonly check_name: string;
@@ -397,6 +402,45 @@ export function createValidateDatasetAction({ config }: ActionDeps) {
           message: r.message,
         })),
       );
+    },
+  });
+}
+
+/**
+ * `orchestration:enrich-dataset-features` — merges precomputed Feast
+ * features into a training dataset before it's handed to
+ * `orchestration:trigger-training`. Opt-in — most Golden Path #1 runs skip
+ * this step entirely.
+ */
+export function createEnrichDatasetFeaturesAction({ config }: ActionDeps) {
+  return createTemplateAction({
+    id: 'orchestration:enrich-dataset-features',
+    description: "Merges precomputed Feast features into a dataset's rows.",
+    schema: {
+      input: {
+        datasetUri: z => z.string({ description: 'URI of the dataset to enrich' }),
+        entityIdColumn: z =>
+          z.string({ description: 'Column identifying each row for the Feast lookup, e.g. "transaction_id"' }),
+        featureNames: z =>
+          z.array(z.string(), {
+            description: 'Feast "<feature_view>:<feature>" references, e.g. "transaction_features:amount"',
+          }),
+      },
+      output: {
+        datasetUri: z => z.string({ description: 'URI of the enriched dataset, with feature columns merged in' }),
+      },
+    },
+    async handler(ctx) {
+      const baseUrl = getBaseUrl(config);
+      const result = await postJson<EnrichDatasetFeaturesResponse>(
+        `${baseUrl}/datasets/enrich-features`,
+        {
+          dataset_uri: ctx.input.datasetUri,
+          entity_id_column: ctx.input.entityIdColumn,
+          feature_names: ctx.input.featureNames,
+        },
+      );
+      ctx.output('datasetUri', result.dataset_uri);
     },
   });
 }
