@@ -471,7 +471,7 @@ trong task list (mỗi phase `blockedBy` task cuối của phase trước):
 | 4 | BYOC — custom script (mục 6b.3) | #30–34 | **Đã code + commit** (`byoc_runner.py`, `pyfunc_wrapper.py`, dispatch trong `train.py`, mục 6b.3.1). `docker build` chưa verify — máy dev hết dung lượng đĩa |
 | 5 | HPO — Grid/Random/Bayesian (mục 6c) | #35–37 | **Đã code + commit** (`hpo_strategies.py`, `hpo_runner.py`, dispatch trong `train.py`, mục 6c.5). `docker build` chưa verify — máy dev hết dung lượng đĩa |
 | 6 | NLP — text classification (mục 6g, thiết kế chi tiết) | #38 | **Đã code + commit** (`train_nlp.py`, dispatch trong `train.py`, mục 6g.6). `docker build` chưa verify — máy dev hết dung lượng đĩa |
-| 7 | CV — image classification (mục 6b) | #39 | Roadmap, cần thiết kế chi tiết trước, `blockedBy` #38 |
+| 7 | CV — image classification (mục 6h, thiết kế chi tiết) | #39 | **Đã code + commit** (`train_cv.py`, dispatch trong `train.py`, dataset `shapes-sample.zip`, mục 6h.6). `docker build` chưa verify — máy dev hết dung lượng đĩa |
 | 8 | RecSys — Golden Path riêng (mục 6e, thiết kế đầy đủ) | #41–46 | Đã duyệt, `blockedBy` #39 |
 | 9 | Model Monitoring — "Setup Model Monitoring" (mục 6d) | #47–50 | Đã duyệt, `blockedBy` #46 (phụ thuộc kỹ thuật thật chỉ là Phase 2 — có thể làm sớm hơn nếu muốn) |
 | — | RL | — | Không hỗ trợ — giới hạn kiến trúc |
@@ -530,7 +530,7 @@ Dashboard).
 | 1. Paved road — Classical ML | Team làm bài toán bảng biểu phổ biến (fraud, churn, giá) | `algorithm_registry.py` (sklearn) | Đã duyệt — mục 3 |
 | 2. Paved road mở rộng — Deep Learning | Team cần hàm phi tuyến phức tạp hơn trên dữ liệu bảng/time-series | `dl_architecture_registry.py` (MLP+LSTM) | Đã duyệt — mục 5 (Phase 3) |
 | 3a. Paved road chuyên biệt — NLP | Team làm text classification | HuggingFace `Trainer`, `mlflow.transformers` | Đã code — Phase 6, mục 6g |
-| 3b. Paved road chuyên biệt — CV | Team làm image classification | torchvision, custom pyfunc wrapper | Đề xuất — Phase 4b |
+| 3b. Paved road chuyên biệt — CV | Team làm image classification | torchvision, custom pyfunc wrapper | Đã code — Phase 7, mục 6h |
 | 4. Escape hatch — BYOC | Team có nhu cầu không khớp preset nào | Custom script (contract cố định) trong base image có sẵn | Đề xuất — Phase 5, thiết kế ở 6b.3 |
 | 5. Golden Path riêng — RecSys | Team recommendation | Template riêng, dataset/gate riêng | Đề xuất — Phase 6 |
 | — | Team làm RL | — | Không hỗ trợ — giới hạn kiến trúc |
@@ -1105,6 +1105,106 @@ trọng").
   cùng loại giới hạn stub đã gặp ở `labels_full = cast(pd.Series,
   df[target_column])` có sẵn) — không tái dùng `_split()`'s `features`
   chung, đúng thiết kế đã ghi ở 6g.3.
+
+## 6h. CV — Image Classification (Phase 7), thiết kế chi tiết
+
+Hiện thực hoá tầng 3b của bảng phân tầng (mục 6b.2) — kết luận 6b.1 ("chỉ
+torchvision image classification, dữ liệu đóng gói zip qua DVC, serving tự
+viết `mlflow.pyfunc.PythonModel` wrapper").
+
+### 6h.1 1 giá trị `architecture` mới (`cv`) — dataset contract đổi hẳn
+
+Không còn 1 file CSV — `DATASET_URI` trỏ tới 1 file `.zip` chứa ảnh theo
+cấu trúc thư mục `<class_name>/<file>.jpg` (đúng layout
+`torchvision.datasets.ImageFolder` đọc được natively, không cần code
+parse thủ công). `train.py`'s `main()` đọc `ARCHITECTURE` **trước** dòng
+`pd.read_csv()` hiện có — khi `architecture == "cv"`, rẽ nhánh sớm, không
+chạm `pd.read_csv`/`_encode_categoricals`/`features` chung ở mọi kiến trúc
+khác (những dòng này giả định input luôn là 1 CSV bảng biểu).
+`_read_dataset_digest()` (đọc hash md5 từ file `.dvc` cạnh dataset) không
+đổi — tên tham số `csv_path` mang tính lịch sử, hàm hoạt động với bất kỳ
+đường dẫn dataset nào, không riêng CSV.
+
+### 6h.2 Script train riêng — `train_cv.py`
+
+- Backbone `torchvision.models.resnet18(weights=IMAGENET1K)` **đóng băng
+  toàn bộ trừ layer cuối** (feature extraction, không full fine-tune) —
+  CPU-only trên `kind` cluster, full fine-tune ResNet cho ảnh quá chậm cho
+  mục tiêu paved-road demo. Layer cuối thay bằng `nn.Linear(in, num_classes)`
+  fresh, chỉ train phần này.
+- `ImageFolder` đọc trực tiếp từ thư mục đã giải nén zip — class label suy
+  ra từ tên thư mục con, không cần cột `targetColumn` (khác CSV) —
+  `taskType` vẫn cố định `classification`.
+- Transform ảnh cố định (resize 224x224 + normalize theo thống kê
+  ImageNet) — không cho Dev tuỳ biến augmentation ở v1 (6h.5).
+
+### 6h.3 Serving — tái dùng `GenericPyfuncWrapper` (mục 6b.3, xây từ BYOC)
+
+Đúng insight nối tầng ở 6b.1 ("xây 1 lần, dùng lại cho cả 3 tầng") — không
+viết wrapper serving mới. Cần 1 lớp mỏng `CVModel` (trong `train_cv.py`)
+implement `.predict(model_input: pd.DataFrame) -> list[str]` (decode ảnh từ
+1 cột base64 string, áp transform, chạy backbone, trả tên class) — object
+này được bọc bởi `GenericPyfuncWrapper` y hệt BYOC, log qua
+`mlflow.pyfunc.log_model()`, chạy trên KServe runtime `"mlflow"` không đổi.
+
+### 6h.4 Dataset mẫu mới — ảnh tổng hợp, không tải ngoài
+
+Cùng nguyên tắc dataset DL (mục 5.3): tự sinh bằng PIL (vẽ hình học đơn
+giản — hình tròn/vuông/tam giác màu ngẫu nhiên trên nền trắng), không tải
+từ nguồn ngoài, đóng gói `.zip`, track qua DVC giống mọi dataset khác.
+
+### 6h.5 Phạm vi v1 — cắt bớt so với 6b.1
+
+- **Chỉ 1 backbone cố định** (`resnet18`) — không cho Dev chọn kiến trúc
+  CV khác (không registry nhiều backbone như DL mục 5.1), giữ phạm vi hẹp
+  đúng kết luận "PARTIALLY FEASIBLE, phạm vi hẹp" của 6b.1.
+- **Không augmentation** (flip/rotate/crop ngẫu nhiên) — chỉ resize/
+  normalize cố định.
+- **Không HPO, không BYOC, không MODE=finetune** — cùng lý do đã cắt ở NLP
+  (mục 6g.5).
+- **`/datasets/validate` (Data Quality, mục 6f) không áp dụng cho CV** —
+  toàn bộ check hiện có giả định đọc CSV qua `pd.read_csv`; bỏ qua bước
+  validate-dataset cho `architecture=cv` ở Scaffolder template, không thiết
+  kế lại EDA cho ảnh trong lần này.
+
+### 6h.6 Đã code — tinh chỉnh so với 6h.1-6h.5 lúc triển khai thật
+
+- **Không cần field mới nào ở orchestration-api/Argo/Backstage action** —
+  CV tái dùng nguyên vẹn `datasetUri`/`taskType`/`architecture`/
+  `learningRate`/`epochs`/`batchSize` đã có, khác BYOC/HPO/NLP (mỗi cái
+  cần thêm field riêng). Chỉ Scaffolder template đổi: thêm `cv` vào enum
+  `architecture`, bỏ yêu cầu `targetColumn` khi `architecture=cv` (thêm
+  `architecture: {not: {const: cv}}` vào điều kiện `if` sẵn có cho
+  `targetColumn`), và bỏ qua hẳn bước `validate-dataset` bằng field `if:`
+  cấp bước (`${{ parameters.architecture !== 'cv' }}`) — cùng cú pháp
+  `register-deploy/template.yaml` đã dùng cho `releaseStrategy`.
+- **`train.py`'s `main()` tái cấu trúc để đọc dataset đúng kiểu theo
+  architecture TRƯỚC khi có thể gọi nhầm `pd.read_csv()` trên file `.zip`**
+  — `df`/`features` giờ kiểu `DataFrame | None`, `None` chỉ khi
+  `architecture=cv`; mỗi nhánh khác (`is_custom`/sklearn/`is_nlp`/DL) thêm
+  `assert df is not None` (và `features` khi cần) ngay đầu nhánh — pyright
+  không tự thu hẹp kiểu qua nhãn biến dùng lại giữa nhiều nhánh `elif`,
+  đúng kiểu vấn đề đã gặp (và giải bằng `assert`) ở các mục trước.
+- **Không log `mlflow.data.Dataset`** cho CV (không có DataFrame để xây từ
+  `mlflow_data.from_pandas`) — thay bằng `mlflow.log_param("dataset_uri",
+  ...)` + `mlflow.log_param("dataset_digest", ...)`, vẫn đủ để lần vết
+  dataset dù không đi qua `IModelRegistryAdapter.get_dataset_lineage()`'s
+  cơ chế `mlflow.data` đầy đủ như các architecture khác.
+- **`resnet18(weights=ResNet18_Weights.DEFAULT)` tải checkpoint ImageNet
+  thật qua mạng lúc train** (không cache sẵn trong image) — xác nhận có
+  mạng lúc code (tải thành công trong sandbox), nhưng đây là điểm cần theo
+  dõi khi chạy thật trên `kind` cluster: pod cần ra được Internet, hoặc cần
+  bake sẵn checkpoint vào `training-image` ở 1 bản sau nếu cluster bị chặn
+  egress.
+- **Dataset mẫu**: `data/shapes-sample.zip` — hình học tổng hợp (tròn/
+  vuông/tam giác, PIL vẽ, không tải ngoài, 3 lớp × 30 ảnh 64x64), track qua
+  DVC giống mọi dataset khác (`dvc add`, chỉ `.dvc` pointer vào git).
+- **Test cho `train_cv.py` mock `resnet18` bằng 1 `nn.Module` thật nhỏ**
+  (không phải `MagicMock`) — cần autograd/`backward()` chạy thật để kiểm
+  tra "chỉ layer cuối được train" (`requires_grad`), điều 1 MagicMock không
+  mô phỏng được. Transform cũng bị patch xuống ảnh 8x8 (thay vì 224x224
+  thật) để test nhanh, không cần tải ImageNet checkpoint (backbone giả
+  không cần pretrained weights).
 
 ## 7b. Luồng end-to-end: UI → Scaffolder Action → orchestration-api → Adapter
 
