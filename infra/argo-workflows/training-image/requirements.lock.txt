@@ -209,6 +209,7 @@ numpy==2.5.2
     #   scikit-learn
     #   scipy
     #   skops
+    #   torchvision
     #   transformers
     #   xgboost
 nvidia-nccl-cu12==2.31.2
@@ -250,7 +251,9 @@ pandas==2.3.3
     #   datasets
     #   mlflow
 pillow==12.3.0
-    # via matplotlib
+    # via
+    #   matplotlib
+    #   torchvision
 plotly==7.0.0
     # via catboost
 prettytable==3.18.0
@@ -365,6 +368,9 @@ torch==2.13.0+cpu
     # via
     #   -r infra/argo-workflows/training-image/requirements.txt
     #   accelerate
+    #   torchvision
+torchvision==0.28.0+cpu
+    # via -r infra/argo-workflows/training-image/requirements.txt
 tqdm==4.70.0
     # via
     #   datasets

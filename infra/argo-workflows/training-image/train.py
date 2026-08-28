@@ -40,6 +40,7 @@ from pyfunc_wrapper import GenericPyfuncWrapper
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import TimeSeriesSplit, train_test_split
 from sklearn.preprocessing import StandardScaler
+from train_cv import train_and_evaluate as train_cv_and_evaluate
 from train_dl import train_and_evaluate as train_dl_and_evaluate
 from train_nlp import train_and_evaluate as train_nlp_and_evaluate
 
@@ -255,6 +256,10 @@ def main() -> None:
     # the elif branch below) so the tokenizer gets raw strings.
     is_nlp = architecture == "nlp"
     text_column = os.environ.get("TEXT_COLUMN") or None
+    # CV (mục 6h) — a 5th architecture; DATASET_URI is a .zip of images
+    # (mục 6h.1), not a CSV, so the dataset-loading section below branches
+    # before ever calling pd.read_csv() for this architecture.
+    is_cv = architecture == "cv"
 
     if is_nlp and text_column is None:
         raise RuntimeError("TEXT_COLUMN is required when ARCHITECTURE=nlp")
@@ -262,12 +267,16 @@ def main() -> None:
         raise RuntimeError("ARCHITECTURE=nlp only supports TASK_TYPE=classification (mục 6g.5)")
     if is_nlp and mode != "train":
         raise RuntimeError("ARCHITECTURE=nlp does not support MODE=finetune (mục 6g.5)")
+    if is_cv and task_type != "classification":
+        raise RuntimeError("ARCHITECTURE=cv only supports TASK_TYPE=classification (mục 6h.5)")
+    if is_cv and mode != "train":
+        raise RuntimeError("ARCHITECTURE=cv does not support MODE=finetune (mục 6h.5)")
 
     if is_custom and (code_repo_url is None or entrypoint_path is None):
         raise RuntimeError("CODE_REPO_URL and ENTRYPOINT_PATH are required when ALGORITHM=custom")
     if is_custom and mode != "train":
         raise RuntimeError("BYOC (ALGORITHM=custom) does not support MODE=finetune")
-    if task_type != "clustering" and target_column is None:
+    if not is_cv and task_type != "clustering" and target_column is None:
         raise RuntimeError(f"TARGET_COLUMN is required for task_type {task_type!r}")
     if not is_custom and architecture == "sklearn" and algorithm is None:
         raise RuntimeError("ALGORITHM is required when ARCHITECTURE=sklearn")
@@ -276,23 +285,29 @@ def main() -> None:
         # classification/regression hyperparameters (mục 5.1) — no DL
         # clustering support.
         raise RuntimeError(f"architecture {architecture!r} does not support task_type='clustering'")
-    if is_search and (is_custom or is_nlp or architecture == "sklearn"):
+    if is_search and (is_custom or is_nlp or is_cv or architecture == "sklearn"):
         # HPO (mục 6c) is scoped to the DL hyperparameters (mục 5.1) — the
         # only ones with an existing single-value form field to search
         # over. sklearn has no tunable field yet, BYOC's train() contract
-        # has no room for injected hyperparameters, and NLP is a separate
-        # tier not yet covered (mục 6g.5).
+        # has no room for injected hyperparameters, and NLP/CV are separate
+        # tiers not yet covered (mục 6g.5/6h.5).
         raise RuntimeError("SEARCH_STRATEGY != 'fixed' requires ARCHITECTURE=mlp or lstm")
 
-    # Strip the "file://" scheme to get a real filesystem path pandas can open.
-    csv_path = Path(dataset_uri.removeprefix("file://"))
-    df = pd.read_csv(csv_path)
-    dataset_digest = _read_dataset_digest(csv_path)
+    # Strip the "file://" scheme to get a real filesystem path.
+    dataset_path = Path(dataset_uri.removeprefix("file://"))
+    dataset_digest = _read_dataset_digest(dataset_path)
 
-    drop_columns = list(id_columns)
-    if target_column is not None:
-        drop_columns.append(target_column)
-    features = _encode_categoricals(df.drop(columns=drop_columns))
+    if is_cv:
+        # No DataFrame at all for CV (mục 6h.1) — ImageFolder reads
+        # straight from the extracted zip inside train_cv.py.
+        df = None
+        features = None
+    else:
+        df = pd.read_csv(dataset_path)
+        drop_columns = list(id_columns)
+        if target_column is not None:
+            drop_columns.append(target_column)
+        features = _encode_categoricals(df.drop(columns=drop_columns))
 
     mlflow.set_tracking_uri(
         os.environ.get("MLFLOW_TRACKING_URI", "http://host.docker.internal:5000")
@@ -306,7 +321,9 @@ def main() -> None:
         mlflow.log_param("mode", mode)
 
         if is_custom:
-            # Validated non-None above.
+            # Validated non-None above — df is None only for is_cv, which
+            # never sets algorithm=custom (mutually exclusive branches).
+            assert df is not None
             assert code_repo_url is not None
             assert entrypoint_path is not None
             mlflow.log_param("algorithm", "custom")
@@ -321,6 +338,9 @@ def main() -> None:
                 mlflow.log_metric(metric_name, value)
             mlflow_pyfunc.log_model(python_model=GenericPyfuncWrapper(model), artifact_path="model")
         elif architecture == "sklearn":
+            # df/features are None only for is_cv, mutually exclusive here.
+            assert df is not None
+            assert features is not None
             spec = get_algorithm_spec(task_type, cast(str, algorithm))
             mlflow.log_param("algorithm", algorithm)
             if task_type == "clustering":
@@ -353,7 +373,8 @@ def main() -> None:
             mlflow_sklearn.log_model(model, artifact_path="model")
         elif is_nlp:
             # Validated non-None above (TEXT_COLUMN/TARGET_COLUMN both
-            # required for ARCHITECTURE=nlp).
+            # required for ARCHITECTURE=nlp). df is None only for is_cv.
+            assert df is not None
             assert text_column is not None
             assert target_column is not None
             # df[[text_column]], not `features` — that went through
@@ -378,9 +399,25 @@ def main() -> None:
             for metric_name, value in metrics.items():
                 mlflow.log_metric(metric_name, value)
             mlflow_transformers.log_model(model, artifact_path="model")
+        elif is_cv:
+            # Same hyperparameter reader as DL (mục 5.1) — the 3 required
+            # keys (learning_rate/epochs/batch_size, mục 6h.2) are all it
+            # reads when the DL-only optional env vars are unset, which
+            # they are here.
+            hyperparameters = _read_dl_hyperparameters()
+            cv_model, metrics = train_cv_and_evaluate(dataset_path, hyperparameters)
+            for metric_name, value in metrics.items():
+                mlflow.log_metric(metric_name, value)
+            mlflow_pyfunc.log_model(
+                python_model=GenericPyfuncWrapper(cv_model), artifact_path="model"
+            )
         else:
-            # architecture != "sklearn"/"nlp" already ruled out task_type ==
-            # "clustering" above, so target_column is guaranteed set.
+            # architecture != "sklearn"/"nlp"/"cv" already ruled out
+            # task_type == "clustering" above, so target_column is
+            # guaranteed set; df/features are None only for is_cv, which
+            # can't reach this branch (mutually exclusive elif chain).
+            assert df is not None
+            assert features is not None
             assert target_column is not None
             labels_full = cast(pd.Series, df[target_column])
             train_features, test_features, train_labels, test_labels = _split(
@@ -428,12 +465,18 @@ def main() -> None:
                 mlflow.log_metric(metric_name, value)
             mlflow_pytorch.log_model(model, artifact_path="model")
 
-        # mlflow.data's stub doesn't declare from_pandas even though it's a
-        # real, documented function.
-        dataset = mlflow_data.from_pandas(  # pyright: ignore[reportAttributeAccessIssue]
-            df, source=dataset_uri, digest=dataset_digest
-        )
-        mlflow.log_input(dataset, context="training")
+        if is_cv:
+            # No pandas DataFrame to build an mlflow.data.Dataset from (mục
+            # 6h.1/6h.5) — params carry the same lineage info instead.
+            mlflow.log_param("dataset_uri", dataset_uri)
+            mlflow.log_param("dataset_digest", dataset_digest)
+        else:
+            # mlflow.data's stub doesn't declare from_pandas even though
+            # it's a real, documented function.
+            dataset = mlflow_data.from_pandas(  # pyright: ignore[reportAttributeAccessIssue]
+                df, source=dataset_uri, digest=dataset_digest
+            )
+            mlflow.log_input(dataset, context="training")
         artifact_uri = f"runs:/{run.info.run_id}/model"
 
     # Argo reads these back via outputs.parameters to hand off to register-step.

@@ -108,6 +108,62 @@ def test_main_dl_branch_dispatches_to_train_dl_when_architecture_set(
     mock_mlflow_pytorch.log_model.assert_called_once_with(fake_model, artifact_path="model")
 
 
+def test_main_cv_branch_dispatches_to_train_cv_and_evaluate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with (
+        patch("train.mlflow_pyfunc") as mock_mlflow_pyfunc,
+        patch("train.mlflow") as mock_mlflow,
+    ):
+        zip_path = tmp_path / "shapes.zip"
+        zip_path.write_bytes(b"fake zip bytes, train_cv_and_evaluate is mocked, never reads it")
+        (tmp_path / "shapes.zip.dvc").write_text("outs:\n- md5: deadbeef\n  path: shapes.zip\n")
+        mock_mlflow.start_run.return_value.__enter__.return_value.info.run_id = "run-cv"
+        fake_model = MagicMock()
+        mock_train_cv = MagicMock(return_value=(fake_model, {"accuracy": 0.7}))
+        monkeypatch.setattr("train.train_cv_and_evaluate", mock_train_cv)
+        env = {
+            "DATASET_URI": f"file://{zip_path}",
+            "TASK_TYPE": "classification",
+            "MODE": "train",
+            "LEARNING_RATE": "0.01",
+            "EPOCHS": "1",
+            "BATCH_SIZE": "4",
+        }
+        for key, value in env.items():
+            monkeypatch.setenv(key, value)
+        monkeypatch.setenv("ARCHITECTURE", "cv")
+        monkeypatch.chdir(tmp_path)
+
+        import train
+
+        train.main()
+
+        mock_train_cv.assert_called_once_with(
+            zip_path, {"learning_rate": 0.01, "epochs": 1, "batch_size": 4}
+        )
+        mock_mlflow_pyfunc.log_model.assert_called_once()
+        assert mock_mlflow_pyfunc.log_model.call_args.kwargs["artifact_path"] == "model"
+        mock_mlflow.log_metric.assert_any_call("accuracy", 0.7)
+        mock_mlflow.log_param.assert_any_call("dataset_uri", f"file://{zip_path}")
+
+
+def test_main_cv_rejects_non_classification_task_type(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    zip_path = tmp_path / "shapes.zip"
+    zip_path.write_bytes(b"irrelevant, validated before any read")
+    monkeypatch.setenv("DATASET_URI", f"file://{zip_path}")
+    monkeypatch.setenv("TASK_TYPE", "regression")
+    monkeypatch.setenv("MODE", "train")
+    monkeypatch.setenv("ARCHITECTURE", "cv")
+
+    import train
+
+    with pytest.raises(RuntimeError, match="only supports TASK_TYPE=classification"):
+        train.main()
+
+
 def test_main_nlp_branch_dispatches_to_train_nlp_and_evaluate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

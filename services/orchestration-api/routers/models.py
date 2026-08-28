@@ -87,6 +87,8 @@ class TriggerTrainingRequest(BaseModel):
     # NLP (mục 6g) — only used when architecture="nlp".
     text_column: str | None = None
     base_model_name: str | None = None
+    # CV (mục 6h) — no new fields, DATASET_URI/LEARNING_RATE/EPOCHS/
+    # BATCH_SIZE are all reused as-is (mục 6h.2).
 
 
 class TriggerTrainingResponse(BaseModel):
