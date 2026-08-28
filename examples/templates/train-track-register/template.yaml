@@ -109,6 +109,16 @@ spec:
         batchSize:
           title: Batch size (architecture=mlp/lstm)
           type: integer
+        optimizer:
+          title: Optimizer (architecture=mlp/lstm/nlp/cv)
+          type: string
+          enum: [adam, sgd]
+          default: adam
+          description: >
+            How the network is fitted — a separate concept from which
+            architecture/algorithm you picked above. "adam" (default) needs
+            less manual tuning for most non-convex problems; "sgd" is the
+            classic alternative.
         searchStrategy:
           title: Hyperparameter search strategy (architecture=mlp/lstm)
           type: string
@@ -360,6 +370,7 @@ spec:
         learningRate: ${{ parameters.learningRate }}
         epochs: ${{ parameters.epochs }}
         batchSize: ${{ parameters.batchSize }}
+        optimizer: ${{ parameters.optimizer }}
         codeRepoUrl: ${{ parameters.codeRepoUrl }}
         entrypointPath: ${{ parameters.entrypointPath }}
         customConfig: ${{ parameters.customConfig }}

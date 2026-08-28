@@ -287,6 +287,12 @@ catalog:
       rules:
         - allow: [Template]
 
+    # AI Delivery Portal — Setup Model Monitoring (Phase 9, mục 6d)
+    - type: file
+      target: ../../examples/templates/setup-model-monitoring/template.yaml
+      rules:
+        - allow: [Template]
+
     # Local example organizational data
     - type: file
       target: ../../examples/org.yaml

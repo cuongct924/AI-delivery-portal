@@ -199,6 +199,37 @@ describe('orchestration:trigger-training', () => {
     });
   });
 
+  it('forwards optimizer to the orchestration API when set', async () => {
+    const fetchMock = mockFetchResponses([
+      { ok: true, body: { workflow_name: 'wf-opt' } },
+      { ok: true, body: { name: 'wf-opt', phase: 'Succeeded', message: null } },
+      { ok: true, body: { name: 'sensor-forecast', version: '1' } },
+    ]);
+    const action = createTriggerTrainingAction({ config, pollIntervalMs: 1 });
+    const { ctx } = createMockContext<typeof action>(
+      {
+        modelName: 'sensor-forecast',
+        datasetUri: 'file:///sensor.csv',
+        taskType: 'regression',
+        architecture: 'mlp',
+        targetColumn: 'target',
+        hiddenLayers: [8],
+        dropout: 0,
+        learningRate: 0.01,
+        epochs: 5,
+        batchSize: 16,
+        optimizer: 'sgd',
+      },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(requestInit.body as string);
+    expect(body.optimizer).toBe('sgd');
+  });
+
   it('forwards BYOC fields to the orchestration API when algorithm is custom', async () => {
     const fetchMock = mockFetchResponses([
       { ok: true, body: { workflow_name: 'wf-5' } },

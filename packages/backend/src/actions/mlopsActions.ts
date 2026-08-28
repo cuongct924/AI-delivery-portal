@@ -1,9 +1,10 @@
 /**
  * Custom Scaffolder Actions that call `services/orchestration-api` — the
- * HTTP surface Golden Path #1 (Train->Track->Register) and #2
- * (Register->Deploy) drive. Business logic stays in orchestration-api
- * (CLAUDE.md); these actions only translate Scaffolder input/output and,
- * for training, poll the workflow status until it finishes.
+ * HTTP surface Golden Path #1 (Train->Track->Register), #2
+ * (Register->Deploy), #3 (Recommend->Track->Register), and "Setup Model
+ * Monitoring" drive. Business logic stays in orchestration-api (CLAUDE.md);
+ * these actions only translate Scaffolder input/output and, for training,
+ * poll the workflow status until it finishes.
  */
 
 import fs from 'node:fs/promises';
@@ -33,6 +34,11 @@ interface TriggerTrainingResponse {
 /** Response body of `POST {baseUrl}/trigger-rec-training`. */
 interface TriggerRecTrainingResponse {
   readonly workflow_name: string;
+}
+
+/** Response body of `POST {baseUrl}/setup-monitoring`. */
+interface SetupMonitoringResponse {
+  readonly cron_workflow_name: string;
 }
 
 /** Response body of `GET {baseUrl}/trigger-training/{workflowName}/status`. */
@@ -178,6 +184,12 @@ export function createTriggerTrainingAction({
           z.number({ description: 'Optimizer learning rate — architecture=mlp/lstm' }).optional(),
         epochs: z => z.number({ description: 'Training epochs — architecture=mlp/lstm' }).optional(),
         batchSize: z => z.number({ description: 'Batch size — architecture=mlp/lstm' }).optional(),
+        optimizer: z =>
+          z
+            .string({
+              description: '"adam" (default) or "sgd" — architecture=mlp/lstm/nlp/cv',
+            })
+            .optional(),
         codeRepoUrl: z =>
           z
             .string({ description: 'Git repo URL to clone — algorithm="custom" (BYOC)' })
@@ -252,6 +264,7 @@ export function createTriggerTrainingAction({
           learning_rate: ctx.input.learningRate,
           epochs: ctx.input.epochs,
           batch_size: ctx.input.batchSize,
+          optimizer: ctx.input.optimizer,
           code_repo_url: ctx.input.codeRepoUrl,
           entrypoint_path: ctx.input.entrypointPath,
           custom_config: ctx.input.customConfig,
@@ -734,6 +747,67 @@ export function createTriggerRecTrainingAction({
       ctx.output('workflowName', workflowName);
       ctx.output('phase', finalPhase);
       ctx.output('modelVersion', modelVersion);
+    },
+  });
+}
+
+/**
+ * `orchestration:setup-monitoring` — registers a periodic Argo CronWorkflow
+ * (Phase 9, mục 6d). Unlike every other action here, this doesn't poll a
+ * workflow to completion — Setup just registers the schedule and returns.
+ */
+export function createSetupMonitoringAction({ config }: ActionDeps) {
+  return createTemplateAction({
+    id: 'orchestration:setup-monitoring',
+    description: 'Registers a periodic Argo CronWorkflow that checks the model for data drift.',
+    schema: {
+      input: {
+        modelName: z => z.string({ description: 'Registered model name' }),
+        modelVersion: z => z.string({ description: 'Registered model version' }),
+        referenceDataUri: z =>
+          z.string({
+            description: 'file:// CSV path — normally the dataset the model was trained on',
+          }),
+        productionDataUri: z =>
+          z.string({
+            description: 'file:// CSV path with recent production input data to compare against it',
+          }),
+        schedule: z => z.string({ description: 'Cron expression, e.g. "0 0 * * *" for daily' }),
+        driftThreshold: z =>
+          z
+            .number({
+              description: 'Share of columns (0-1) Evidently must flag as drifted to count as drift',
+            })
+            .optional(),
+        onDriftDetected: z =>
+          z.string({ description: '"alert-only" (default) or "auto-retrain"' }).optional(),
+        retrainRequestJson: z =>
+          z
+            .string({
+              description:
+                'JSON body to POST to /trigger-training — required when onDriftDetected="auto-retrain"',
+            })
+            .optional(),
+      },
+      output: {
+        cronWorkflowName: z => z.string({ description: 'Name of the registered CronWorkflow' }),
+      },
+    },
+    async handler(ctx) {
+      const baseUrl = getBaseUrl(config);
+      const { cron_workflow_name: cronWorkflowName } =
+        await postJson<SetupMonitoringResponse>(`${baseUrl}/setup-monitoring`, {
+          model_name: ctx.input.modelName,
+          model_version: ctx.input.modelVersion,
+          reference_data_uri: ctx.input.referenceDataUri,
+          production_data_uri: ctx.input.productionDataUri,
+          schedule: ctx.input.schedule,
+          drift_threshold: ctx.input.driftThreshold,
+          on_drift_detected: ctx.input.onDriftDetected,
+          retrain_request_json: ctx.input.retrainRequestJson,
+        });
+      ctx.logger.info(`Registered monitoring CronWorkflow "${cronWorkflowName}"`);
+      ctx.output('cronWorkflowName', cronWorkflowName);
     },
   });
 }
