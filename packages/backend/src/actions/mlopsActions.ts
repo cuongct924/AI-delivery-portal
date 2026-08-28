@@ -96,6 +96,13 @@ interface PrepareDeployResponse {
   readonly deployed: boolean;
 }
 
+/** Response body of `POST {baseUrl}/llm-deploy/prepare`. */
+interface PrepareLlmDeployResponse {
+  readonly file_name: string;
+  readonly content: string;
+  readonly deployed: boolean;
+}
+
 /** Response body of `POST {baseUrl}/deploy-model/record`. */
 interface RecordDeployResponse {
   readonly model_name: string;
@@ -641,6 +648,97 @@ export function createPrepareDeployManifestAction({ config }: ActionDeps) {
 }
 
 /**
+ * `orchestration:prepare-llm-deploy-manifest` — renders the KServe
+ * InferenceService manifest for a self-hosted LLM (vLLM, referenced by
+ * HuggingFace Hub id — not an MLflow-registered artifact) and writes it
+ * into the Scaffolder workspace, same shape as
+ * `orchestration:prepare-deploy-manifest` but a separate endpoint since
+ * that one hardcodes the MLflow Model Registry URI formula.
+ */
+export function createPrepareLlmDeployManifestAction({ config }: ActionDeps) {
+  return createTemplateAction({
+    id: 'orchestration:prepare-llm-deploy-manifest',
+    description:
+      'Renders the KServe InferenceService manifest for a self-hosted LLM and writes it into the workspace.',
+    schema: {
+      input: {
+        modelName: z => z.string({ description: 'Name to deploy the LLM under' }),
+        huggingFaceModelId: z =>
+          z.string({ description: 'HuggingFace Hub model id, e.g. "meta-llama/Llama-3.1-8B-Instruct"' }),
+        runtime: z =>
+          z.string({ description: '"vllm" (default) — see llm_serving/registry.py' }).optional(),
+        gpuType: z =>
+          z.enum(['L4', 'L40S', 'A100', 'H100', 'H200', 'B200'], {
+            description: 'GPU type to request',
+          }),
+        gpuCount: z =>
+          z.enum(['1', '2', '4', '8'], { description: 'GPU count — also used as tensor-parallel-size' }).optional(),
+        quantization: z =>
+          z
+            .enum(['none', 'fp8', 'int8', 'int4-awq'], {
+              description: 'Not every gpuType supports every value — see llm_serving/registry.py',
+            })
+            .optional(),
+        maxContextLength: z =>
+          z.number({ description: 'Max context length in tokens' }).optional(),
+        trafficStrategy: z =>
+          z
+            .enum(['direct', 'canary', 'ab', 'blue-green'], {
+              description: 'How traffic moves to the new version — canary/ab/blue-green require a prior deploy',
+            })
+            .optional(),
+        trafficPercent: z =>
+          z
+            .number({ description: 'Required unless trafficStrategy is direct/unset' })
+            .optional(),
+        releaseStrategy: z =>
+          z
+            .enum(['pr-gated', 'instant'], {
+              description: 'pr-gated (default) opens a PR; instant deploys directly, no PR',
+            })
+            .optional(),
+      },
+      output: {
+        filePath: z => z.string({ description: 'Workspace-relative path the manifest was written to' }),
+        deployed: z =>
+          z.boolean({
+            description: 'True when releaseStrategy=instant already deployed it — no PR to publish',
+          }),
+      },
+    },
+    async handler(ctx) {
+      const baseUrl = getBaseUrl(config);
+      const {
+        file_name: fileName,
+        content,
+        deployed,
+      } = await postJson<PrepareLlmDeployResponse>(`${baseUrl}/llm-deploy/prepare`, {
+        model_name: ctx.input.modelName,
+        huggingface_model_id: ctx.input.huggingFaceModelId,
+        runtime: ctx.input.runtime,
+        gpu_type: ctx.input.gpuType,
+        gpu_count: ctx.input.gpuCount ? Number(ctx.input.gpuCount) : undefined,
+        quantization: ctx.input.quantization,
+        max_context_length: ctx.input.maxContextLength,
+        traffic_strategy: ctx.input.trafficStrategy,
+        traffic_percent: ctx.input.trafficPercent,
+        release_strategy: ctx.input.releaseStrategy,
+      });
+      const absolutePath = path.join(ctx.workspacePath, fileName);
+      await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+      await fs.writeFile(absolutePath, content, 'utf-8');
+      ctx.logger.info(
+        deployed
+          ? `Deployed LLM "${ctx.input.modelName}" directly (releaseStrategy=instant)`
+          : `Wrote LLM deploy manifest to "${fileName}"`,
+      );
+      ctx.output('filePath', fileName);
+      ctx.output('deployed', deployed);
+    },
+  });
+}
+
+/**
  * `orchestration:record-deploy` — records the deploy PR URL as an MLflow
  * model version tag so the Dashboard can read it back later.
  */
@@ -907,6 +1005,277 @@ export function createSetupMonitoringAction({ config }: ActionDeps) {
         });
       ctx.logger.info(`Registered monitoring CronWorkflow "${cronWorkflowName}"`);
       ctx.output('cronWorkflowName', cronWorkflowName);
+    },
+  });
+}
+
+/** Response body of `POST {baseUrl}/rag/ingest`. */
+interface RagIngestResponse {
+  readonly collection: string;
+  readonly index_version: string;
+  readonly chunks_ingested: number;
+}
+
+/** Response body of `POST {baseUrl}/rag/evaluate`. */
+interface RagEvaluateResponse {
+  readonly passed: boolean;
+  readonly pass_rate: number;
+  readonly results: Record<string, unknown>[];
+}
+
+/** Response body of `POST {baseUrl}/rag/activate`. */
+interface RagActivateResponse {
+  readonly collection: string;
+  readonly active_version: string;
+}
+
+/** Response body of `POST {baseUrl}/prompts`. */
+interface DraftPromptResponse {
+  readonly id: string;
+  readonly name: string;
+  readonly version: string;
+  readonly persona: string;
+  readonly content: string;
+}
+
+/** Response body of `POST {baseUrl}/prompts/{name}/evaluate`. */
+interface EvaluatePromptResponse {
+  readonly passed: boolean;
+  readonly pass_rate: number;
+  readonly results: Record<string, unknown>[];
+}
+
+/** Response body of `POST {baseUrl}/prompts/{name}/activate`. */
+interface ActivatePromptResponse {
+  readonly name: string;
+  readonly active_version: string;
+}
+
+function parseEvalCasesJson(evalCasesJson: string): unknown {
+  try {
+    return JSON.parse(evalCasesJson);
+  } catch (err) {
+    throw new Error(`evalCasesJson is not valid JSON: ${err}`);
+  }
+}
+
+/**
+ * `orchestration:rag-ingest` — chunks and embeds documents into a Qdrant
+ * collection, registering a new (inactive) RAG index version.
+ */
+export function createRagIngestAction({ config }: ActionDeps) {
+  return createTemplateAction({
+    id: 'orchestration:rag-ingest',
+    description:
+      'Chunks and embeds documents into a Qdrant collection, registering a new (inactive) RAG index version.',
+    schema: {
+      input: {
+        collection: z => z.string({ description: 'Qdrant collection name' }),
+        sourcePaths: z =>
+          z.array(z.string(), {
+            description: 'Repo-relative paths to ingest, e.g. ["docs/playbook-ai-delivery-portal.md"]',
+          }),
+        chunkSize: z => z.number({ description: 'Characters per chunk' }).optional(),
+        chunkOverlap: z =>
+          z.number({ description: 'Character overlap between consecutive chunks' }).optional(),
+      },
+      output: {
+        indexVersion: z =>
+          z.string({ description: 'Newly registered RAG index version — not active yet' }),
+        chunksIngested: z => z.number({ description: 'Number of chunks embedded and upserted' }),
+      },
+    },
+    async handler(ctx) {
+      const baseUrl = getBaseUrl(config);
+      const result = await postJson<RagIngestResponse>(`${baseUrl}/rag/ingest`, {
+        collection: ctx.input.collection,
+        source_paths: ctx.input.sourcePaths,
+        chunk_size: ctx.input.chunkSize,
+        chunk_overlap: ctx.input.chunkOverlap,
+      });
+      ctx.logger.info(
+        `Ingested ${result.chunks_ingested} chunks into "${result.collection}" as version ${result.index_version}`,
+      );
+      ctx.output('indexVersion', result.index_version);
+      ctx.output('chunksIngested', result.chunks_ingested);
+    },
+  });
+}
+
+/**
+ * `orchestration:rag-evaluate` — runs the LLM-as-judge Evaluate Gate
+ * against a RAG index version and reports the pass rate.
+ */
+export function createRagEvaluateAction({ config }: ActionDeps) {
+  return createTemplateAction({
+    id: 'orchestration:rag-evaluate',
+    description:
+      'Runs the LLM-as-judge Evaluate Gate against a RAG index version and reports the pass rate.',
+    schema: {
+      input: {
+        collection: z => z.string({ description: 'Qdrant collection name' }),
+        indexVersion: z => z.string({ description: 'RAG index version to evaluate' }),
+        evalCasesJson: z =>
+          z.string({ description: 'JSON array of {"question": "..."} objects' }),
+        model: z =>
+          z
+            .string({
+              description:
+                'model_name registered in litellm-config.yaml — including a self-hosted model deployed via the Serving LLM Golden Path. Defaults to "claude-sonnet-5"',
+            })
+            .optional(),
+      },
+      output: {
+        passed: z => z.boolean({ description: 'True when pass_rate >= 0.8' }),
+        passRate: z => z.number({ description: 'Fraction of eval_cases that passed the gate' }),
+      },
+    },
+    async handler(ctx) {
+      const baseUrl = getBaseUrl(config);
+      const evalCases = parseEvalCasesJson(ctx.input.evalCasesJson);
+      const result = await postJson<RagEvaluateResponse>(`${baseUrl}/rag/evaluate`, {
+        collection: ctx.input.collection,
+        index_version: ctx.input.indexVersion,
+        eval_cases: evalCases,
+        model: ctx.input.model,
+      });
+      ctx.logger.info(`RAG evaluate: passed=${result.passed} pass_rate=${result.pass_rate}`);
+      ctx.output('passed', result.passed);
+      ctx.output('passRate', result.pass_rate);
+    },
+  });
+}
+
+/**
+ * `orchestration:rag-activate` — activates a RAG index version;
+ * routers/chat.py starts retrieving from it immediately.
+ */
+export function createRagActivateAction({ config }: ActionDeps) {
+  return createTemplateAction({
+    id: 'orchestration:rag-activate',
+    description: 'Activates a RAG index version for use by the chat endpoint.',
+    schema: {
+      input: {
+        collection: z => z.string({ description: 'Qdrant collection name' }),
+        indexVersion: z => z.string({ description: 'RAG index version to activate' }),
+      },
+      output: {
+        activeVersion: z => z.string({ description: 'The version now active for this collection' }),
+      },
+    },
+    async handler(ctx) {
+      const baseUrl = getBaseUrl(config);
+      const result = await postJson<RagActivateResponse>(`${baseUrl}/rag/activate`, {
+        collection: ctx.input.collection,
+        index_version: ctx.input.indexVersion,
+      });
+      ctx.logger.info(`Activated RAG index "${result.collection}" version ${result.active_version}`);
+      ctx.output('activeVersion', result.active_version);
+    },
+  });
+}
+
+/**
+ * `orchestration:draft-prompt` — registers a new (inactive) prompt version.
+ */
+export function createDraftPromptAction({ config }: ActionDeps) {
+  return createTemplateAction({
+    id: 'orchestration:draft-prompt',
+    description: 'Registers a new (inactive) prompt version.',
+    schema: {
+      input: {
+        name: z => z.string({ description: 'Persona key, e.g. "mlops"' }),
+        persona: z => z.string({ description: 'Display name, e.g. "MLOps Assistant"' }),
+        content: z => z.string({ description: 'System prompt content' }),
+      },
+      output: {
+        version: z => z.string({ description: 'Newly registered prompt version — not active yet' }),
+      },
+    },
+    async handler(ctx) {
+      const baseUrl = getBaseUrl(config);
+      const result = await postJson<DraftPromptResponse>(`${baseUrl}/prompts`, {
+        name: ctx.input.name,
+        persona: ctx.input.persona,
+        content: ctx.input.content,
+      });
+      ctx.logger.info(`Drafted prompt "${result.name}" version ${result.version}`);
+      ctx.output('version', result.version);
+    },
+  });
+}
+
+/**
+ * `orchestration:evaluate-prompt` — runs the LLM-as-judge Evaluate Gate
+ * against a prompt version and reports the pass rate.
+ */
+export function createEvaluatePromptAction({ config }: ActionDeps) {
+  return createTemplateAction({
+    id: 'orchestration:evaluate-prompt',
+    description:
+      'Runs the LLM-as-judge Evaluate Gate against a prompt version and reports the pass rate.',
+    schema: {
+      input: {
+        name: z => z.string({ description: 'Persona key' }),
+        version: z => z.string({ description: 'Prompt version to evaluate' }),
+        evalCasesJson: z =>
+          z.string({ description: 'JSON array of {"question": "..."} objects' }),
+        model: z =>
+          z
+            .string({
+              description:
+                'model_name registered in litellm-config.yaml — including a self-hosted model deployed via the Serving LLM Golden Path. Defaults to "claude-sonnet-5"',
+            })
+            .optional(),
+      },
+      output: {
+        passed: z => z.boolean({ description: 'True when pass_rate >= 0.8' }),
+        passRate: z => z.number({ description: 'Fraction of eval_cases that passed the gate' }),
+      },
+    },
+    async handler(ctx) {
+      const baseUrl = getBaseUrl(config);
+      const evalCases = parseEvalCasesJson(ctx.input.evalCasesJson);
+      const result = await postJson<EvaluatePromptResponse>(
+        `${baseUrl}/prompts/${encodeURIComponent(ctx.input.name)}/evaluate`,
+        {
+          version: ctx.input.version,
+          eval_cases: evalCases,
+          model: ctx.input.model,
+        },
+      );
+      ctx.logger.info(`Prompt evaluate: passed=${result.passed} pass_rate=${result.pass_rate}`);
+      ctx.output('passed', result.passed);
+      ctx.output('passRate', result.pass_rate);
+    },
+  });
+}
+
+/**
+ * `orchestration:activate-prompt` — activates a prompt version;
+ * routers/chat.py starts using it immediately.
+ */
+export function createActivatePromptAction({ config }: ActionDeps) {
+  return createTemplateAction({
+    id: 'orchestration:activate-prompt',
+    description: 'Activates a prompt version for use by the chat endpoint.',
+    schema: {
+      input: {
+        name: z => z.string({ description: 'Persona key' }),
+        version: z => z.string({ description: 'Prompt version to activate' }),
+      },
+      output: {
+        activeVersion: z => z.string({ description: 'The version now active for this persona' }),
+      },
+    },
+    async handler(ctx) {
+      const baseUrl = getBaseUrl(config);
+      const result = await postJson<ActivatePromptResponse>(
+        `${baseUrl}/prompts/${encodeURIComponent(ctx.input.name)}/activate`,
+        { version: ctx.input.version },
+      );
+      ctx.logger.info(`Activated prompt "${result.name}" version ${result.active_version}`);
+      ctx.output('activeVersion', result.active_version);
     },
   });
 }

@@ -21,23 +21,32 @@ class QdrantAdapter(IVectorStoreAdapter):
         self.collection = collection
         self.client = QdrantClient(url=self.url)
 
-    def ensure_collection(self, vector_size: int = 1536) -> None:
-        if not self.client.collection_exists(self.collection):
+    def ensure_collection(self, vector_size: int = 1536, collection: str | None = None) -> None:
+        collection = collection or self.collection
+        if not self.client.collection_exists(collection):
             self.client.create_collection(
-                collection_name=self.collection,
+                collection_name=collection,
                 vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
             )
 
-    def upsert(self, ids: list[str], vectors: list[list[float]], payloads: list[dict]) -> dict:
+    def upsert(
+        self,
+        ids: list[str],
+        vectors: list[list[float]],
+        payloads: list[dict],
+        collection: str | None = None,
+    ) -> dict:
         points = [
             PointStruct(id=i, vector=v, payload=p)
             for i, v, p in zip(ids, vectors, payloads, strict=True)
         ]
-        result = self.client.upsert(collection_name=self.collection, points=points)
+        result = self.client.upsert(collection_name=collection or self.collection, points=points)
         return {"status": str(result.status)}
 
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict]:
+    def search(
+        self, query_vector: list[float], top_k: int = 5, collection: str | None = None
+    ) -> list[dict]:
         hits = self.client.query_points(
-            collection_name=self.collection, query=query_vector, limit=top_k
+            collection_name=collection or self.collection, query=query_vector, limit=top_k
         ).points
         return [{"id": h.id, "score": h.score, "payload": h.payload} for h in hits]

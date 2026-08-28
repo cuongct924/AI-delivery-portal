@@ -11,9 +11,12 @@ Central module for AI Agent & MCP (Model Context Protocol).
   - `metrics-server/` — Prometheus query tools (drift/latency)
 - `skills/` — specific business logic (e.g. evaluating model drift), calls
   `adapters/` directly; reusable from both MCP tools and regular FastAPI routes.
-- `prompts/` — Prompt Registry (Python version): system prompt / persona for
-  each type of Agent. The UI-managed version lives in `plugins/prompt-registry/`
-  (Backstage) + `services/orchestration-api/routers/prompts.py` (API).
+
+Prompt/persona content lives in one place, not here —
+`services/orchestration-api/routers/prompts.py` (backed by
+`adapters/version_registry_adapter.py`), read by `plugins/prompt-registry/`
+(Backstage UI) and `routers/chat.py`. A duplicate static copy used to live
+at `agents/prompts/`; removed once nothing imported it.
 
 ## Try running an MCP server locally
 

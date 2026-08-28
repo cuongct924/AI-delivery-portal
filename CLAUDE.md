@@ -54,7 +54,7 @@ Run `make check` and `yarn tsc && yarn lint:all` before committing — CI
 packages/            Portal (Backstage) — app-backstage (React/TS UI) + backend (Node, no React)
 plugins/              Backstage plugins — prompt-registry (Prompt version UI)
 services/             orchestration-api — FastAPI BFF, MCP client, auth, evaluations
-agents/               AI Agent & MCP — mcp-servers/, skills/, prompts/
+agents/               AI Agent & MCP — mcp-servers/, skills/
 adapters/             Adapter Pattern — MLflow, KServe, Argo, Qdrant, LiteLLM, Feast, JupyterHub
 data/                 DVC-tracked datasets — pointer files in git, real data in an S3-compatible remote
 infra/                GitOps infra — monitoring/vector-dbs/llm-gateways (active); helm-charts/argocd/opa-policies (not yet implemented)

@@ -484,7 +484,7 @@ trong task list (mỗi phase `blockedBy` task cuối của phase trước):
 | 8 | RecSys — Golden Path riêng (mục 6e, thiết kế đầy đủ) | #41–46 | **Đã code + commit** (`rec_algorithm_registry.py`, `rec_metrics.py`, `train_rec.py`, `rec-train-register-template.yaml`, `routers/recommendations.py`, template `recommend-train-register`, mục 6e.5). `docker build training-image` đã verify thành công (bao gồm `implicit`/`scikit-surprise`) |
 | 9 | Model Monitoring — "Setup Model Monitoring" (mục 6d) | #47–50 | **Đã code + commit** (`monitor_drift.py`, `monitor-drift-template.yaml`, `routers/monitoring.py`, `ArgoAdapter.create_cron_workflow()`, template `setup-model-monitoring`, mục 6d.7). `docker build` đã verify thành công (bao gồm `evidently`) — image + smoke test import (`train`/`train_dl`/`train_nlp`/`train_cv`/`train_rec`/`monitor_drift`) đều pass trong container Linux thật. CronWorkflow REST call vẫn chưa kiểm chứng với Argo Server thật (chỉ unit test mock) |
 | — | RL | — | Không hỗ trợ — giới hạn kiến trúc |
-| — | LLMOps (`docs/llmops-lifecycle-plan-draft.md`) | Không tạo task | **Giữ nguyên DRAFT, chỉ bắt đầu sau khi toàn bộ 9 phase MLOps trên hoàn thành và verify xong** |
+| — | LLMOps (`docs/llmops-lifecycle-plan.md`) | Không tạo task | **Đã CHỐT (không còn DRAFT) sau khi toàn bộ 9 phase MLOps trên hoàn thành và verify xong — kế hoạch triển khai chi tiết, chưa code** |
 
 **Data Quality/EDA (mục 6f)** không phải 1 phase riêng — là 1 thiết kế xuyên suốt, cập nhật vào mô tả task #9/#12/#14/#42 (xem 6f.3).
 
@@ -1593,7 +1593,7 @@ vài field fixed trong cùng 1 lần chạy, không phải chọn tất-cả-ho�
 
 ## 7. Reuse cho LLMOps
 
-`docs/llmops-lifecycle-plan-draft.md` mục 8 đã thiết kế để dùng lại nguyên 2
+`docs/llmops-lifecycle-plan.md` mục 8 đã thiết kế để dùng lại nguyên 2
 interface `IDeployTrafficStrategy`/`IReleaseStrategy` — không thiết kế cơ chế
 riêng cho LLMOps. Với LLMOps, `IDeployTrafficStrategy` áp dụng ở tầng route %
 request trong `chat.py` sang version mới (không phải field K8s CRD);

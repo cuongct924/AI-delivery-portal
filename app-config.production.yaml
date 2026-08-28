@@ -78,6 +78,24 @@ catalog:
       rules:
         - allow: [Template]
 
+    # AI Delivery Portal — Serving LLM
+    - type: file
+      target: ./examples/templates/deploy-llm/template.yaml
+      rules:
+        - allow: [Template]
+
+    # AI Delivery Portal — LLMOps Golden Path #1 (Draft/Ingest→Register)
+    - type: file
+      target: ./examples/templates/llm-draft-register/template.yaml
+      rules:
+        - allow: [Template]
+
+    # AI Delivery Portal — LLMOps Golden Path #2 (Evaluate→Deploy)
+    - type: file
+      target: ./examples/templates/llm-evaluate-deploy/template.yaml
+      rules:
+        - allow: [Template]
+
     # Local example organizational data
     - type: file
       target: ./examples/org.yaml

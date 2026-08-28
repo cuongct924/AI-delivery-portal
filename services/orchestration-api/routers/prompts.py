@@ -3,15 +3,25 @@ separate from the Model Registry (unlike traditional MLOps, see docs/architectur
 The Portal reads this data through the `plugins/prompt-registry/` plugin
 (Backstage), via the `/orchestration-api` proxy declared in app-config.yaml.
 
-Demo version: in-memory data. For production, replace with a DB (Postgres)
-or Git to store each prompt's version history.
+Backed by JsonFileVersionRegistryAdapter (kind="prompt") — the same
+registry routers/rag.py uses for "rag-index", just a different kind. Two
+personas ("mlops", "k8s") are seeded at import time so existing behavior
+survives a first restart unchanged; new personas register via POST /prompts.
 """
 
 from auth.keycloak import get_current_user
+from evaluations.gate import evaluate_gate
+from evaluations.llm_judge import judge_response
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from adapters.llm_gateway_adapter import LiteLLMGatewayAdapter
+from adapters.version_registry_adapter import JsonFileVersionRegistryAdapter
+
 router = APIRouter(prefix="/prompts", tags=["prompts"])
+
+llm_gateway_adapter = LiteLLMGatewayAdapter()
+registry_adapter = JsonFileVersionRegistryAdapter()
 
 
 class PromptVersion(BaseModel):
@@ -22,35 +32,154 @@ class PromptVersion(BaseModel):
     content: str
 
 
-_PROMPTS: list[PromptVersion] = [
-    PromptVersion(
-        id="mlops-v1",
-        name="mlops",
-        version="v1",
-        persona="MLOps Assistant",
-        content="You are the MLOps assistant for the AI Delivery Portal. You help "
-        "ML engineers look up experiments, model registry entries, and deploy "
-        "status via MCP tools.",
-    ),
-    PromptVersion(
-        id="k8s-v1",
-        name="k8s",
-        version="v1",
-        persona="K8s Assistant",
-        content="You are the Kubernetes operations assistant. You may only read "
-        "status (pods, logs, events) via MCP tools — you have no write/delete permission.",
-    ),
-]
+class DraftPromptRequest(BaseModel):
+    name: str
+    persona: str
+    content: str
+
+
+class DraftPromptResponse(BaseModel):
+    id: str
+    name: str
+    version: str
+    persona: str
+    content: str
+
+
+class PromptEvalCase(BaseModel):
+    question: str
+
+
+class EvaluatePromptRequest(BaseModel):
+    version: str
+    eval_cases: list[PromptEvalCase]
+    # Overridable — same reasoning as routers/rag.py's RagEvaluateRequest.model.
+    model: str = "claude-sonnet-5"
+
+
+class EvaluatePromptResponse(BaseModel):
+    passed: bool
+    pass_rate: float
+    results: list[dict[str, object]]
+
+
+class ActivatePromptRequest(BaseModel):
+    version: str
+
+
+class ActivatePromptResponse(BaseModel):
+    name: str
+    active_version: str
+
+
+def _seed_default_prompts() -> None:
+    defaults = {
+        "mlops": {
+            "persona": "MLOps Assistant",
+            "content": "You are the MLOps assistant for the AI Delivery Portal. You help "
+            "ML engineers look up experiments, model registry entries, and deploy "
+            "status via MCP tools.",
+        },
+        "k8s": {
+            "persona": "K8s Assistant",
+            "content": "You are the Kubernetes operations assistant. You may only read "
+            "status (pods, logs, events) via MCP tools — you have no write/delete permission.",
+        },
+    }
+    for name, metadata in defaults.items():
+        if registry_adapter.get_active_version("prompt", name) is None:
+            version = registry_adapter.register_version("prompt", name, metadata)
+            registry_adapter.set_active_version("prompt", name, version)
+
+
+_seed_default_prompts()
 
 
 @router.get("", response_model=list[PromptVersion])
 def list_prompts(user: dict = Depends(get_current_user)) -> list[PromptVersion]:
-    return _PROMPTS
+    result = []
+    for name in registry_adapter.list_names("prompt"):
+        active_version = registry_adapter.get_active_version("prompt", name)
+        if active_version is None:
+            continue
+        metadata = registry_adapter.get_version("prompt", name, active_version)
+        result.append(
+            PromptVersion(
+                id=f"{name}-v{active_version}",
+                name=name,
+                version=active_version,
+                persona=metadata["persona"],
+                content=metadata["content"],
+            )
+        )
+    return result
 
 
 @router.get("/{prompt_id}", response_model=PromptVersion)
 def get_prompt(prompt_id: str, user: dict = Depends(get_current_user)) -> PromptVersion:
-    for p in _PROMPTS:
-        if p.id == prompt_id:
-            return p
-    raise HTTPException(404, f"Prompt not found: {prompt_id}")
+    name, _, version = prompt_id.rpartition("-v")
+    if not name:
+        raise HTTPException(404, f"Prompt not found: {prompt_id}")
+    try:
+        metadata = registry_adapter.get_version("prompt", name, version)
+    except ValueError as exc:
+        raise HTTPException(404, f"Prompt not found: {prompt_id}") from exc
+    return PromptVersion(
+        id=prompt_id,
+        name=name,
+        version=version,
+        persona=metadata["persona"],
+        content=metadata["content"],
+    )
+
+
+@router.post("", response_model=DraftPromptResponse)
+def draft_prompt(
+    request: DraftPromptRequest, user: dict = Depends(get_current_user)
+) -> DraftPromptResponse:
+    version = registry_adapter.register_version(
+        "prompt", request.name, {"persona": request.persona, "content": request.content}
+    )
+    return DraftPromptResponse(
+        id=f"{request.name}-v{version}",
+        name=request.name,
+        version=version,
+        persona=request.persona,
+        content=request.content,
+    )
+
+
+@router.post("/{name}/evaluate", response_model=EvaluatePromptResponse)
+def evaluate_prompt(
+    name: str, request: EvaluatePromptRequest, user: dict = Depends(get_current_user)
+) -> EvaluatePromptResponse:
+    metadata = registry_adapter.get_version("prompt", name, request.version)
+    system_prompt = metadata["content"]
+
+    results: list[dict[str, object]] = []
+    for eval_case in request.eval_cases:
+        response = llm_gateway_adapter.chat_completion(
+            model=request.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": eval_case.question},
+            ],
+        )
+        answer = response["choices"][0]["message"]["content"]
+        judge_result = judge_response(eval_case.question, answer)
+        gate_result = evaluate_gate(judge_result)
+        results.append(
+            {"question": eval_case.question, "answer": answer, "passed": gate_result["passed"]}
+        )
+
+    passed_count = sum(1 for r in results if r["passed"])
+    pass_rate = passed_count / len(results) if results else 0.0
+    return EvaluatePromptResponse(passed=pass_rate >= 0.8, pass_rate=pass_rate, results=results)
+
+
+@router.post("/{name}/activate", response_model=ActivatePromptResponse)
+def activate_prompt(
+    name: str, request: ActivatePromptRequest, user: dict = Depends(get_current_user)
+) -> ActivatePromptResponse:
+    registry_adapter.set_active_version("prompt", name, request.version)
+    return ActivatePromptResponse(name=name, active_version=request.version)

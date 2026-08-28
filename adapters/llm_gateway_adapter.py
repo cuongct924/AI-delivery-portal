@@ -34,3 +34,13 @@ class LiteLLMGatewayAdapter(ILLMGatewayAdapter):
         )
         response.raise_for_status()
         return response.json().get("data", [])
+
+    def embed(self, model: str, input_texts: list[str]) -> list[list[float]]:
+        response = httpx.post(
+            f"{self.base_url}/embeddings",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={"model": model, "input": input_texts},
+            timeout=30,
+        )
+        response.raise_for_status()
+        return [item["embedding"] for item in response.json()["data"]]

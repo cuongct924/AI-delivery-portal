@@ -3,9 +3,16 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { ConfigReader } from '@backstage/config';
 import {
+  createActivatePromptAction,
+  createDraftPromptAction,
+  createEvaluatePromptAction,
   createModelSummaryAction,
   createPolicyCheckAction,
   createPrepareDeployManifestAction,
+  createPrepareLlmDeployManifestAction,
+  createRagActivateAction,
+  createRagEvaluateAction,
+  createRagIngestAction,
   createRecordDeployAction,
   createRegisterModelAction,
   createTriggerRecTrainingAction,
@@ -596,6 +603,107 @@ describe('orchestration:prepare-deploy-manifest', () => {
   });
 });
 
+describe('orchestration:prepare-llm-deploy-manifest', () => {
+  it('writes the rendered manifest into the workspace and outputs its path', async () => {
+    const workspacePath = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'mlops-actions-test-'),
+    );
+    const fileName = 'infra/inference-services/llama-3-8b/llm.yaml';
+    const fetchMock = mockFetchResponses([
+      {
+        ok: true,
+        body: { file_name: fileName, content: 'kind: InferenceService\n', deployed: false },
+      },
+    ]);
+    const action = createPrepareLlmDeployManifestAction({ config });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      {
+        modelName: 'llama-3-8b',
+        huggingFaceModelId: 'meta-llama/Llama-3.1-8B-Instruct',
+        gpuType: 'H100',
+      },
+      workspacePath,
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.filePath).toBe(fileName);
+    expect(outputs.deployed).toBe(false);
+    const written = await fs.readFile(
+      path.join(workspacePath, fileName),
+      'utf-8',
+    );
+    expect(written).toBe('kind: InferenceService\n');
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${BASE_URL}/llm-deploy/prepare`,
+      expect.objectContaining({
+        body: JSON.stringify({
+          model_name: 'llama-3-8b',
+          huggingface_model_id: 'meta-llama/Llama-3.1-8B-Instruct',
+          runtime: undefined,
+          gpu_type: 'H100',
+          gpu_count: undefined,
+          quantization: undefined,
+          max_context_length: undefined,
+          traffic_strategy: undefined,
+          traffic_percent: undefined,
+          release_strategy: undefined,
+        }),
+      }),
+    );
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+
+  it('converts gpuCount to a number and outputs deployed=true for instant', async () => {
+    const workspacePath = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'mlops-actions-test-'),
+    );
+    const fileName = 'infra/inference-services/llama-3-8b/llm.yaml';
+    const fetchMock = mockFetchResponses([
+      {
+        ok: true,
+        body: { file_name: fileName, content: 'kind: InferenceService\n', deployed: true },
+      },
+    ]);
+    const action = createPrepareLlmDeployManifestAction({ config });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      {
+        modelName: 'llama-3-8b',
+        huggingFaceModelId: 'meta-llama/Llama-3.1-8B-Instruct',
+        gpuType: 'H100',
+        gpuCount: '2',
+        quantization: 'fp8',
+        releaseStrategy: 'instant',
+      },
+      workspacePath,
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.deployed).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${BASE_URL}/llm-deploy/prepare`,
+      expect.objectContaining({
+        body: JSON.stringify({
+          model_name: 'llama-3-8b',
+          huggingface_model_id: 'meta-llama/Llama-3.1-8B-Instruct',
+          runtime: undefined,
+          gpu_type: 'H100',
+          gpu_count: 2,
+          quantization: 'fp8',
+          max_context_length: undefined,
+          traffic_strategy: undefined,
+          traffic_percent: undefined,
+          release_strategy: 'instant',
+        }),
+      }),
+    );
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+});
+
 describe('orchestration:record-deploy', () => {
   it('posts the PR URL and outputs recorded=true', async () => {
     const fetchMock = mockFetchResponses([
@@ -803,5 +911,195 @@ describe('orchestration:trigger-rec-training', () => {
     );
 
     await expect(action.handler(ctx)).rejects.toThrow(/pod OOMKilled/);
+  });
+});
+
+describe('orchestration:rag-ingest', () => {
+  it('posts source paths and outputs the new index version', async () => {
+    const fetchMock = mockFetchResponses([
+      {
+        ok: true,
+        body: { collection: 'smoke-test', index_version: '1', chunks_ingested: 4 },
+      },
+    ]);
+    const action = createRagIngestAction({ config });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      {
+        collection: 'smoke-test',
+        sourcePaths: ['docs/playbook-ai-delivery-portal.md'],
+        chunkSize: 800,
+        chunkOverlap: 100,
+      },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.indexVersion).toBe('1');
+    expect(outputs.chunksIngested).toBe(4);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${BASE_URL}/rag/ingest`,
+      expect.objectContaining({
+        body: JSON.stringify({
+          collection: 'smoke-test',
+          source_paths: ['docs/playbook-ai-delivery-portal.md'],
+          chunk_size: 800,
+          chunk_overlap: 100,
+        }),
+      }),
+    );
+  });
+});
+
+describe('orchestration:rag-evaluate', () => {
+  it('parses evalCasesJson and forwards model', async () => {
+    const fetchMock = mockFetchResponses([
+      { ok: true, body: { passed: true, pass_rate: 1, results: [] } },
+    ]);
+    const action = createRagEvaluateAction({ config });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      {
+        collection: 'smoke-test',
+        indexVersion: '1',
+        evalCasesJson: '[{"question": "q1"}]',
+        model: 'llama-3-8b-self-hosted',
+      },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.passed).toBe(true);
+    expect(outputs.passRate).toBe(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${BASE_URL}/rag/evaluate`,
+      expect.objectContaining({
+        body: JSON.stringify({
+          collection: 'smoke-test',
+          index_version: '1',
+          eval_cases: [{ question: 'q1' }],
+          model: 'llama-3-8b-self-hosted',
+        }),
+      }),
+    );
+  });
+
+  it('throws a clear error when evalCasesJson is not valid JSON', async () => {
+    const action = createRagEvaluateAction({ config });
+    const { ctx } = createMockContext<typeof action>(
+      {
+        collection: 'smoke-test',
+        indexVersion: '1',
+        evalCasesJson: 'not json',
+      },
+      '/tmp/workspace',
+    );
+
+    await expect(action.handler(ctx)).rejects.toThrow('evalCasesJson is not valid JSON');
+  });
+});
+
+describe('orchestration:rag-activate', () => {
+  it('posts the collection/version and outputs activeVersion', async () => {
+    const fetchMock = mockFetchResponses([
+      { ok: true, body: { collection: 'smoke-test', active_version: '1' } },
+    ]);
+    const action = createRagActivateAction({ config });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      { collection: 'smoke-test', indexVersion: '1' },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.activeVersion).toBe('1');
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${BASE_URL}/rag/activate`,
+      expect.objectContaining({
+        body: JSON.stringify({ collection: 'smoke-test', index_version: '1' }),
+      }),
+    );
+  });
+});
+
+describe('orchestration:draft-prompt', () => {
+  it('posts the draft and outputs the new version', async () => {
+    const fetchMock = mockFetchResponses([
+      {
+        ok: true,
+        body: { id: 'rag-writer-v1', name: 'rag-writer', version: '1', persona: 'RAG Writer', content: 'sys' },
+      },
+    ]);
+    const action = createDraftPromptAction({ config });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      { name: 'rag-writer', persona: 'RAG Writer', content: 'sys' },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.version).toBe('1');
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${BASE_URL}/prompts`,
+      expect.objectContaining({
+        body: JSON.stringify({ name: 'rag-writer', persona: 'RAG Writer', content: 'sys' }),
+      }),
+    );
+  });
+});
+
+describe('orchestration:evaluate-prompt', () => {
+  it('parses evalCasesJson, forwards model, and calls the per-name endpoint', async () => {
+    const fetchMock = mockFetchResponses([
+      { ok: true, body: { passed: false, pass_rate: 0.5, results: [] } },
+    ]);
+    const action = createEvaluatePromptAction({ config });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      {
+        name: 'mlops',
+        version: '1',
+        evalCasesJson: '[{"question": "q1"}, {"question": "q2"}]',
+        model: 'llama-3-8b-self-hosted',
+      },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.passed).toBe(false);
+    expect(outputs.passRate).toBe(0.5);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${BASE_URL}/prompts/mlops/evaluate`,
+      expect.objectContaining({
+        body: JSON.stringify({
+          version: '1',
+          eval_cases: [{ question: 'q1' }, { question: 'q2' }],
+          model: 'llama-3-8b-self-hosted',
+        }),
+      }),
+    );
+  });
+});
+
+describe('orchestration:activate-prompt', () => {
+  it('calls the per-name activate endpoint and outputs activeVersion', async () => {
+    const fetchMock = mockFetchResponses([
+      { ok: true, body: { name: 'mlops', active_version: '2' } },
+    ]);
+    const action = createActivatePromptAction({ config });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      { name: 'mlops', version: '2' },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.activeVersion).toBe('2');
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${BASE_URL}/prompts/mlops/activate`,
+      expect.objectContaining({
+        body: JSON.stringify({ version: '2' }),
+      }),
+    );
   });
 });

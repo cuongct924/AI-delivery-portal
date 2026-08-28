@@ -28,6 +28,31 @@ class IModelRegistryAdapter(ABC):
     def get_model_version_details(self, name: str, version: str) -> dict: ...
 
 
+class IVersionRegistryAdapter(ABC):
+    """Tracks versions of an artifact that isn't a trained model (prompt
+    text, RAG index pointer) and which one is currently active — the
+    LLMOps equivalent of IModelRegistryAdapter's "model version", without
+    assuming an MLflow-loadable artifact exists."""
+
+    @abstractmethod
+    def register_version(self, kind: str, name: str, metadata: dict) -> str: ...
+
+    @abstractmethod
+    def list_names(self, kind: str) -> list[str]: ...
+
+    @abstractmethod
+    def get_version(self, kind: str, name: str, version: str) -> dict: ...
+
+    @abstractmethod
+    def list_versions(self, kind: str, name: str) -> dict[str, dict]: ...
+
+    @abstractmethod
+    def get_active_version(self, kind: str, name: str) -> str | None: ...
+
+    @abstractmethod
+    def set_active_version(self, kind: str, name: str, version: str) -> None: ...
+
+
 class IInferenceAdapter(ABC):
     @abstractmethod
     def deploy_model(
@@ -77,10 +102,18 @@ class IWorkflowAdapter(ABC):
 
 class IVectorStoreAdapter(ABC):
     @abstractmethod
-    def upsert(self, ids: list[str], vectors: list[list[float]], payloads: list[dict]) -> dict: ...
+    def upsert(
+        self,
+        ids: list[str],
+        vectors: list[list[float]],
+        payloads: list[dict],
+        collection: str | None = None,
+    ) -> dict: ...
 
     @abstractmethod
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict]: ...
+    def search(
+        self, query_vector: list[float], top_k: int = 5, collection: str | None = None
+    ) -> list[dict]: ...
 
 
 class ILLMGatewayAdapter(ABC):
@@ -89,6 +122,9 @@ class ILLMGatewayAdapter(ABC):
 
     @abstractmethod
     def list_models(self) -> list[dict]: ...
+
+    @abstractmethod
+    def embed(self, model: str, input_texts: list[str]) -> list[list[float]]: ...
 
 
 class IFeatureStoreAdapter(ABC):

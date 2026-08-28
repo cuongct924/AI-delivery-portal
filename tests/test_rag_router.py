@@ -1,0 +1,101 @@
+"""services/orchestration-api/routers/rag.py — patches the module-level
+`llm_gateway_adapter`/`vector_store_adapter`/`registry_adapter` singletons
+and `judge_response`/`evaluate_gate`, same pattern as
+tests/test_models_router.py — calls route functions directly.
+"""
+
+from unittest.mock import patch
+
+from routers.rag import (
+    RagActivateRequest,
+    RagEvalCase,
+    RagEvaluateRequest,
+    RagIngestRequest,
+    _chunk_text,
+    rag_activate,
+    rag_evaluate,
+    rag_ingest,
+)
+
+
+def test_chunk_text_slides_with_overlap() -> None:
+    assert _chunk_text("0123456789", chunk_size=4, chunk_overlap=1) == ["0123", "3456", "6789", "9"]
+
+
+def test_chunk_text_guards_against_zero_step() -> None:
+    # chunk_overlap >= chunk_size would infinite-loop without the max(1, ...) guard.
+    chunks = _chunk_text("0123456789", chunk_size=4, chunk_overlap=4)
+    assert len(chunks) > 0
+
+
+def test_rag_ingest_embeds_chunks_and_registers_version(tmp_path) -> None:
+    doc = tmp_path / "doc.md"
+    doc.write_text("0123456789")
+    request = RagIngestRequest(
+        collection="smoke-test", source_paths=[str(doc)], chunk_size=4, chunk_overlap=1
+    )
+    with (
+        patch("routers.rag.llm_gateway_adapter") as mock_gateway,
+        patch("routers.rag.vector_store_adapter") as mock_vector_store,
+        patch("routers.rag.registry_adapter") as mock_registry,
+    ):
+        mock_gateway.embed.return_value = [[0.1, 0.2]] * 4
+        mock_registry.register_version.return_value = "1"
+        response = rag_ingest(request)
+
+    assert response.collection == "smoke-test"
+    assert response.index_version == "1"
+    assert response.chunks_ingested == 4
+    mock_vector_store.ensure_collection.assert_called_once_with(
+        vector_size=2, collection="smoke-test"
+    )
+    upsert_args = mock_vector_store.upsert.call_args
+    assert len(upsert_args.args[0]) == 4  # ids
+    assert upsert_args.args[1] == [[0.1, 0.2]] * 4  # vectors
+    assert all(p["source"] == str(doc) for p in upsert_args.args[2])  # payloads
+    assert upsert_args.kwargs == {"collection": "smoke-test"}
+    mock_registry.register_version.assert_called_once_with(
+        "rag-index", "smoke-test", {"chunks_ingested": 4, "source_paths": [str(doc)]}
+    )
+
+
+def test_rag_evaluate_computes_pass_rate_and_forwards_model() -> None:
+    request = RagEvaluateRequest(
+        collection="smoke-test",
+        index_version="1",
+        eval_cases=[RagEvalCase(question="q1"), RagEvalCase(question="q2")],
+        model="llama-3-8b-self-hosted",
+    )
+    with (
+        patch("routers.rag.llm_gateway_adapter") as mock_gateway,
+        patch("routers.rag.vector_store_adapter") as mock_vector_store,
+        patch("routers.rag.judge_response") as mock_judge,
+        patch("routers.rag.evaluate_gate") as mock_gate,
+    ):
+        mock_gateway.embed.return_value = [[0.1]]
+        mock_vector_store.search.return_value = [{"payload": {"text": "context chunk"}}]
+        mock_gateway.chat_completion.return_value = {
+            "choices": [{"message": {"content": "an answer"}}]
+        }
+        mock_judge.return_value = {"safety": 9, "correctness": 9, "relevance": 9}
+        mock_gate.side_effect = [{"passed": True}, {"passed": False}]
+        response = rag_evaluate(request)
+
+    assert response.pass_rate == 0.5
+    assert response.passed is False
+    mock_gateway.chat_completion.assert_any_call(
+        model="llama-3-8b-self-hosted",
+        messages=[
+            {"role": "system", "content": "Answer using only this context:\n\ncontext chunk"},
+            {"role": "user", "content": "q1"},
+        ],
+    )
+
+
+def test_rag_activate_calls_set_active_version() -> None:
+    request = RagActivateRequest(collection="smoke-test", index_version="1")
+    with patch("routers.rag.registry_adapter") as mock_registry:
+        response = rag_activate(request)
+
+    mock_registry.set_active_version.assert_called_once_with("rag-index", "smoke-test", "1")
+    assert response.active_version == "1"
