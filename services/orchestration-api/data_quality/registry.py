@@ -28,8 +28,9 @@ UNIVERSAL_CHECKS: Final[list[Callable[..., CheckResult]]] = [
     check_duplicate_rows,
 ]
 
-# nlp/cv/recsys entries land here when those phases add their own checks
-# (mục 6f.2) — same dict, no new mechanism.
+# NLP reuses the "classification" list unchanged; CV and RecSys don't fit
+# this dict's shared (df, target_column=...) signature — see
+# run_rec_checks() below for RecSys, and CV skips validate-dataset entirely.
 TASK_TYPE_CHECKS: Final[dict[str, list[Callable[..., CheckResult]]]] = {
     "classification": [
         check_target_leakage_correlation,
@@ -76,9 +77,9 @@ def run_checks(
 def run_rec_checks(
     interactions: pd.DataFrame, user_id_column: str, item_id_column: str
 ) -> list[CheckResult]:
-    """RecSys's own entry point (mục 6e.2/6f.5) — doesn't fit `run_checks()`'s
-    shared `(df, target_column=...)` shape (2 required id columns, no
-    single target), so it isn't in TASK_TYPE_CHECKS."""
+    """RecSys's own entry point — doesn't fit `run_checks()`'s shared
+    `(df, target_column=...)` shape (2 required id columns, no single
+    target), so it isn't in TASK_TYPE_CHECKS."""
     return [
         check_rec_ids_present(interactions, user_id_column, item_id_column),
         check_rec_duplicate_interactions(interactions, user_id_column, item_id_column),

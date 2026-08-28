@@ -1,13 +1,11 @@
-"""BYOC (Bring-Your-Own-Code) support for Golden Path #1 (mục 6b.3,
-docs/mlops-lifecycle-software-template.md) — Dev supplies a Git repo + a
-path to a file exposing a fixed-signature `train()` function. The platform
-clones the repo, dynamically imports that file, and calls `train()` with the
-already-loaded dataset and a free-form JSON config dict.
+"""BYOC (Bring-Your-Own-Code) support for Golden Path #1 — Dev supplies a
+Git repo + a path to a file exposing a fixed-signature `train()` function.
+The platform clones the repo, dynamically imports that file, and calls
+`train()` with the already-loaded dataset and a free-form JSON config dict.
 
 No custom Docker image: this runs inside the same training-image as
 everything else, sandboxed only by the least-privilege ServiceAccount
-already in place (mục 3.1) — not by anything new at the container/cluster
-level.
+already in place — not by anything new at the container/cluster level.
 """
 
 import importlib.util
@@ -116,6 +114,6 @@ def run_custom_training(
     if not hasattr(model, "predict"):
         raise RuntimeError(
             f"train() in {entrypoint_path} must return a model exposing .predict(X) — "
-            "required by the platform's generic serving wrapper (mục 6b.1)"
+            "required by the platform's generic serving wrapper"
         )
     return model, {name: float(value) for name, value in metrics.items()}

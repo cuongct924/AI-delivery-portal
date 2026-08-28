@@ -5,7 +5,7 @@ from rec_algorithm_registry import REC_ALGORITHMS, get_rec_algorithm_spec
 
 
 def test_registry_has_no_lightfm_entry() -> None:
-    # Dropped — fails to build on Python 3.12/modern setuptools (mục 6e.5).
+    # Dropped — fails to build on Python 3.12/modern setuptools.
     assert "lightfm" not in REC_ALGORITHMS
 
 

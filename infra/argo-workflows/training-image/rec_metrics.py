@@ -1,7 +1,7 @@
-"""Ranking metrics for RecSys (Phase 8, mục 6e.3) — recall@k/ndcg@k/map@k,
-averaged per-user over the warm subset the caller (train_rec.py) already
-filtered to (cold-start users/items excluded from the gate, reported
-separately as reference info — mục 6e.3)."""
+"""Ranking metrics for RecSys — recall@k/ndcg@k/map@k, averaged per-user
+over the warm subset the caller (train_rec.py) already filtered to
+(cold-start users/items excluded from the gate, reported separately as
+reference info)."""
 
 import math
 

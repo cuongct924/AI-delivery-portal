@@ -1,6 +1,6 @@
 """Registry of Deep Learning architectures — same registry-by-dimension
 pattern as algorithm_registry.py's TASK_TYPE_ALGORITHMS, keyed by
-architecture name instead of task type (mục 5.1).
+architecture name instead of task type.
 """
 
 from dataclasses import dataclass
@@ -20,7 +20,7 @@ class DLArchitectureSpec:
             row ordering. False for MLP — timeColumn only improves split
             validity there (train.py's existing TimeSeriesSplit logic).
         hyperparameters: Names of the Dev-facing fields this architecture
-            exposes — mirrors DL_ARCHITECTURES in mục 5.1.
+            exposes.
     """
 
     model_class: type[nn.Module]

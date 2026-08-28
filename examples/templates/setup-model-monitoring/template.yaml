@@ -4,8 +4,7 @@ metadata:
   name: setup-model-monitoring
   title: "Setup Model Monitoring (Phase 9)"
   description: >
-    Registers a periodic Argo CronWorkflow (mục 6d,
-    docs/mlops-lifecycle-software-template.md) that compares recent
+    Registers a periodic Argo CronWorkflow that compares recent
     production input data against the model's training data with
     Evidently, logs the result to MLflow as a monitoring run, and — if you
     choose auto-retrain — calls the same trigger-training endpoint the
@@ -32,7 +31,7 @@ spec:
         modelName:
           title: Model name
           type: string
-          description: Must already be registered (any Golden Path — mục 6d.6).
+          description: Must already be registered (any Golden Path).
         modelVersion:
           title: Model version
           type: string
@@ -49,8 +48,8 @@ spec:
             A file:// CSV path with recent real input data to compare
             against the reference data. Setting up automatic logging of
             live serving inputs into this file is a separate, not-yet-
-            built piece (mục 6d.7) — for now, point this at wherever your
-            team already collects a sample of recent production inputs.
+            built piece — for now, point this at wherever your team
+            already collects a sample of recent production inputs.
         schedule:
           title: Schedule (cron expression)
           type: string
@@ -74,7 +73,7 @@ spec:
             "alert-only" just logs the monitoring run to MLflow.
             "auto-retrain" also calls trigger-training automatically —
             real risk if the drift check false-positives, so this is your
-            call, not the platform's (mục 6d.5).
+            call, not the platform's.
         retrainRequestJson:
           title: Retrain request JSON (onDriftDetected=auto-retrain)
           type: string

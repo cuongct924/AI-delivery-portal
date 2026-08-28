@@ -47,13 +47,13 @@ spec:
           default: sklearn
           description: >
             "sklearn" trains a classical algorithm (choose it below). "mlp"/
-            "lstm" train a neural network instead (mục 5) — no clustering
-            support, and "lstm" requires a time column for sequence
-            windowing. "nlp" fine-tunes a pretrained HuggingFace text-
-            classification model (mục 6g) — taskType must be
-            "classification", and requires textColumn/baseModelName below.
-            "cv" fine-tunes a pretrained resnet18 on images (mục 6h) —
-            taskType must be "classification", datasetUri must be a .zip of
+            "lstm" train a neural network instead — no clustering support,
+            and "lstm" requires a time column for sequence windowing.
+            "nlp" fine-tunes a pretrained HuggingFace text-classification
+            model — taskType must be "classification", and requires
+            textColumn/baseModelName below. "cv" fine-tunes a pretrained
+            resnet18 on images — taskType must be "classification",
+            datasetUri must be a .zip of
             <className>/<file> images (not a CSV — leave targetColumn
             empty, class comes from the folder name), and requires
             learningRate/epochs/batchSize below.
@@ -62,8 +62,8 @@ spec:
           type: string
           description: >
             Options depend on the task type selected above. Choose "custom"
-            for BYOC (mục 6b.3) — Dev-supplied training code instead of a
-            registry algorithm; fill in the 3 fields below when chosen.
+            for BYOC — Dev-supplied training code instead of a registry
+            algorithm; fill in the 3 fields below when chosen.
         codeRepoUrl:
           title: Code repository (algorithm=custom)
           type: string
@@ -128,7 +128,7 @@ spec:
             "fixed" (default) trains once with the values above, unchanged.
             "grid"/"random"/"bayesian" run multiple trials instead — set
             searchSpaceJson to say which hyperparameters to search, and
-            objectiveMetric/numTrials below (mục 6c).
+            objectiveMetric/numTrials below.
         numTrials:
           title: Number of trials (searchStrategy=random/bayesian)
           type: integer
@@ -340,8 +340,8 @@ spec:
     - id: validate-dataset
       name: "Validate the dataset"
       action: orchestration:validate-dataset
-      # Data Quality checks (mục 6f) assume a CSV read via pd.read_csv —
-      # CV's datasetUri is a .zip of images (mục 6h.5), skip this step.
+      # Data Quality checks assume a CSV read via pd.read_csv — CV's
+      # datasetUri is a .zip of images, skip this step.
       if: ${{ parameters.architecture !== 'cv' }}
       input:
         datasetUri: ${{ parameters.datasetUri }}

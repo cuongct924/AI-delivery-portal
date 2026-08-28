@@ -208,7 +208,7 @@ export function createTriggerTrainingAction({
             .optional(),
         searchStrategy: z =>
           z
-            .string({ description: '"fixed" (default), "grid", "random", or "bayesian" — mục 6c' })
+            .string({ description: '"fixed" (default), "grid", "random", or "bayesian"' })
             .optional(),
         numTrials: z =>
           z.number({ description: 'Trial budget — searchStrategy=random/bayesian' }).optional(),
@@ -634,7 +634,7 @@ export function createValidateRecDatasetAction({ config }: ActionDeps) {
 
 /**
  * `orchestration:trigger-rec-training` — starts the RecSys Argo Workflow
- * (Golden Path #3, mục 6e) and polls it to completion. Reuses the same
+ * (Golden Path #3) and polls it to completion. Reuses the same
  * `/trigger-training/{workflowName}/status` and `/models/{name}/latest-
  * version` endpoints `orchestration:trigger-training` uses — both are
  * keyed by workflow/model name, not by which WorkflowTemplate produced
@@ -752,9 +752,9 @@ export function createTriggerRecTrainingAction({
 }
 
 /**
- * `orchestration:setup-monitoring` — registers a periodic Argo CronWorkflow
- * (Phase 9, mục 6d). Unlike every other action here, this doesn't poll a
- * workflow to completion — Setup just registers the schedule and returns.
+ * `orchestration:setup-monitoring` — registers a periodic Argo CronWorkflow.
+ * Unlike every other action here, this doesn't poll a workflow to
+ * completion — Setup just registers the schedule and returns.
  */
 export function createSetupMonitoringAction({ config }: ActionDeps) {
   return createTemplateAction({

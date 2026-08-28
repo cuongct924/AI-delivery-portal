@@ -1,7 +1,7 @@
-"""Model Monitoring API — "Setup Model Monitoring" Golden Path (Phase 9,
-mục 6d). A separate router: unlike every other Golden Path, this one
-doesn't trigger a 1-shot workflow — it registers a periodic Argo
-CronWorkflow (mục 6d.1/6d.2) via `ArgoAdapter.create_cron_workflow()`.
+"""Model Monitoring API — "Setup Model Monitoring" Golden Path. A separate
+router: unlike every other Golden Path, this one doesn't trigger a 1-shot
+workflow — it registers a periodic Argo CronWorkflow via
+`ArgoAdapter.create_cron_workflow()`.
 """
 
 from typing import Final
@@ -25,11 +25,11 @@ class SetupMonitoringRequest(BaseModel):
     production_data_uri: str
     schedule: str
     drift_threshold: float = 0.5
-    # "alert-only" | "auto-retrain" (mục 6d.5) — Dev-facing on purpose,
-    # auto-retrain has real risk if the drift check false-positives.
+    # "alert-only" | "auto-retrain" — Dev-facing on purpose, auto-retrain
+    # has real risk if the drift check false-positives.
     on_drift_detected: str = "alert-only"
     # Required when on_drift_detected="auto-retrain" — the exact JSON body
-    # Dev would have POSTed to /trigger-training by hand (mục 6d.7).
+    # Dev would have POSTed to /trigger-training by hand.
     retrain_request_json: str | None = None
 
 
@@ -43,8 +43,7 @@ def setup_monitoring(request: SetupMonitoringRequest) -> SetupMonitoringResponse
         raise ValueError("retrain_request_json is required when on_drift_detected='auto-retrain'")
 
     # Deterministic name — re-running Setup for the same model updates the
-    # existing schedule/threshold (mục 6d.5/6d.6) instead of creating a
-    # duplicate CronWorkflow.
+    # existing schedule/threshold instead of creating a duplicate CronWorkflow.
     cron_workflow_name = f"monitor-{request.model_name}"
     parameters = {
         "model-name": request.model_name,

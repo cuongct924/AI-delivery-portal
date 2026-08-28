@@ -64,8 +64,7 @@ def compute_metrics(task_type: str, y_true: ArrayLike, y_pred: ArrayLike) -> dic
     if task_type == "regression":
         # r2/mean_absolute_percentage_error are both scale-free — usable as
         # default gate thresholds without knowing the dataset's units
-        # (mean_absolute_error isn't — logged for reference alongside them,
-        # not gated, same treatment as RecSys's map_at_k, mục 6e.3).
+        # (mean_absolute_error isn't — logged for reference, not gated).
         return {
             "r2": r2_score(y_true, y_pred),
             "mean_absolute_percentage_error": mean_absolute_percentage_error(y_true, y_pred),

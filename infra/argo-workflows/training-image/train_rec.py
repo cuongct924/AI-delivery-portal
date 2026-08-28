@@ -1,14 +1,12 @@
-"""Recommendation System training — Golden Path #3 (Phase 8, mục 6e,
-docs/mlops-lifecycle-software-template.md). A separate entrypoint from
-train.py — its own Argo WorkflowTemplate, its own env vars, its own
-multi-file dataset contract (mục 6e.2), not a Golden Path #1 architecture
-value.
+"""Recommendation System training — Golden Path #3. A separate entrypoint
+from train.py: its own Argo WorkflowTemplate, own env vars, own multi-file
+dataset contract, not a Golden Path #1 architecture value.
 
 Dispatches per algorithm family (rec_algorithm_registry.py) since the
 underlying libraries don't share a fit/predict interface: `implicit` (a
 sparse user-item matrix), `surprise` (its own `Trainset`), `tfidf_cosine`
-(hand-assembled sklearn primitives), `popularity` (pure pandas) — see mục
-6e.5 for the full delta writeup, including why `lightfm`/hybrid isn't here.
+(hand-assembled sklearn primitives), `popularity` (pure pandas). No
+`lightfm`/hybrid entry — it fails to build on this Python version.
 """
 
 import json
@@ -54,13 +52,11 @@ def _read_dataset_digest(path: Path) -> str:
 
 
 class RecModel:
-    """Wraps a trained recommender for serving (mục 6e.4) — `.predict()`
-    takes a DataFrame with `user_id`/`top_k` columns (1 row per request)
-    and returns a ranked list of recommended item ids per row, falling
-    back to the popularity baseline for any user with no training history
-    at all (cold-start — mục 6e.4 requires this fallback live in
-    `predict()` itself; no KServe/MLflow mechanism does it automatically).
-    """
+    """Wraps a trained recommender for serving — `.predict()` takes a
+    DataFrame with `user_id`/`top_k` columns (1 row per request) and
+    returns a ranked list of recommended item ids per row, falling back to
+    the popularity baseline for any user with no training history at all
+    (cold-start — no KServe/MLflow mechanism does this automatically)."""
 
     def __init__(
         self,
@@ -234,12 +230,12 @@ def train_and_evaluate(
     item_text_column: str | None = None,
 ) -> tuple[RecModel, dict[str, float]]:
     """Trains 1 RecSys algorithm and evaluates it on a global temporal
-    split's warm users (mục 6e.2/6e.3).
+    split's warm users.
 
     Returns:
         (RecModel, metrics) — `metrics` has `recall_at_k`/`ndcg_at_k`/
-        `map_at_k` (mục 6e.3) plus `cold_start_user_fraction` (reference
-        info, not gated).
+        `map_at_k` plus `cold_start_user_fraction` (reference info, not
+        gated).
 
     Raises:
         ValueError: the chosen algorithm's data requirement (rating column
@@ -269,7 +265,7 @@ def train_and_evaluate(
         dict[str, set[str]], train_df.groupby("user_id")["item_id"].apply(set).to_dict()
     )
 
-    # Warm = present in train (mục 6e.3) — cold interactions are reported
+    # Warm = present in train — cold interactions are reported
     # (cold_start_user_fraction below), never gated.
     is_warm = test_df["user_id"].isin(train_users) & test_df["item_id"].isin(train_items)
     warm_test_df = test_df[is_warm]

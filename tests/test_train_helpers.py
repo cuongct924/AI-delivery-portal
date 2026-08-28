@@ -1,7 +1,7 @@
 """infra/argo-workflows/training-image/train.py — the pure helper functions
 (encoding/imputation/scaling/splitting), tested directly since they hold
-the actual per-run decision logic (mục 2's "cơ chế ML thuần kỹ thuật" bucket
-— what train.py automates instead of asking Dev)."""
+the actual per-run decision logic — the mechanical choices train.py
+automates instead of asking Dev."""
 
 from typing import cast
 

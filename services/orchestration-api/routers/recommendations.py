@@ -1,11 +1,10 @@
-"""Recommendation System API — Golden Path #3 (Phase 8, mục 6e). A
-separate router from models.py (Golden Path #1/#2): the dataset contract
-(multi-file manifest, mục 6e.2) and the training trigger's shape are
-different enough that reusing TriggerTrainingRequest/validate_dataset
-would mean optional fields nobody else uses tacked onto an unrelated
-model. `/models/register`, `/policy-check`, `/deploy-model/*` (models.py)
-are reused unchanged — register→gate→deploy doesn't care which Golden Path
-produced the model (mục 6e.4).
+"""Recommendation System API — Golden Path #3. A separate router from
+models.py (Golden Path #1/#2): the dataset contract (multi-file manifest)
+and the training trigger's shape are different enough that reusing
+TriggerTrainingRequest/validate_dataset would mean optional fields nobody
+else uses tacked onto an unrelated model. `/models/register`,
+`/policy-check`, `/deploy-model/*` (models.py) are reused unchanged —
+register→gate→deploy doesn't care which Golden Path produced the model.
 """
 
 from pathlib import Path

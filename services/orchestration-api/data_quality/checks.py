@@ -208,8 +208,8 @@ def check_class_imbalance(df: pd.DataFrame, target_column: str | None = None) ->
 
 def check_high_cardinality(df: pd.DataFrame, target_column: str | None = None) -> CheckResult:
     """High-cardinality categorical columns break the assumption behind
-    automatic ordinal encoding (mục 3.1) — near-unique values encode to
-    near-unique codes, giving the model no generalizable signal."""
+    automatic ordinal encoding — near-unique values encode to near-unique
+    codes, giving the model no generalizable signal."""
     del target_column  # unused — see check_duplicate_rows
     row_count = len(df)
     flagged: dict[str, int] = {}
@@ -291,13 +291,10 @@ def check_time_gaps(df: pd.DataFrame, time_column: str) -> CheckResult:
     )
 
 
-# RecSys checks (Phase 8, mục 6e.2/6f.5) — don't fit registry.run_checks()'s
-# shared `(df, target_column=...)` shape (RecSys has no single df/target —
-# 2 required id columns, no target), so they're called directly by
-# routers/recommendations.py instead of through TASK_TYPE_CHECKS. Trimmed
-# from 6e.2's full list (also wanted: rating validity, item-features
-# foreign-key consistency) to the 2 cheapest, highest-signal ones — mục
-# 6e.5.
+# RecSys checks — don't fit registry.run_checks()'s shared
+# `(df, target_column=...)` shape (RecSys has no single df/target — 2
+# required id columns, no target), so they're called directly by
+# routers/recommendations.py instead of through TASK_TYPE_CHECKS.
 _MIN_INTERACTIONS_PER_ENTITY = 5  # k-core threshold for "not cold-start"
 
 
@@ -347,9 +344,9 @@ def check_rec_cold_start_ratio(
     interactions: pd.DataFrame, user_id_column: str, item_id_column: str
 ) -> CheckResult:
     """Warns when a large share of users/items fall below the k-core
-    threshold (mục 6e.2) — too little interaction history for any
-    algorithm family to learn a meaningful signal for them, regardless of
-    which one Dev picks."""
+    threshold — too little interaction history for any algorithm family
+    to learn a meaningful signal for them, regardless of which one Dev
+    picks."""
     user_counts = interactions[user_id_column].value_counts()
     item_counts = interactions[item_id_column].value_counts()
     cold_user_ratio = (

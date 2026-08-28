@@ -7,8 +7,8 @@ metadata:
     Validates the interactions dataset, trains a Recommendation System
     algorithm on the local Argo Workflows cluster, tracks the run in
     MLflow, registers the resulting model version, and opens a PR with its
-    Catalog entry (mục 6e, docs/mlops-lifecycle-software-template.md) —
-    calling services/orchestration-api the whole way, no mock steps.
+    Catalog entry — calling services/orchestration-api the whole way, no
+    mock steps.
   tags:
     - mlops
     - recsys
@@ -37,7 +37,7 @@ spec:
           type: string
           description: >
             A file:// path readable inside the training pod — 1 row per
-            (user, item) interaction (mục 6e.2).
+            (user, item) interaction.
           default: file:///mnt/data/interactions-sample.csv
         userIdColumn:
           title: User id column
@@ -52,8 +52,8 @@ spec:
           type: string
           default: timestamp
           description: >
-            Used for the global temporal split (mục 6e.2) — sorted
-            ascending, last 20% becomes the test period.
+            Used for the global temporal split — sorted ascending, last
+            20% becomes the test period.
         ratingColumn:
           title: Rating column (algorithm=svd/knn)
           type: string
@@ -70,14 +70,13 @@ spec:
             interactions). svd/knn: collaborative filtering on explicit
             feedback (needs ratingColumn). tfidf_cosine: content-based
             (needs itemFeaturesUri below). popularity: baseline, same
-            top-k for everyone (mục 6e.1). No "hybrid" option — the
-            planned lightfm entry doesn't build on this Python version
-            (mục 6e.5).
+            top-k for everyone. No "hybrid" option — the planned lightfm
+            entry doesn't build on this Python version.
         k:
           title: Recommendation list length (k)
           type: integer
           default: 10
-          description: Used for recall@k/ndcg@k/map@k (mục 6e.3).
+          description: Used for recall@k/ndcg@k/map@k.
         hyperparametersJson:
           title: Hyperparameters JSON
           type: string

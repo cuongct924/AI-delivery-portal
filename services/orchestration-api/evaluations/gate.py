@@ -67,12 +67,10 @@ TASK_TYPE_THRESHOLDS: Final[dict[str, list[MetricThreshold]]] = {
     "clustering": [
         MetricThreshold("silhouette_score", minimum=0.25),
     ],
-    # RecSys (mục 6e.3) — evaluated on warm users/items only (cold-start
-    # excluded, reported separately as reference info, not gated: a
-    # cold-start user has no history, so its ranking score is close to
-    # random and doesn't reflect model quality). map_at_k/exposure_gini are
-    # optional metrics (mục 6e.3) — no threshold entry, so they're simply
-    # not part of the pass/fail decision even when a run logs them.
+    # RecSys — evaluated on warm users/items only (cold-start excluded,
+    # reported separately as reference info: a cold-start user has no
+    # history, so its ranking score is close to random). map_at_k has no
+    # threshold entry, so it's never part of the pass/fail decision.
     "ranking": [
         MetricThreshold("recall_at_k", minimum=0.20),
         MetricThreshold("ndcg_at_k", minimum=0.30),

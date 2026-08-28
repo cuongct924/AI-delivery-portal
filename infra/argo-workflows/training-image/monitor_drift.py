@@ -1,14 +1,13 @@
-"""Data Drift monitoring — "Setup Model Monitoring" Golden Path (Phase 9,
-mục 6d, docs/mlops-lifecycle-software-template.md). Compares recent
-production input data against the model's original training dataset with
-Evidently, logs the result to MLflow as a monitoring run tied to the
-model, and optionally triggers a retrain. Runs periodically via an Argo
-CronWorkflow (mục 6d.2) — a fully separate entrypoint from train.py, like
+"""Data Drift monitoring — "Setup Model Monitoring" Golden Path. Compares
+recent production input data against the model's original training
+dataset with Evidently, logs the result to MLflow as a monitoring run tied
+to the model, and optionally triggers a retrain. Runs periodically via an
+Argo CronWorkflow — a fully separate entrypoint from train.py, like
 train_rec.py.
 
-Scope (mục 6d.4): Data Drift only, not Performance/Error monitoring — those
-need production ground-truth labels, which arrive on a separate, slower
-feedback loop out of scope for v1.
+Scope: Data Drift only, not Performance/Error monitoring — those need
+production ground-truth labels, which arrive on a separate, slower
+feedback loop.
 """
 
 import json
@@ -52,13 +51,13 @@ def compute_drift_share(reference: pd.DataFrame, current: pd.DataFrame) -> float
 
 def _trigger_retrain(retrain_request_json: str, orchestration_api_url: str) -> None:
     """Calls the same POST /trigger-training the Scaffolder action
-    (orchestration:trigger-training) uses (mục 6d.5) — auto-retrain needs
-    no new mechanism, just an automated caller instead of a Dev clicking
-    the button.
+    (orchestration:trigger-training) uses — auto-retrain needs no new
+    mechanism, just an automated caller instead of a Dev clicking the
+    button.
 
     `retrain_request_json` is the exact JSON body Dev supplied at Setup
-    Model Monitoring time (mục 6d.7) — the same request they'd have used
-    to retrigger training by hand. Reconstructing it automatically from the
+    Model Monitoring time — the same request they'd have used to retrigger
+    training by hand. Reconstructing it automatically from the
     model's MLflow run metadata would need a different lookup per Golden
     Path/architecture (dataset_uri vs. interactions_uri, tag vs. param for
     task_type, ...) and was cut in favor of this simpler, more reliable

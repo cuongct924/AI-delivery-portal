@@ -1,7 +1,7 @@
 """Deep Learning training loop (MLP/LSTM) — dispatched from train.py when
-ARCHITECTURE is not "sklearn". Kept in a separate file per mục 5.2: the
-epoch/batch/backprop training loop shape is fundamentally different from
-sklearn's single `.fit()` call, not worth cramming into train.py.
+ARCHITECTURE is not "sklearn". Kept in a separate file: the epoch/batch/
+backprop training loop shape is fundamentally different from sklearn's
+single `.fit()` call, not worth cramming into train.py.
 """
 
 from typing import Any, cast
@@ -63,8 +63,7 @@ def train_and_evaluate(
 
     Logs one `loss` metric per epoch to the currently active MLflow run
     (opened by the caller, train.py's main()) — reuses MLflow's own UI for
-    live experiment tracking instead of building a new dashboard, same
-    approach already used for HPO (mục 6c.3).
+    live experiment tracking instead of building a new dashboard.
     """
     spec = get_dl_architecture(architecture)
     epochs = int(hyperparameters["epochs"])

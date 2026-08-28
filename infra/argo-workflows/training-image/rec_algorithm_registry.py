@@ -1,19 +1,18 @@
-"""Registry of Recommendation System algorithms (Phase 8, mục 6e,
-docs/mlops-lifecycle-software-template.md) — keyed by algorithm name,
-grouped by family (mục 6e.1).
+"""Registry of Recommendation System algorithms — keyed by algorithm name,
+grouped by family.
 
-Unlike `algorithm_registry.py` (mục 3.1), the underlying libraries don't
-share a `fit`/`predict` interface — `implicit` works on sparse matrices,
-`surprise` on its own `Trainset`, `tfidf_cosine` is hand-assembled from
-sklearn primitives, `popularity` is pure pandas. Each family's actual
-training/recommending logic lives in `train_rec.py`, not here — this
-registry only tracks name -> family and which raw data each needs, driving
-the Scaffolder form and `train_rec.py`'s dispatch.
+Unlike `algorithm_registry.py`, the underlying libraries don't share a
+`fit`/`predict` interface — `implicit` works on sparse matrices, `surprise`
+on its own `Trainset`, `tfidf_cosine` is hand-assembled from sklearn
+primitives, `popularity` is pure pandas. Each family's actual training/
+recommending logic lives in `train_rec.py`, not here — this registry only
+tracks name -> family and which raw data each needs, driving the
+Scaffolder form and `train_rec.py`'s dispatch.
 
-No `lightfm` entry (hybrid family, mục 6e.1's table) — dropped after
-discovering it fails to build on Python 3.12/modern setuptools (`AttributeError:
-'dict' object has no attribute '__LIGHTFM_SETUP__'`, a known upstream
-incompatibility, not fixable from this repo) — see mục 6e.5.
+No `lightfm` entry (hybrid family) — dropped after discovering it fails to
+build on Python 3.12/modern setuptools (`AttributeError: 'dict' object has
+no attribute '__LIGHTFM_SETUP__'`, a known upstream incompatibility, not
+fixable from this repo).
 """
 
 from dataclasses import dataclass

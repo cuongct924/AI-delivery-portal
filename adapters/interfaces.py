@@ -46,9 +46,8 @@ class IDeployTrafficStrategy(ABC):
 
     Direct and TrafficSplit (Canary/A-B/Blue-Green) are the only 2
     concrete strategies: KServe's `canaryTrafficPercent` field is one
-    mechanism that Canary/A-B/Blue-Green only differ in *intent* over
-    (mục 4.1, docs/mlops-lifecycle-software-template.md) — not 3 separate
-    classes.
+    mechanism that Canary/A-B/Blue-Green only differ in *intent* over —
+    not 3 separate classes.
     """
 
     @abstractmethod

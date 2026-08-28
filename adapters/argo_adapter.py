@@ -50,11 +50,10 @@ class ArgoAdapter(IWorkflowAdapter):
         self, name: str, schedule: str, workflow_template_name: str, parameters: dict
     ) -> dict:
         """Creates (or replaces) a CronWorkflow — same CRD family as
-        WorkflowTemplate, no new infra (mục 6d.2). Used by "Setup Model
-        Monitoring" (Phase 9) to register a periodic drift-check job; `name`
-        is deterministic (1 CronWorkflow per model name) so re-running Setup
-        updates the existing schedule/threshold instead of creating a
-        duplicate.
+        WorkflowTemplate, no new infra. Used by "Setup Model Monitoring" to
+        register a periodic drift-check job; `name` is deterministic (1
+        CronWorkflow per model name) so re-running Setup updates the
+        existing schedule/threshold instead of creating a duplicate.
 
         Not part of IWorkflowAdapter — same precedent as list_workflows().
         """
@@ -81,9 +80,8 @@ class ArgoAdapter(IWorkflowAdapter):
             timeout=10,
         )
         if response.status_code == 409:
-            # Already exists — mục 6d.5/6d.6: re-running "Setup Model
-            # Monitoring" for the same model updates its schedule/threshold
-            # in place instead of erroring.
+            # Already exists — re-running "Setup Model Monitoring" for the
+            # same model updates its schedule/threshold in place.
             response = httpx.put(
                 f"{self.base_url}/api/v1/cron-workflows/{self.namespace}/{name}",
                 json=body,

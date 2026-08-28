@@ -1,8 +1,7 @@
-"""Text classification training (Phase 6, mục 6g,
-docs/mlops-lifecycle-software-template.md) — fine-tunes a pretrained
-HuggingFace sequence-classification model with `transformers.Trainer`. Same
-role as `train_dl.py`/`byoc_runner.py`: a separate script `train.py`
-dispatches into, not a rewrite of the shared split/gate/register flow.
+"""Text classification training — fine-tunes a pretrained HuggingFace
+sequence-classification model with `transformers.Trainer`. Same role as
+`train_dl.py`/`byoc_runner.py`: a separate script `train.py` dispatches
+into, not a rewrite of the shared split/gate/register flow.
 """
 
 from typing import Any, Final, cast
@@ -38,14 +37,14 @@ def train_and_evaluate(
 
     Args:
         train_text: Raw text column, train split — never run through
-            `train.py`'s `_encode_categoricals()` (mục 6g.3), which would
-            corrupt it into category codes.
+            `train.py`'s `_encode_categoricals()`, which would corrupt it
+            into category codes.
         test_text: Raw text column, test split.
         train_labels: Label column (string classes), train split.
         test_labels: Label column, test split.
         hyperparameters: `base_model_name` (HuggingFace Hub model id),
-            `learning_rate`, `epochs`, `batch_size` — mục 6g.2. Optional
-            `optimizer` ("adam"/"sgd", default "adam").
+            `learning_rate`, `epochs`, `batch_size`. Optional `optimizer`
+            ("adam"/"sgd", default "adam").
 
     Returns:
         (transformers model, metrics) — `metrics` from the same

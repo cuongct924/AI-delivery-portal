@@ -123,8 +123,7 @@ def _split(
     task_type: str,
     time_column: str | None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-    """Picks the validation strategy automatically — Dev never chooses this
-    (mục 2, "cơ chế ML thuần kỹ thuật" bucket).
+    """Picks the validation strategy automatically — Dev never chooses this.
 
     A `time_column` always wins and never shuffles — random holdout/k-fold
     would let future rows leak into training and inflate metrics
@@ -197,10 +196,10 @@ def _fit(
 
 def _read_dl_hyperparameters() -> dict[str, object]:
     """Reads the DL hyperparameter env vars set by train-register-template.yaml.
-    Only LEARNING_RATE/EPOCHS/BATCH_SIZE are common to both architectures
-    (mục 5.1) — the rest are architecture-specific and simply absent from
-    the dict when unset, letting train_dl.py fail loudly via KeyError if a
-    required one is genuinely missing instead of silently defaulting."""
+    Only LEARNING_RATE/EPOCHS/BATCH_SIZE are common to both architectures —
+    the rest are architecture-specific and simply absent from the dict when
+    unset, letting train_dl.py fail loudly via KeyError if a required one is
+    genuinely missing instead of silently defaulting."""
     hyperparameters: dict[str, object] = {
         "learning_rate": float(os.environ["LEARNING_RATE"]),
         "epochs": int(os.environ["EPOCHS"]),
@@ -225,10 +224,9 @@ def _read_dl_hyperparameters() -> dict[str, object]:
 
 
 def _read_nlp_hyperparameters() -> dict[str, object]:
-    """Reads the NLP hyperparameter env vars (mục 6g.2). LEARNING_RATE/
-    EPOCHS/BATCH_SIZE are the same workflow parameters the DL path uses
-    (mục 5.1) — reused as-is since the 2 architectures never run in the
-    same job, no collision."""
+    """Reads the NLP hyperparameter env vars. LEARNING_RATE/EPOCHS/
+    BATCH_SIZE are the same workflow parameters the DL path uses — reused
+    as-is since the 2 architectures never run in the same job."""
     hyperparameters: dict[str, object] = {
         "base_model_name": os.environ["BASE_MODEL_NAME"],
         "learning_rate": float(os.environ["LEARNING_RATE"]),
@@ -250,35 +248,34 @@ def main() -> None:
     mode = os.environ.get("MODE", "train")
     base_model_uri = os.environ.get("BASE_MODEL_URI") or None
     time_column = os.environ.get("TIME_COLUMN") or None
-    # BYOC (mục 6b.3) — "custom" bypasses the algorithm registry and DL
-    # architecture registry entirely, so it's checked ahead of both.
+    # "custom" bypasses the algorithm registry and DL architecture registry
+    # entirely, so it's checked ahead of both.
     is_custom = algorithm == "custom"
     code_repo_url = os.environ.get("CODE_REPO_URL") or None
     entrypoint_path = os.environ.get("ENTRYPOINT_PATH") or None
-    # HPO (mục 6c) — "fixed" (default) keeps this Phase-3 code path
-    # completely unchanged, no nested runs, no Optuna involved at all.
+    # "fixed" (default) keeps the non-search code path completely
+    # unchanged — no nested runs, no Optuna involved at all.
     search_strategy_name = os.environ.get("SEARCH_STRATEGY") or "fixed"
     is_search = search_strategy_name != "fixed"
-    # NLP (mục 6g) — a 4th architecture, not an algorithm/BYOC value (mục
-    # 6g.1). text_column stays out of _encode_categoricals()'s reach (see
-    # the elif branch below) so the tokenizer gets raw strings.
+    # text_column stays out of _encode_categoricals()'s reach (see the elif
+    # branch below) so the tokenizer gets raw strings.
     is_nlp = architecture == "nlp"
     text_column = os.environ.get("TEXT_COLUMN") or None
-    # CV (mục 6h) — a 5th architecture; DATASET_URI is a .zip of images
-    # (mục 6h.1), not a CSV, so the dataset-loading section below branches
-    # before ever calling pd.read_csv() for this architecture.
+    # DATASET_URI is a .zip of images, not a CSV, for this architecture —
+    # the dataset-loading section below branches before ever calling
+    # pd.read_csv().
     is_cv = architecture == "cv"
 
     if is_nlp and text_column is None:
         raise RuntimeError("TEXT_COLUMN is required when ARCHITECTURE=nlp")
     if is_nlp and task_type != "classification":
-        raise RuntimeError("ARCHITECTURE=nlp only supports TASK_TYPE=classification (mục 6g.5)")
+        raise RuntimeError("ARCHITECTURE=nlp only supports TASK_TYPE=classification")
     if is_nlp and mode != "train":
-        raise RuntimeError("ARCHITECTURE=nlp does not support MODE=finetune (mục 6g.5)")
+        raise RuntimeError("ARCHITECTURE=nlp does not support MODE=finetune")
     if is_cv and task_type != "classification":
-        raise RuntimeError("ARCHITECTURE=cv only supports TASK_TYPE=classification (mục 6h.5)")
+        raise RuntimeError("ARCHITECTURE=cv only supports TASK_TYPE=classification")
     if is_cv and mode != "train":
-        raise RuntimeError("ARCHITECTURE=cv does not support MODE=finetune (mục 6h.5)")
+        raise RuntimeError("ARCHITECTURE=cv does not support MODE=finetune")
 
     if is_custom and (code_repo_url is None or entrypoint_path is None):
         raise RuntimeError("CODE_REPO_URL and ENTRYPOINT_PATH are required when ALGORITHM=custom")
@@ -290,15 +287,11 @@ def main() -> None:
         raise RuntimeError("ALGORITHM is required when ARCHITECTURE=sklearn")
     if not is_custom and architecture != "sklearn" and task_type == "clustering":
         # dl_architecture_registry.py's DL_ARCHITECTURES only lists
-        # classification/regression hyperparameters (mục 5.1) — no DL
-        # clustering support.
+        # classification/regression hyperparameters — no DL clustering support.
         raise RuntimeError(f"architecture {architecture!r} does not support task_type='clustering'")
     if is_search and (is_custom or is_nlp or is_cv or architecture == "sklearn"):
-        # HPO (mục 6c) is scoped to the DL hyperparameters (mục 5.1) — the
-        # only ones with an existing single-value form field to search
-        # over. sklearn has no tunable field yet, BYOC's train() contract
-        # has no room for injected hyperparameters, and NLP/CV are separate
-        # tiers not yet covered (mục 6g.5/6h.5).
+        # HPO is scoped to the DL hyperparameters — the only ones with an
+        # existing single-value form field to search over.
         raise RuntimeError("SEARCH_STRATEGY != 'fixed' requires ARCHITECTURE=mlp or lstm")
 
     # Strip the "file://" scheme to get a real filesystem path.
@@ -306,8 +299,8 @@ def main() -> None:
     dataset_digest = _read_dataset_digest(dataset_path)
 
     if is_cv:
-        # No DataFrame at all for CV (mục 6h.1) — ImageFolder reads
-        # straight from the extracted zip inside train_cv.py.
+        # No DataFrame for CV — ImageFolder reads straight from the
+        # extracted zip inside train_cv.py.
         df = None
         features = None
     else:
@@ -354,7 +347,7 @@ def main() -> None:
             if task_type == "clustering":
                 # DBSCAN/AgglomerativeClustering are transductive (no
                 # .predict on new data) — clustering always fits+predicts
-                # on the full dataset, no train/test split (mục 3.1).
+                # on the full dataset, no train/test split.
                 if mode != "train":
                     raise RuntimeError("clustering does not support MODE=finetune")
                 train_features, _ = _handle_missing_values(features, features, spec)
@@ -387,9 +380,9 @@ def main() -> None:
             assert target_column is not None
             # df[[text_column]], not `features` — that went through
             # _encode_categoricals() above, which would corrupt raw text
-            # into category codes (mục 6g.3). pandas-stubs doesn't resolve
-            # a 1-item list-of-str indexer to DataFrame confidently, same
-            # single-column stub gap as the `labels_full` cast below.
+            # into category codes. pandas-stubs doesn't resolve a 1-item
+            # list-of-str indexer to DataFrame confidently, same gap as the
+            # `labels_full` cast below.
             text_features = cast(pd.DataFrame, df[[text_column]])
             labels_full = cast(pd.Series, df[target_column])
             train_features, test_features, train_labels, test_labels = _split(
@@ -408,10 +401,8 @@ def main() -> None:
                 mlflow.log_metric(metric_name, value)
             mlflow_transformers.log_model(model, artifact_path="model")
         elif is_cv:
-            # Same hyperparameter reader as DL (mục 5.1) — the 3 required
-            # keys (learning_rate/epochs/batch_size, mục 6h.2) are all it
-            # reads when the DL-only optional env vars are unset, which
-            # they are here.
+            # Same hyperparameter reader as DL — the 3 required keys are all
+            # it reads when the DL-only optional env vars are unset.
             hyperparameters = _read_dl_hyperparameters()
             cv_model, metrics = train_cv_and_evaluate(dataset_path, hyperparameters)
             for metric_name, value in metrics.items():

@@ -5,8 +5,8 @@ metadata:
   namespace: default
 spec:
   entrypoint: train-and-register
-  # Same least-privilege ServiceAccount as Golden Path #1 (mục 3.1) — no
-  # new cluster-level permissions needed for Golden Path #3.
+  # Same least-privilege ServiceAccount as Golden Path #1 — no new
+  # cluster-level permissions needed for Golden Path #3.
   serviceAccountName: train-register-workflow
   securityContext:
     runAsNonRoot: true
@@ -20,7 +20,7 @@ spec:
     parameters:
       - name: model-name
       - name: interactions-uri
-      # Only required for algorithm=tfidf_cosine (mục 6e.1/6e.2).
+      # Only required for algorithm=tfidf_cosine.
       - name: item-features-uri
         value: ""
       - name: user-id-column
@@ -37,9 +37,9 @@ spec:
       - name: algorithm
       - name: k
         value: "10"
-      # Free-form per-algorithm hyperparameters (mục 6e.5 — 1 JSON field
-      # instead of a form field per algorithm's own hyperparameter names,
-      # same pattern as BYOC's customConfig/HPO's searchSpaceJson).
+      # Free-form per-algorithm hyperparameters — 1 JSON field instead of
+      # a form field per algorithm's own hyperparameter names, same
+      # pattern as BYOC's customConfig/HPO's searchSpaceJson.
       - name: hyperparameters-json
         value: "{}"
   templates:
@@ -74,8 +74,8 @@ spec:
                   value: '{{workflow.parameters.hyperparameters-json}}'
           - name: register
             # Reuses train-register-golden-path's register-step unchanged
-            # (mục 3.4) — it only cares about model-name/task-type/
-            # artifact-uri/dataset-digest, all identical in shape here.
+            # — it only cares about model-name/task-type/artifact-uri/
+            # dataset-digest, all identical in shape here.
             templateRef:
               name: train-register-golden-path
               template: register-step

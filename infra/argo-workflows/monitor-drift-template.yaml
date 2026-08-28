@@ -26,16 +26,15 @@ spec:
         value: "0.5"
       - name: on-drift-detected
         value: alert-only
-      # Only required when on-drift-detected=auto-retrain (mục 6d.5/6d.7)
-      # — the exact JSON body Dev would have POSTed to /trigger-training
-      # by hand.
+      # Only required when on-drift-detected=auto-retrain — the exact
+      # JSON body Dev would have POSTed to /trigger-training by hand.
       - name: retrain-request-json
         value: ""
   templates:
     - name: monitor-drift
       # A CronWorkflow instantiates this template directly (no DAG wrapper
       # needed — 1 step, no register/deploy follow-up unlike Golden Path
-      # #1/#3, mục 6d.1).
+      # #1/#3).
       inputs:
         parameters:
           - name: model-name

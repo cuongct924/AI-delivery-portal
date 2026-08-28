@@ -1,8 +1,7 @@
-"""Image classification training (Phase 7, mục 6h,
-docs/mlops-lifecycle-software-template.md) — torchvision transfer learning:
-a frozen ImageNet-pretrained resnet18 backbone with a fresh linear head,
-fine-tuned only on that head (CPU-friendly, mục 6h.2). Same role as
-train_dl.py/train_nlp.py: a separate script train.py dispatches into.
+"""Image classification training — torchvision transfer learning: a frozen
+ImageNet-pretrained resnet18 backbone with a fresh linear head, fine-tuned
+only on that head (CPU-friendly). Same role as train_dl.py/train_nlp.py: a
+separate script train.py dispatches into.
 """
 
 import base64
@@ -36,8 +35,8 @@ _TRANSFORM = transforms.Compose(
 
 class CVModel:
     """Wraps the fine-tuned backbone + class names for serving — the object
-    `pyfunc_wrapper.GenericPyfuncWrapper` delegates `.predict()` to (mục
-    6h.3), reused unchanged from BYOC (mục 6b.3)."""
+    `pyfunc_wrapper.GenericPyfuncWrapper` delegates `.predict()` to, reused
+    unchanged from BYOC."""
 
     def __init__(self, backbone: nn.Module, class_names: list[str]) -> None:
         self._backbone = backbone
@@ -46,7 +45,7 @@ class CVModel:
     def predict(self, model_input: pd.DataFrame) -> list[str]:
         """`model_input` has exactly 1 column of base64-encoded image bytes
         (a serving-friendly, JSON-transportable encoding — the training-
-        time input is files on disk instead, mục 6h.1)."""
+        time input is files on disk instead)."""
         column = model_input.columns[0]
         images = [
             _TRANSFORM(Image.open(io.BytesIO(base64.b64decode(value))).convert("RGB"))
@@ -63,14 +62,14 @@ class CVModel:
 def train_and_evaluate(
     dataset_zip_path: Path, hyperparameters: dict[str, object]
 ) -> tuple[CVModel, dict[str, float]]:
-    """Extracts the zip (mục 6h.1 — `<class_name>/<file>` layout,
-    `ImageFolder`-compatible), fine-tunes only the replaced final layer, and
-    evaluates on a held-out 20%.
+    """Extracts the zip (`<class_name>/<file>` layout, `ImageFolder`-
+    compatible), fine-tunes only the replaced final layer, and evaluates on
+    a held-out 20%.
 
     Args:
         dataset_zip_path: Path to the (already-downloaded) dataset zip.
         hyperparameters: `learning_rate`, `epochs`, `batch_size` — same
-            names/meaning as the DL path (mục 5.1), reused as-is. Optional
+            names/meaning as the DL path, reused as-is. Optional
             `optimizer` ("adam"/"sgd", default "adam") — same Dev-facing
             choice as train_dl.py, applied to just the replaced head's
             parameters since the backbone stays frozen.

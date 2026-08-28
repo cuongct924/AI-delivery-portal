@@ -1,17 +1,14 @@
-"""Hyperparameter Search Strategy (Phase 5b, mục 6c,
-docs/mlops-lifecycle-software-template.md) — Grid/Random/Bayesian search over
-DL hyperparameters (mục 5.1), on top of the existing single-value default.
+"""Hyperparameter Search Strategy — Grid/Random/Bayesian search over DL
+hyperparameters, on top of the existing single-value default.
 
-Lives inside training-image, not `adapters/interfaces.py` as mục 6c.1
-literally suggests — this container only has the `*.py` files the
-Dockerfile copies in, no access to the top-level `adapters/` package (a
-different deployable). Same Strategy Pattern shape as
-`adapters/interfaces.py`'s `IDeployTrafficStrategy`/`IReleaseStrategy`
-though — see mục 6c.5 for the full writeup of this and the other deltas
-from the literal interface in mục 6c.1 (this module adds `trial_count()`
-and `report_result()`, not in the original 1-method sketch — Grid needs to
-tell the caller how many trials the grid actually contains, and Bayesian
-needs each trial's outcome fed back before it can suggest the next one).
+Lives inside training-image, not `adapters/interfaces.py` — this container
+only has the `*.py` files the Dockerfile copies in, no access to the
+top-level `adapters/` package (a different deployable). Same Strategy
+Pattern shape as `adapters/interfaces.py`'s
+`IDeployTrafficStrategy`/`IReleaseStrategy` though, plus `trial_count()`
+(Grid needs to tell the caller how many trials the grid actually contains)
+and `report_result()` (Bayesian needs each trial's outcome fed back before
+it can suggest the next one).
 """
 
 import itertools
@@ -20,9 +17,8 @@ from typing import Any, Protocol
 
 import optuna
 
-# Only this module's own Optuna progress spam — doesn't affect training
-# logs. Study/trial info is already visible via the nested MLflow runs
-# hpo_runner.py creates (mục 6c.3).
+# Only this module's own Optuna progress spam — study/trial info is
+# already visible via the nested MLflow runs hpo_runner.py creates.
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 
@@ -68,11 +64,10 @@ class IHyperparameterSearchStrategy(Protocol):
 
 
 class FixedStrategy:
-    """The existing default (mục 6c.4) — 1 trial, the single fixed value
-    from each space's `choices[0]`. Not actually wired into `train.py`'s
-    dispatch (searchStrategy="fixed" skips the HPO loop entirely and keeps
-    the pre-Phase-5b code path unchanged) — kept here so the Strategy enum
-    stays complete for any future generic caller."""
+    """The existing default — 1 trial, the single fixed value from each
+    space's `choices[0]`. Not wired into `train.py`'s dispatch
+    (searchStrategy="fixed" skips the HPO loop entirely) — kept so the
+    Strategy enum stays complete for any future generic caller."""
 
     def trial_count(self, requested_trials: int, spaces: list[SearchSpace]) -> int:
         return 1
@@ -86,7 +81,7 @@ class FixedStrategy:
 
 class GridSearchStrategy:
     """Exhaustively tries every combination in the Cartesian product of
-    each space's `choices` — no ranges allowed (mục 6c.1)."""
+    each space's `choices` — no ranges allowed."""
 
     def __init__(self) -> None:
         self._param_names: list[str] = []
@@ -120,7 +115,7 @@ class GridSearchStrategy:
 
 class _OptunaStrategy:
     """Shared `optuna.Study.ask()`/`tell()` plumbing for Random/Bayesian —
-    only the sampler differs between the two (mục 6c.1)."""
+    only the sampler differs between the two."""
 
     def __init__(self, sampler: optuna.samplers.BaseSampler, direction: str) -> None:
         self._study = optuna.create_study(sampler=sampler, direction=direction)
@@ -163,11 +158,9 @@ class RandomSearchStrategy(_OptunaStrategy):
 
 class BayesianSearchStrategy(_OptunaStrategy):
     """Optuna's TPE sampler — uses past trials' outcomes to pick smarter
-    later ones. Optuna's optional trial-pruning (mục 6c.1) isn't wired in
-    here: it needs per-epoch intermediate values reported from inside
-    `train_dl.py`'s own training loop, not just the strategy/SearchSpace
-    layer — left for a later pass, the TPE sampling itself is the main
-    value (mục 6c.1 already calls pruning optional)."""
+    later ones. Optuna's optional trial-pruning isn't wired in: it needs
+    per-epoch intermediate values from `train_dl.py`'s own loop, not just
+    this strategy/SearchSpace layer — left for later."""
 
     def __init__(self, direction: str) -> None:
         super().__init__(optuna.samplers.TPESampler(), direction)

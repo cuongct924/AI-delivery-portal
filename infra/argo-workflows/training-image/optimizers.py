@@ -1,14 +1,8 @@
-"""Optimizer selection (Dev-facing) — shared between train_dl.py and
+"""Optimizer selection (Dev-facing choice between Adam and SGD, each
+kept at its library defaults otherwise) — shared between train_dl.py and
 train_cv.py, the 2 places that build a raw `torch.optim` optimizer
-directly. train_nlp.py's HuggingFace `Trainer` takes an `optim=` string
-of its own instead (mapped separately there, not through this module).
-
-This resolves the "optimizer" open point noted in
-docs/mlops-lifecycle-software-template.md (the Q&A section before mục
-7b.4) — previously fixed to Adam automatically; now a Dev-facing choice
-between Adam and SGD, their own respective library defaults otherwise
-(e.g. SGD's momentum=0) — no extra tuning knobs beyond the 2 the Dev
-actually asked to choose between.
+directly. train_nlp.py's HuggingFace `Trainer` takes an `optim=` string of
+its own instead (mapped separately there, not through this module).
 """
 
 from collections.abc import Callable, Iterable
@@ -34,7 +28,7 @@ def build_optimizer(
         name: "adam" or "sgd".
         params: The model parameters to optimize (all of them for
             train_dl.py; only the replaced head for train_cv.py's frozen
-            backbone, mục 6h.2).
+            backbone).
         learning_rate: Passed through as-is to the optimizer's `lr`.
 
     Returns:

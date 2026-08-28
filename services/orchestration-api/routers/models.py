@@ -57,14 +57,14 @@ class TriggerTrainingRequest(BaseModel):
     dataset_uri: str
     task_type: str
     # sklearn by default — "algorithm" only applies to that architecture;
-    # mlp/lstm use the DL hyperparameter fields below instead (mục 5.1).
+    # mlp/lstm use the DL hyperparameter fields below instead.
     architecture: str = "sklearn"
     algorithm: str | None = None
     target_column: str | None = None
     id_columns: list[str] | None = None
     time_column: str | None = None
     base_model_uri: str | None = None
-    # DL hyperparameters (mục 5.1) — unused for architecture="sklearn".
+    # DL hyperparameters — unused for architecture="sklearn".
     hidden_layers: list[int] | None = None
     dropout: float | None = None
     sequence_length: int | None = None
@@ -76,22 +76,22 @@ class TriggerTrainingRequest(BaseModel):
     # Dev-facing optimizer choice ("adam"/"sgd", optimizers.py) — only used
     # for architecture="mlp"/"lstm"/"nlp"/"cv", defaults to "adam" when unset.
     optimizer: str | None = None
-    # BYOC (mục 6b.3) — only used when algorithm="custom".
+    # BYOC — only used when algorithm="custom".
     code_repo_url: str | None = None
     entrypoint_path: str | None = None
     custom_config: str | None = None
-    # HPO (mục 6c) — only used when architecture is "mlp"/"lstm" and
-    # search_strategy is not "fixed" (the default).
+    # HPO — only used when architecture is "mlp"/"lstm" and search_strategy
+    # is not "fixed" (the default).
     search_strategy: str | None = None
     num_trials: int | None = None
     search_space_json: str | None = None
     objective_metric: str | None = None
     objective_direction: str | None = None
-    # NLP (mục 6g) — only used when architecture="nlp".
+    # NLP — only used when architecture="nlp".
     text_column: str | None = None
     base_model_name: str | None = None
-    # CV (mục 6h) — no new fields, DATASET_URI/LEARNING_RATE/EPOCHS/
-    # BATCH_SIZE are all reused as-is (mục 6h.2).
+    # CV — no new fields, DATASET_URI/LEARNING_RATE/EPOCHS/BATCH_SIZE are
+    # all reused as-is.
 
 
 class TriggerTrainingResponse(BaseModel):
@@ -174,8 +174,8 @@ class PrepareDeployRequest(BaseModel):
     model_name: str
     model_version: str
     # "direct" | "canary" | "ab" | "blue-green" — canary/ab/blue-green all
-    # render the same canaryTrafficPercent field (mục 4.1), only the
-    # Dev-facing suggested default differs.
+    # render the same canaryTrafficPercent field, only the Dev-facing
+    # suggested default differs.
     traffic_strategy: str = "direct"
     traffic_percent: int | None = None
     # "pr-gated" | "instant"
@@ -282,7 +282,7 @@ def register_model(request: RegisterModelRequest) -> RegisterModelResponse:
     )
     # Tagged separately (not an IModelRegistryAdapter.register_model() param)
     # so policy_check() can read it back at deploy time without Backstage
-    # having to resend taskType (mục 3.3).
+    # having to resend taskType.
     mlflow_adapter.set_model_version_tag(
         result["name"], result["version"], "task_type", request.task_type
     )

@@ -1,11 +1,10 @@
-"""Runs a Hyperparameter Search Strategy (hpo_strategies.py, mục 6c) as a
-plain Python loop inside the training-image pod — no Ray Tune/Katib (mục
-6c.2, deliberately avoiding new infra). Each trial: sample → train_dl.py's
-train_and_evaluate() → log as a nested MLflow child run → feed the result
-back to the strategy. After all trials, the best one's model/metrics/
-hyperparameters are handed back to `train.py` to log at the parent-run
-level and register — the register→gate→deploy flow downstream never
-changes (mục 6c.2).
+"""Runs a Hyperparameter Search Strategy (hpo_strategies.py) as a plain
+Python loop inside the training-image pod — no Ray Tune/Katib, deliberately
+avoiding new infra. Each trial: sample → train_dl.py's train_and_evaluate()
+→ log as a nested MLflow child run → feed the result back to the strategy.
+After all trials, the best one's model/metrics/hyperparameters are handed
+back to `train.py` to log at the parent-run level and register — the
+register→gate→deploy flow downstream never changes.
 """
 
 from typing import Any
@@ -19,13 +18,12 @@ from train_dl import train_and_evaluate as train_dl_and_evaluate
 def build_search_spaces(
     search_space_config: dict[str, dict[str, Any]], base_hyperparameters: dict[str, object]
 ) -> list[SearchSpace]:
-    """Converts the Dev's `SEARCH_SPACE_JSON` (mục 6c.5 — 1 JSON field
-    instead of a per-hyperparameter range/set field pair, see the delta
-    writeup) into `SearchSpace` objects.
+    """Converts the Dev's `SEARCH_SPACE_JSON` (1 JSON field instead of a
+    per-hyperparameter range/set field pair) into `SearchSpace` objects.
 
-    Any DL hyperparameter (mục 5.1) not present in `search_space_config`
-    stays fixed at its single value from `base_hyperparameters` — Dev can
-    search a subset and fix the rest.
+    Any DL hyperparameter not present in `search_space_config` stays fixed
+    at its single value from `base_hyperparameters` — Dev can search a
+    subset and fix the rest.
 
     Args:
         search_space_config: `{param_name: {"choices": [...]} |

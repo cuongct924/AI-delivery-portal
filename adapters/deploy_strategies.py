@@ -1,6 +1,6 @@
 """Concrete IDeployTrafficStrategy / IReleaseStrategy implementations for
-Golden Path #2 (mục 4, docs/mlops-lifecycle-software-template.md). Kept in
-one file — 4 small, tightly related classes, not worth 4 separate files.
+Golden Path #2. Kept in one file — 4 small, tightly related classes, not
+worth 4 separate files.
 """
 
 from dataclasses import dataclass
@@ -20,7 +20,7 @@ class DirectStrategy(IDeployTrafficStrategy):
 class TrafficSplitStrategy(IDeployTrafficStrategy):
     """Canary/A-B/Blue-Green — same `canaryTrafficPercent` mechanism, the
     presets only differ in which percent the Dev-facing form suggests by
-    default (mục 4.1: "1 strategy kỹ thuật, không phải 3 cơ chế riêng")."""
+    default."""
 
     percent: int
 

@@ -22,7 +22,7 @@ spec:
       - name: dataset-uri
       - name: task-type
       # sklearn by default — mlp/lstm use dl_architecture_registry.py
-      # instead (mục 5.1) and don't need `algorithm` at all.
+      # instead and don't need `algorithm` at all.
       - name: architecture
         value: sklearn
       - name: algorithm
@@ -39,7 +39,7 @@ spec:
         value: ""
       - name: base-model-uri
         value: ""
-      # DL hyperparameters (mục 5.1) — unused/empty for architecture=sklearn.
+      # DL hyperparameters — unused/empty for architecture=sklearn.
       - name: hidden-layers
         value: ""
       - name: dropout
@@ -60,14 +60,14 @@ spec:
       # architecture=mlp/lstm/nlp/cv, defaults to "adam" when unset.
       - name: optimizer
         value: ""
-      # BYOC (mục 6b.3) — only used when algorithm=custom.
+      # BYOC — only used when algorithm=custom.
       - name: code-repo-url
         value: ""
       - name: entrypoint-path
         value: ""
       - name: custom-config
         value: "{}"
-      # HPO (mục 6c) — fixed by default, matches the pre-Phase-5b behavior.
+      # HPO — fixed by default, matches the original single-run behavior.
       - name: search-strategy
         value: fixed
       - name: num-trials
@@ -78,7 +78,7 @@ spec:
         value: ""
       - name: objective-direction
         value: maximize
-      # NLP (mục 6g) — only used when architecture=nlp.
+      # NLP — only used when architecture=nlp.
       - name: text-column
         value: ""
       - name: base-model-name

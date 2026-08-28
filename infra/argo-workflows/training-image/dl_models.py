@@ -1,4 +1,4 @@
-"""Neural network architectures — mục 5.1: a separate module (not
+"""Neural network architectures — a separate module (not
 algorithm_registry.py) because neural nets don't share sklearn's uniform
 fit/predict interface; each architecture's hyperparameter shape is
 fundamentally different.
@@ -30,9 +30,9 @@ class MLPModel(nn.Module):
 
 
 class LSTMModel(nn.Module):
-    """Sequence model for time-ordered windows — mục 5.1's
-    `requires_time_column=True` entry. Predicts from the last timestep's
-    hidden state, the standard "many-to-one" LSTM shape."""
+    """Sequence model for time-ordered windows (`requires_time_column=True`
+    entry). Predicts from the last timestep's hidden state, the standard
+    "many-to-one" LSTM shape."""
 
     def __init__(
         self, input_size: int, hidden_size: int, num_layers: int, output_size: int

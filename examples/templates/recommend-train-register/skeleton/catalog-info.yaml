@@ -1,5 +1,5 @@
 # Mirrors ../../train-track-register/skeleton/catalog-info.yaml, templated
-# by ../template.yaml — same shape, different Golden Path (#3, mục 6e).
+# by ../template.yaml — same shape, different Golden Path (#3).
 apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
