@@ -44,6 +44,10 @@ class ChatResponse(BaseModel):
     reply: str
     persona_version: str
     rag_index_version: str | None = None
+    # None when the model has no cost entry in litellm-config.yaml (e.g. a
+    # self-hosted model via the Serving LLM Golden Path).
+    tokens: int
+    cost_usd: float | None
 
 
 @router.post("", response_model=ChatResponse)
@@ -77,4 +81,11 @@ def send_message(request: ChatRequest, user: dict = Depends(get_current_user)) -
         ],
     )
     reply = response["choices"][0]["message"]["content"]
-    return ChatResponse(reply=reply, persona_version=active_version, rag_index_version=rag_version)
+    tokens = (response.get("usage") or {}).get("total_tokens", 0)
+    return ChatResponse(
+        reply=reply,
+        persona_version=active_version,
+        rag_index_version=rag_version,
+        tokens=tokens,
+        cost_usd=response.get("response_cost_usd"),
+    )

@@ -954,7 +954,10 @@ describe('orchestration:rag-ingest', () => {
 describe('orchestration:rag-evaluate', () => {
   it('parses evalCasesJson and forwards model', async () => {
     const fetchMock = mockFetchResponses([
-      { ok: true, body: { passed: true, pass_rate: 1, results: [] } },
+      {
+        ok: true,
+        body: { passed: true, pass_rate: 1, results: [], total_tokens: 120, total_cost_usd: 0.003 },
+      },
     ]);
     const action = createRagEvaluateAction({ config });
     const { ctx, outputs } = createMockContext<typeof action>(
@@ -971,6 +974,8 @@ describe('orchestration:rag-evaluate', () => {
 
     expect(outputs.passed).toBe(true);
     expect(outputs.passRate).toBe(1);
+    expect(outputs.totalTokens).toBe(120);
+    expect(outputs.totalCostUsd).toBe(0.003);
     expect(fetchMock).toHaveBeenCalledWith(
       `${BASE_URL}/rag/evaluate`,
       expect.objectContaining({
@@ -1051,7 +1056,10 @@ describe('orchestration:draft-prompt', () => {
 describe('orchestration:evaluate-prompt', () => {
   it('parses evalCasesJson, forwards model, and calls the per-name endpoint', async () => {
     const fetchMock = mockFetchResponses([
-      { ok: true, body: { passed: false, pass_rate: 0.5, results: [] } },
+      {
+        ok: true,
+        body: { passed: false, pass_rate: 0.5, results: [], total_tokens: 80, total_cost_usd: null },
+      },
     ]);
     const action = createEvaluatePromptAction({ config });
     const { ctx, outputs } = createMockContext<typeof action>(
@@ -1068,6 +1076,8 @@ describe('orchestration:evaluate-prompt', () => {
 
     expect(outputs.passed).toBe(false);
     expect(outputs.passRate).toBe(0.5);
+    expect(outputs.totalTokens).toBe(80);
+    expect(outputs.totalCostUsd).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       `${BASE_URL}/prompts/mlops/evaluate`,
       expect.objectContaining({

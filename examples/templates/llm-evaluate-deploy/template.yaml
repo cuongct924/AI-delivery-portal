@@ -114,7 +114,13 @@ spec:
           {% if parameters.artifactKind === 'prompt' %}
           Evaluate Gate for prompt **${{ parameters.promptName }}** version
           **${{ parameters.promptVersion }}**: pass_rate =
-          {{ steps['evaluate-prompt'].output.passRate }}.
+          {{ steps['evaluate-prompt'].output.passRate }}. Cost:
+          {{ steps['evaluate-prompt'].output.totalTokens }} tokens
+          {% if steps['evaluate-prompt'].output.totalCostUsd %}
+          (${{ steps['evaluate-prompt'].output.totalCostUsd }})
+          {% else %}
+          (no pricing entry in litellm-config.yaml for this model)
+          {% endif %}
           {% if steps['evaluate-prompt'].output.passed %}
           **Activated.** `routers/chat.py` now uses this version for
           persona `${{ parameters.promptName }}`.
@@ -125,7 +131,13 @@ spec:
           {% else %}
           Evaluate Gate for RAG index **${{ parameters.collectionName }}**
           version **${{ parameters.indexVersion }}**: pass_rate =
-          {{ steps['evaluate-rag'].output.passRate }}.
+          {{ steps['evaluate-rag'].output.passRate }}. Cost:
+          {{ steps['evaluate-rag'].output.totalTokens }} tokens
+          {% if steps['evaluate-rag'].output.totalCostUsd %}
+          (${{ steps['evaluate-rag'].output.totalCostUsd }})
+          {% else %}
+          (no pricing entry in litellm-config.yaml for this model)
+          {% endif %}
           {% if steps['evaluate-rag'].output.passed %}
           **Activated.** `routers/chat.py` now retrieves from this version
           when `use_rag=true, rag_collection=${{ parameters.collectionName }}`.

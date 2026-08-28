@@ -61,6 +61,11 @@ class EvaluatePromptResponse(BaseModel):
     passed: bool
     pass_rate: float
     results: list[dict[str, object]]
+    # Same fields, same reasoning as routers/rag.py's RagEvaluateResponse —
+    # judge_response()'s own LLM call isn't tracked, total_cost_usd is None
+    # when the model has no cost entry in litellm-config.yaml.
+    total_tokens: int
+    total_cost_usd: float | None
 
 
 class ActivatePromptRequest(BaseModel):
@@ -157,6 +162,9 @@ def evaluate_prompt(
     system_prompt = metadata["content"]
 
     results: list[dict[str, object]] = []
+    total_tokens = 0
+    total_cost_usd = 0.0
+    cost_known = True
     for eval_case in request.eval_cases:
         response = llm_gateway_adapter.chat_completion(
             model=request.model,
@@ -166,6 +174,12 @@ def evaluate_prompt(
             ],
         )
         answer = response["choices"][0]["message"]["content"]
+        total_tokens += (response.get("usage") or {}).get("total_tokens", 0)
+        response_cost = response.get("response_cost_usd")
+        if response_cost is None:
+            cost_known = False
+        else:
+            total_cost_usd += response_cost
         judge_result = judge_response(eval_case.question, answer)
         gate_result = evaluate_gate(judge_result)
         results.append(
@@ -174,7 +188,13 @@ def evaluate_prompt(
 
     passed_count = sum(1 for r in results if r["passed"])
     pass_rate = passed_count / len(results) if results else 0.0
-    return EvaluatePromptResponse(passed=pass_rate >= 0.8, pass_rate=pass_rate, results=results)
+    return EvaluatePromptResponse(
+        passed=pass_rate >= 0.8,
+        pass_rate=pass_rate,
+        results=results,
+        total_tokens=total_tokens,
+        total_cost_usd=total_cost_usd if cost_known else None,
+    )
 
 
 @router.post("/{name}/activate", response_model=ActivatePromptResponse)

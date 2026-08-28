@@ -1021,6 +1021,8 @@ interface RagEvaluateResponse {
   readonly passed: boolean;
   readonly pass_rate: number;
   readonly results: Record<string, unknown>[];
+  readonly total_tokens: number;
+  readonly total_cost_usd: number | null;
 }
 
 /** Response body of `POST {baseUrl}/rag/activate`. */
@@ -1043,6 +1045,8 @@ interface EvaluatePromptResponse {
   readonly passed: boolean;
   readonly pass_rate: number;
   readonly results: Record<string, unknown>[];
+  readonly total_tokens: number;
+  readonly total_cost_usd: number | null;
 }
 
 /** Response body of `POST {baseUrl}/prompts/{name}/activate`. */
@@ -1128,6 +1132,15 @@ export function createRagEvaluateAction({ config }: ActionDeps) {
       output: {
         passed: z => z.boolean({ description: 'True when pass_rate >= 0.8' }),
         passRate: z => z.number({ description: 'Fraction of eval_cases that passed the gate' }),
+        totalTokens: z =>
+          z.number({ description: 'Total tokens across all eval_cases\' answer-generation calls' }),
+        totalCostUsd: z =>
+          z
+            .number({
+              description:
+                'Total cost in USD — null when the model has no cost entry in litellm-config.yaml (e.g. a self-hosted model)',
+            })
+            .nullable(),
       },
     },
     async handler(ctx) {
@@ -1139,9 +1152,13 @@ export function createRagEvaluateAction({ config }: ActionDeps) {
         eval_cases: evalCases,
         model: ctx.input.model,
       });
-      ctx.logger.info(`RAG evaluate: passed=${result.passed} pass_rate=${result.pass_rate}`);
+      ctx.logger.info(
+        `RAG evaluate: passed=${result.passed} pass_rate=${result.pass_rate} total_tokens=${result.total_tokens} total_cost_usd=${result.total_cost_usd}`,
+      );
       ctx.output('passed', result.passed);
       ctx.output('passRate', result.pass_rate);
+      ctx.output('totalTokens', result.total_tokens);
+      ctx.output('totalCostUsd', result.total_cost_usd);
     },
   });
 }
@@ -1231,6 +1248,15 @@ export function createEvaluatePromptAction({ config }: ActionDeps) {
       output: {
         passed: z => z.boolean({ description: 'True when pass_rate >= 0.8' }),
         passRate: z => z.number({ description: 'Fraction of eval_cases that passed the gate' }),
+        totalTokens: z =>
+          z.number({ description: 'Total tokens across all eval_cases\' answer-generation calls' }),
+        totalCostUsd: z =>
+          z
+            .number({
+              description:
+                'Total cost in USD — null when the model has no cost entry in litellm-config.yaml (e.g. a self-hosted model)',
+            })
+            .nullable(),
       },
     },
     async handler(ctx) {
@@ -1244,9 +1270,13 @@ export function createEvaluatePromptAction({ config }: ActionDeps) {
           model: ctx.input.model,
         },
       );
-      ctx.logger.info(`Prompt evaluate: passed=${result.passed} pass_rate=${result.pass_rate}`);
+      ctx.logger.info(
+        `Prompt evaluate: passed=${result.passed} pass_rate=${result.pass_rate} total_tokens=${result.total_tokens} total_cost_usd=${result.total_cost_usd}`,
+      );
       ctx.output('passed', result.passed);
       ctx.output('passRate', result.pass_rate);
+      ctx.output('totalTokens', result.total_tokens);
+      ctx.output('totalCostUsd', result.total_cost_usd);
     },
   });
 }

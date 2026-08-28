@@ -64,6 +64,13 @@ class RagEvaluateResponse(BaseModel):
     passed: bool
     pass_rate: float
     results: list[dict[str, object]]
+    # Answer-generation calls only — judge_response()'s own LLM call isn't
+    # tracked (it constructs its own adapter instance internally, no usage
+    # returned). total_cost_usd is None when the model has no cost entry
+    # in litellm-config.yaml (e.g. a self-hosted model via the Serving LLM
+    # Golden Path) — token count is still meaningful even without a price.
+    total_tokens: int
+    total_cost_usd: float | None
 
 
 class RagActivateRequest(BaseModel):
@@ -118,6 +125,9 @@ def rag_evaluate(
     request: RagEvaluateRequest, user: dict = Depends(get_current_user)
 ) -> RagEvaluateResponse:
     results: list[dict[str, object]] = []
+    total_tokens = 0
+    total_cost_usd = 0.0
+    cost_known = True
     for eval_case in request.eval_cases:
         query_vector = llm_gateway_adapter.embed(EMBEDDING_MODEL, [eval_case.question])[0]
         hits = vector_store_adapter.search(
@@ -133,6 +143,12 @@ def rag_evaluate(
             ],
         )
         answer = response["choices"][0]["message"]["content"]
+        total_tokens += (response.get("usage") or {}).get("total_tokens", 0)
+        response_cost = response.get("response_cost_usd")
+        if response_cost is None:
+            cost_known = False
+        else:
+            total_cost_usd += response_cost
         judge_result = judge_response(eval_case.question, answer)
         gate_result = evaluate_gate(judge_result)
         results.append(
@@ -141,7 +157,13 @@ def rag_evaluate(
 
     passed_count = sum(1 for r in results if r["passed"])
     pass_rate = passed_count / len(results) if results else 0.0
-    return RagEvaluateResponse(passed=pass_rate >= 0.8, pass_rate=pass_rate, results=results)
+    return RagEvaluateResponse(
+        passed=pass_rate >= 0.8,
+        pass_rate=pass_rate,
+        results=results,
+        total_tokens=total_tokens,
+        total_cost_usd=total_cost_usd if cost_known else None,
+    )
 
 
 @router.post("/activate", response_model=RagActivateResponse)

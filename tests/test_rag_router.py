@@ -6,6 +6,7 @@ tests/test_models_router.py — calls route functions directly.
 
 from unittest.mock import patch
 
+import pytest
 from routers.rag import (
     RagActivateRequest,
     RagEvalCase,
@@ -75,7 +76,9 @@ def test_rag_evaluate_computes_pass_rate_and_forwards_model() -> None:
         mock_gateway.embed.return_value = [[0.1]]
         mock_vector_store.search.return_value = [{"payload": {"text": "context chunk"}}]
         mock_gateway.chat_completion.return_value = {
-            "choices": [{"message": {"content": "an answer"}}]
+            "choices": [{"message": {"content": "an answer"}}],
+            "usage": {"total_tokens": 100},
+            "response_cost_usd": 0.002,
         }
         mock_judge.return_value = {"safety": 9, "correctness": 9, "relevance": 9}
         mock_gate.side_effect = [{"passed": True}, {"passed": False}]
@@ -83,6 +86,8 @@ def test_rag_evaluate_computes_pass_rate_and_forwards_model() -> None:
 
     assert response.pass_rate == 0.5
     assert response.passed is False
+    assert response.total_tokens == 200  # 100 per eval_case, 2 eval_cases
+    assert response.total_cost_usd == pytest.approx(0.004)
     mock_gateway.chat_completion.assert_any_call(
         model="llama-3-8b-self-hosted",
         messages=[
@@ -90,6 +95,36 @@ def test_rag_evaluate_computes_pass_rate_and_forwards_model() -> None:
             {"role": "user", "content": "q1"},
         ],
     )
+
+
+def test_rag_evaluate_reports_none_cost_when_model_has_no_pricing() -> None:
+    # A self-hosted model (e.g. via the Serving LLM Golden Path) has no
+    # cost entry in litellm-config.yaml — LiteLLM omits the cost header,
+    # response_cost_usd is None. Token count must still be reported.
+    request = RagEvaluateRequest(
+        collection="smoke-test",
+        index_version="1",
+        eval_cases=[RagEvalCase(question="q1")],
+    )
+    with (
+        patch("routers.rag.llm_gateway_adapter") as mock_gateway,
+        patch("routers.rag.vector_store_adapter") as mock_vector_store,
+        patch("routers.rag.judge_response") as mock_judge,
+        patch("routers.rag.evaluate_gate") as mock_gate,
+    ):
+        mock_gateway.embed.return_value = [[0.1]]
+        mock_vector_store.search.return_value = [{"payload": {"text": "context chunk"}}]
+        mock_gateway.chat_completion.return_value = {
+            "choices": [{"message": {"content": "an answer"}}],
+            "usage": {"total_tokens": 50},
+            "response_cost_usd": None,
+        }
+        mock_judge.return_value = {"safety": 9, "correctness": 9, "relevance": 9}
+        mock_gate.return_value = {"passed": True}
+        response = rag_evaluate(request)
+
+    assert response.total_tokens == 50
+    assert response.total_cost_usd is None
 
 
 def test_rag_activate_calls_set_active_version() -> None:

@@ -61,7 +61,9 @@ def test_evaluate_prompt_computes_pass_rate_and_forwards_model():
         patch("routers.prompts.evaluate_gate") as mock_gate,
     ):
         mock_gateway.chat_completion.return_value = {
-            "choices": [{"message": {"content": "an answer"}}]
+            "choices": [{"message": {"content": "an answer"}}],
+            "usage": {"total_tokens": 100},
+            "response_cost_usd": 0.002,
         }
         mock_judge.return_value = {"safety": 9, "correctness": 9, "relevance": 9}
         mock_gate.side_effect = [{"passed": True}, {"passed": True}]
@@ -69,6 +71,8 @@ def test_evaluate_prompt_computes_pass_rate_and_forwards_model():
 
     assert response.passed is True
     assert response.pass_rate == 1.0
+    assert response.total_tokens == 200  # 100 per eval_case, 2 eval_cases
+    assert response.total_cost_usd == pytest.approx(0.004)
     mock_gateway.chat_completion.assert_any_call(
         model="llama-3-8b-self-hosted",
         messages=[

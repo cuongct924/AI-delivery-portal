@@ -18,13 +18,19 @@ def test_send_message_uses_active_prompt_and_forwards_model() -> None:
     ):
         mock_registry.get_active_version.return_value = "3"
         mock_registry.get_version.return_value = {"content": "system prompt"}
-        mock_gateway.chat_completion.return_value = {"choices": [{"message": {"content": "hello"}}]}
+        mock_gateway.chat_completion.return_value = {
+            "choices": [{"message": {"content": "hello"}}],
+            "usage": {"total_tokens": 42},
+            "response_cost_usd": 0.001,
+        }
 
         response = send_message(request)
 
     assert response.reply == "hello"
     assert response.persona_version == "3"
     assert response.rag_index_version is None
+    assert response.tokens == 42
+    assert response.cost_usd == pytest.approx(0.001)
     mock_gateway.chat_completion.assert_called_once_with(
         model="llama-3-8b-self-hosted",
         messages=[
