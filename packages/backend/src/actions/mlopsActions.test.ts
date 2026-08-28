@@ -7,8 +7,10 @@ import {
   createPolicyCheckAction,
   createPrepareDeployManifestAction,
   createRecordDeployAction,
+  createTriggerRecTrainingAction,
   createTriggerTrainingAction,
   createValidateDatasetAction,
+  createValidateRecDatasetAction,
 } from './mlopsActions';
 
 const BASE_URL = 'http://orchestration-api.test';
@@ -574,5 +576,149 @@ describe('orchestration:record-deploy', () => {
         }),
       }),
     );
+  });
+});
+
+describe('orchestration:validate-rec-dataset', () => {
+  it('outputs results and does not throw when nothing is blocking', async () => {
+    mockFetchResponses([
+      {
+        ok: true,
+        body: [
+          {
+            check_name: 'check_rec_ids_present',
+            severity: 'info',
+            message: 'no missing id columns or null ids',
+            details: {},
+          },
+        ],
+      },
+    ]);
+    const action = createValidateRecDatasetAction({ config });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      {
+        interactionsUri: 'file:///interactions.csv',
+        userIdColumn: 'user_id',
+        itemIdColumn: 'item_id',
+      },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.results).toEqual([
+      {
+        checkName: 'check_rec_ids_present',
+        severity: 'info',
+        message: 'no missing id columns or null ids',
+      },
+    ]);
+  });
+
+  it('throws with the blocking checks summary when any check is blocking', async () => {
+    mockFetchResponses([
+      {
+        ok: true,
+        body: [
+          {
+            check_name: 'check_rec_ids_present',
+            severity: 'blocking',
+            message: "missing column(s): ['item_id']",
+            details: {},
+          },
+        ],
+      },
+    ]);
+    const action = createValidateRecDatasetAction({ config });
+    const { ctx } = createMockContext<typeof action>(
+      {
+        interactionsUri: 'file:///interactions.csv',
+        userIdColumn: 'user_id',
+        itemIdColumn: 'item_id',
+      },
+      '/tmp/workspace',
+    );
+
+    await expect(action.handler(ctx)).rejects.toThrow(/blocking/);
+  });
+});
+
+describe('orchestration:trigger-rec-training', () => {
+  it('polls until Succeeded and outputs the final phase and model version', async () => {
+    mockFetchResponses([
+      { ok: true, body: { workflow_name: 'wf-rec-1' } },
+      { ok: true, body: { name: 'wf-rec-1', phase: 'Succeeded', message: null } },
+      { ok: true, body: { name: 'product-recommender', version: '1' } },
+    ]);
+    const action = createTriggerRecTrainingAction({ config, pollIntervalMs: 1 });
+    const { ctx, outputs } = createMockContext<typeof action>(
+      {
+        modelName: 'product-recommender',
+        interactionsUri: 'file:///interactions.csv',
+        userIdColumn: 'user_id',
+        itemIdColumn: 'item_id',
+        timestampColumn: 'timestamp',
+        algorithm: 'als',
+      },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    expect(outputs.workflowName).toBe('wf-rec-1');
+    expect(outputs.phase).toBe('Succeeded');
+    expect(outputs.modelVersion).toBe('1');
+  });
+
+  it('forwards tfidf_cosine-specific fields to the orchestration API', async () => {
+    const fetchMock = mockFetchResponses([
+      { ok: true, body: { workflow_name: 'wf-rec-2' } },
+      { ok: true, body: { name: 'wf-rec-2', phase: 'Succeeded', message: null } },
+      { ok: true, body: { name: 'content-recommender', version: '1' } },
+    ]);
+    const action = createTriggerRecTrainingAction({ config, pollIntervalMs: 1 });
+    const { ctx } = createMockContext<typeof action>(
+      {
+        modelName: 'content-recommender',
+        interactionsUri: 'file:///interactions.csv',
+        userIdColumn: 'user_id',
+        itemIdColumn: 'item_id',
+        timestampColumn: 'timestamp',
+        algorithm: 'tfidf_cosine',
+        itemFeaturesUri: 'file:///item-features.csv',
+        itemIdColumnFeatures: 'item_id',
+        itemTextColumn: 'description',
+      },
+      '/tmp/workspace',
+    );
+
+    await action.handler(ctx);
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(requestInit.body as string);
+    expect(body.item_features_uri).toBe('file:///item-features.csv');
+    expect(body.item_id_column_features).toBe('item_id');
+    expect(body.item_text_column).toBe('description');
+  });
+
+  it('throws with the status message when the workflow fails', async () => {
+    mockFetchResponses([
+      { ok: true, body: { workflow_name: 'wf-rec-3' } },
+      { ok: true, body: { name: 'wf-rec-3', phase: 'Failed', message: 'pod OOMKilled' } },
+    ]);
+    const action = createTriggerRecTrainingAction({ config, pollIntervalMs: 1 });
+    const { ctx } = createMockContext<typeof action>(
+      {
+        modelName: 'product-recommender',
+        interactionsUri: 'file:///interactions.csv',
+        userIdColumn: 'user_id',
+        itemIdColumn: 'item_id',
+        timestampColumn: 'timestamp',
+        algorithm: 'popularity',
+      },
+      '/tmp/workspace',
+    );
+
+    await expect(action.handler(ctx)).rejects.toThrow(/pod OOMKilled/);
   });
 });

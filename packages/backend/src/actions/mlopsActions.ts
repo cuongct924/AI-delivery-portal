@@ -30,6 +30,11 @@ interface TriggerTrainingResponse {
   readonly workflow_name: string;
 }
 
+/** Response body of `POST {baseUrl}/trigger-rec-training`. */
+interface TriggerRecTrainingResponse {
+  readonly workflow_name: string;
+}
+
 /** Response body of `GET {baseUrl}/trigger-training/{workflowName}/status`. */
 interface WorkflowStatusResponse {
   readonly name: string;
@@ -552,6 +557,183 @@ export function createRecordDeployAction({ config }: ActionDeps) {
         pr_url: ctx.input.prUrl,
       });
       ctx.output('recorded', true);
+    },
+  });
+}
+
+/**
+ * `orchestration:validate-rec-dataset` — RecSys's own dataset checks (mục
+ * 6e.2), a separate endpoint from `orchestration:validate-dataset` since
+ * the shape (interactions, no target column) doesn't match.
+ */
+export function createValidateRecDatasetAction({ config }: ActionDeps) {
+  return createTemplateAction({
+    id: 'orchestration:validate-rec-dataset',
+    description:
+      'Runs RecSys data quality checks against the interactions dataset and fails the step on any blocking result.',
+    schema: {
+      input: {
+        interactionsUri: z => z.string({ description: 'URI of the interactions dataset to validate' }),
+        userIdColumn: z => z.string({ description: 'Column identifying the user in each interaction' }),
+        itemIdColumn: z => z.string({ description: 'Column identifying the item in each interaction' }),
+      },
+      output: {
+        results: z =>
+          z.array(
+            z.object({
+              checkName: z.string(),
+              severity: z.enum(['blocking', 'warning', 'info']),
+              message: z.string(),
+            }),
+            { description: 'One entry per check that ran, grouped by severity in the log' },
+          ),
+      },
+    },
+    async handler(ctx) {
+      const baseUrl = getBaseUrl(config);
+      const results = await postJson<CheckResultItem[]>(`${baseUrl}/rec-datasets/validate`, {
+        interactions_uri: ctx.input.interactionsUri,
+        user_id_column: ctx.input.userIdColumn,
+        item_id_column: ctx.input.itemIdColumn,
+      });
+
+      for (const result of results) {
+        ctx.logger.info(`[${result.severity}] ${result.check_name}: ${result.message}`);
+      }
+
+      const blocking = results.filter(r => r.severity === 'blocking');
+      if (blocking.length > 0) {
+        const summary = blocking.map(r => `${r.check_name}: ${r.message}`).join('; ');
+        throw new Error(`RecSys dataset validation failed (blocking): ${summary}`);
+      }
+
+      ctx.output(
+        'results',
+        results.map(r => ({
+          checkName: r.check_name,
+          severity: r.severity,
+          message: r.message,
+        })),
+      );
+    },
+  });
+}
+
+/**
+ * `orchestration:trigger-rec-training` — starts the RecSys Argo Workflow
+ * (Golden Path #3, mục 6e) and polls it to completion. Reuses the same
+ * `/trigger-training/{workflowName}/status` and `/models/{name}/latest-
+ * version` endpoints `orchestration:trigger-training` uses — both are
+ * keyed by workflow/model name, not by which WorkflowTemplate produced
+ * them, so there's nothing RecSys-specific to add there.
+ */
+export function createTriggerRecTrainingAction({
+  config,
+  pollIntervalMs = POLL_INTERVAL_MS,
+  pollTimeoutMs = POLL_TIMEOUT_MS,
+}: TriggerTrainingActionDeps) {
+  return createTemplateAction({
+    id: 'orchestration:trigger-rec-training',
+    description: 'Triggers the RecSys Argo Workflow and waits for it to finish.',
+    schema: {
+      input: {
+        modelName: z => z.string({ description: 'Name to register the trained model under' }),
+        interactionsUri: z => z.string({ description: 'URI of the interactions dataset' }),
+        userIdColumn: z => z.string({ description: 'Column identifying the user in each interaction' }),
+        itemIdColumn: z => z.string({ description: 'Column identifying the item in each interaction' }),
+        timestampColumn: z => z.string({ description: 'Column with the interaction timestamp — used for the temporal train/test split' }),
+        algorithm: z =>
+          z.string({ description: 'als, bpr, svd, knn, tfidf_cosine, or popularity — see rec_algorithm_registry.py' }),
+        k: z => z.number({ description: 'Recommendation list length used for recall@k/ndcg@k/map@k' }).optional(),
+        hyperparametersJson: z =>
+          z
+            .string({ description: 'JSON object of the chosen algorithm\'s hyperparameters' })
+            .optional(),
+        ratingColumn: z =>
+          z.string({ description: 'Rating column — required for algorithm=svd/knn' }).optional(),
+        itemFeaturesUri: z =>
+          z.string({ description: 'URI of item metadata — required for algorithm=tfidf_cosine' }).optional(),
+        itemIdColumnFeatures: z =>
+          z.string({ description: 'Item id column in itemFeaturesUri — required for algorithm=tfidf_cosine' }).optional(),
+        itemTextColumn: z =>
+          z.string({ description: 'Text column in itemFeaturesUri — required for algorithm=tfidf_cosine' }).optional(),
+      },
+      output: {
+        workflowName: z => z.string({ description: 'Name of the Argo Workflow that ran' }),
+        phase: z => z.string({ description: 'Terminal phase the workflow finished in' }),
+        modelVersion: z =>
+          z.string({
+            description:
+              'MLflow model version the register-step registered — resolved after the workflow succeeds',
+          }),
+      },
+    },
+    async handler(ctx) {
+      const baseUrl = getBaseUrl(config);
+      const { workflow_name: workflowName } =
+        await postJson<TriggerRecTrainingResponse>(`${baseUrl}/trigger-rec-training`, {
+          model_name: ctx.input.modelName,
+          interactions_uri: ctx.input.interactionsUri,
+          user_id_column: ctx.input.userIdColumn,
+          item_id_column: ctx.input.itemIdColumn,
+          timestamp_column: ctx.input.timestampColumn,
+          algorithm: ctx.input.algorithm,
+          k: ctx.input.k,
+          hyperparameters_json: ctx.input.hyperparametersJson,
+          rating_column: ctx.input.ratingColumn,
+          item_features_uri: ctx.input.itemFeaturesUri,
+          item_id_column_features: ctx.input.itemIdColumnFeatures,
+          item_text_column: ctx.input.itemTextColumn,
+        });
+      ctx.logger.info(`Triggered RecSys training workflow "${workflowName}"`);
+
+      const deadline = Date.now() + pollTimeoutMs;
+      let status: WorkflowStatusResponse;
+      for (;;) {
+        const response = await fetch(
+          `${baseUrl}/trigger-training/${workflowName}/status`,
+        );
+        if (!response.ok) {
+          throw new Error(
+            `GET workflow status failed with ${response.status}: ${await response.text()}`,
+          );
+        }
+        status = (await response.json()) as WorkflowStatusResponse;
+        ctx.logger.info(
+          `Workflow "${workflowName}" phase: ${status.phase ?? 'unknown'}`,
+        );
+        if (status.phase !== null && TERMINAL_PHASES.has(status.phase as TerminalPhase)) {
+          break;
+        }
+        if (Date.now() >= deadline) {
+          throw new Error(
+            `Timed out after ${pollTimeoutMs / 1000}s waiting for workflow "${workflowName}" to finish`,
+          );
+        }
+        await sleep(pollIntervalMs);
+      }
+
+      const finalPhase = status.phase;
+      if (finalPhase !== 'Succeeded') {
+        throw new Error(
+          `Workflow "${workflowName}" ended in phase "${finalPhase}": ${status.message ?? 'no message'}`,
+        );
+      }
+
+      const latestVersionResponse = await fetch(
+        `${baseUrl}/models/${encodeURIComponent(ctx.input.modelName)}/latest-version`,
+      );
+      if (!latestVersionResponse.ok) {
+        throw new Error(
+          `GET latest model version failed with ${latestVersionResponse.status}: ${await latestVersionResponse.text()}`,
+        );
+      }
+      const { version: modelVersion } =
+        (await latestVersionResponse.json()) as LatestVersionResponse;
+
+      ctx.output('workflowName', workflowName);
+      ctx.output('phase', finalPhase);
+      ctx.output('modelVersion', modelVersion);
     },
   });
 }

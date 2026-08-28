@@ -60,6 +60,12 @@ catalog:
       rules:
         - allow: [Template]
 
+    # AI Delivery Portal — Golden Path #3 (Recommend→Track→Register, mục 6e)
+    - type: file
+      target: ./examples/templates/recommend-train-register/template.yaml
+      rules:
+        - allow: [Template]
+
     # Local example organizational data
     - type: file
       target: ./examples/org.yaml

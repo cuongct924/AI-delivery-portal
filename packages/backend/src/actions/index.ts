@@ -1,7 +1,8 @@
 /**
  * Backend module registering the orchestration-api Custom Scaffolder
- * Actions (mlopsActions.ts) used by Golden Path #1 (Train->Track->Register)
- * and #2 (Register->Deploy) — see examples/templates/.
+ * Actions (mlopsActions.ts) used by Golden Path #1 (Train->Track->Register),
+ * #2 (Register->Deploy), and #3 (Recommend->Track->Register, mục 6e) — see
+ * examples/templates/.
  */
 
 import { coreServices, createBackendModule } from '@backstage/backend-plugin-api';
@@ -11,8 +12,10 @@ import {
   createPolicyCheckAction,
   createPrepareDeployManifestAction,
   createRecordDeployAction,
+  createTriggerRecTrainingAction,
   createTriggerTrainingAction,
   createValidateDatasetAction,
+  createValidateRecDatasetAction,
 } from './mlopsActions';
 
 export default createBackendModule({
@@ -32,6 +35,8 @@ export default createBackendModule({
           createPolicyCheckAction({ config }),
           createPrepareDeployManifestAction({ config }),
           createRecordDeployAction({ config }),
+          createValidateRecDatasetAction({ config }),
+          createTriggerRecTrainingAction({ config }),
         );
       },
     });
