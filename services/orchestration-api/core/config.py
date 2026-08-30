@@ -1,6 +1,6 @@
 """Centralized configuration — read from environment variables (.env at the repo root)."""
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -16,8 +16,10 @@ class Settings(BaseSettings):
     litellm_master_key: str = ""
     qdrant_url: str = "http://localhost:6333"
 
-    class Config:
-        env_file = "../../.env"
+    # extra="ignore": .env is shared with unrelated tooling (dvc-pull/push,
+    # ArgoCD) and carries vars this service doesn't declare — without this,
+    # pydantic-settings' default extra="forbid" crashes Settings() on startup.
+    model_config = SettingsConfigDict(env_file="../../.env", extra="ignore")
 
 
 settings = Settings()
