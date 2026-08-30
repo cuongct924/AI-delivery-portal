@@ -3,14 +3,9 @@ app:
   baseUrl: http://localhost:7007
 
 backend:
-  # Note that the baseUrl should be the URL that the browser and other clients
-  # should use when communicating with the backend, i.e. it needs to be
-  # reachable not just from within the backend host, but from all of your
-  # callers. When its value is "http://localhost:7007", it's strictly private
-  # and can't be reached by others.
+  # Must be reachable by all callers, not just localhost.
   baseUrl: http://localhost:7007
-  # The listener can also be expressed as a single <host>:<port> string. In this case we bind to
-  # all interfaces, the most permissive setting. The right value depends on your specific deployment.
+  # ':7007' binds all interfaces — the most permissive option.
   listen: ':7007'
 
   # config options: https://node-postgres.com/apis/client
@@ -33,12 +28,11 @@ auth:
     guest: {}
 
 catalog:
-  # Overrides the default list locations from app-config.yaml as these contain example data.
-  # See https://backstage.io/docs/features/software-catalog/#adding-components-to-the-catalog for more details
-  # on how to get entities into the catalog.
+  # Overrides app-config.yaml's example-data locations.
+  # See https://backstage.io/docs/features/software-catalog/#adding-components-to-the-catalog
   locations:
-    # Local example data, replace this with your production config, these are intended for demo use only.
-    # File locations are relative to the backend process, typically in a deployed context, such as in a Docker container, this will be the root
+    # Demo data — replace with your production config. Paths are relative
+    # to the backend process (repo root in a deployed container).
     - type: file
       target: ./examples/entities.yaml
 

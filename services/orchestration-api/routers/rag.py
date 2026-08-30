@@ -53,10 +53,7 @@ class RagEvaluateRequest(BaseModel):
     index_version: str
     eval_cases: list[RagEvalCase]
     top_k: int = 5
-    # Overridable — a hardcoded model= here would lock every RAG eval to
-    # Claude regardless of what's registered in litellm-config.yaml
-    # (including a self-hosted model deployed via the Serving LLM Golden
-    # Path). Default kept for convenience, not as a floor.
+    # Overridable so RAG eval isn't locked to Claude.
     model: str = "claude-sonnet-5"
 
 
@@ -64,11 +61,7 @@ class RagEvaluateResponse(BaseModel):
     passed: bool
     pass_rate: float
     results: list[dict[str, object]]
-    # Answer-generation calls only — judge_response()'s own LLM call isn't
-    # tracked (it constructs its own adapter instance internally, no usage
-    # returned). total_cost_usd is None when the model has no cost entry
-    # in litellm-config.yaml (e.g. a self-hosted model via the Serving LLM
-    # Golden Path) — token count is still meaningful even without a price.
+    # Answer-generation calls only; total_cost_usd is None with no cost entry.
     total_tokens: int
     total_cost_usd: float | None
 

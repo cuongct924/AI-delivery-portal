@@ -1,13 +1,7 @@
-"""OIDC authentication via Keycloak — every request from Portal/Agent goes
-through here before touching real infrastructure. `auth_enabled=False` (the
-local dev default) makes auth OPTIONAL rather than off: a caller that sends
-no Bearer token still gets a fake dev user (Backstage Scaffolder actions
-never send one — see packages/backend/src/actions/mlopsActions.ts's
-postJson), but a caller that DOES send a token (golden-paths-server, using
-its own Keycloak service-account identity — see
-agents/mcp-servers/golden-paths-server/auth.py) gets it verified for real,
-giving a trustworthy identity in logs even without flipping AUTH_ENABLED=true
-globally. Set `AUTH_ENABLED=true` to require a valid token from everyone.
+"""OIDC authentication via Keycloak — every request goes through here.
+`auth_enabled=False` makes auth optional, not off: a token is verified for
+real if present, and only a request with no token at all falls back to a
+fake dev user. Set `AUTH_ENABLED=true` to require a valid token always.
 """
 
 import logging
@@ -40,9 +34,7 @@ def get_current_user(
             return {"sub": "local-dev", "preferred_username": "dev"}
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing Bearer token")
 
-    # A token was presented — verify it for real regardless of AUTH_ENABLED.
-    # Silently accepting an invalid token under dev-bypass would mask real
-    # bugs in whichever caller thought it had a valid identity.
+    # A token was presented — always verify it, even under dev-bypass.
     try:
         claims = jwt.decode(
             credentials.credentials,

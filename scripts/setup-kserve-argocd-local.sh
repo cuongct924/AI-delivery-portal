@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
-# Installs KServe (Serverless mode) + Knative Serving + Kourier + ArgoCD on
-# the local kind cluster, builds/loads the orchestration-api + portal images,
-# and applies the 3 ArgoCD Applications. Idempotent.
-#
-# Run `bash scripts/setup-k8s-local.sh` first (same cluster). Kept as a
-# separate script on purpose — Knative/KServe's install chain (many CRDs,
-# webhooks, strict ordering) is known to be fragile, and a failure here
-# shouldn't have to redo the already-stable Argo Workflows setup.
+# Installs KServe + Knative Serving + Kourier + ArgoCD on the local kind
+# cluster, builds/loads images, applies the ArgoCD Applications. Idempotent.
+# Run `bash scripts/setup-k8s-local.sh` first — kept separate since
+# Knative/KServe's install chain is fragile and shouldn't risk the stable
+# Argo Workflows setup.
 #
 # Usage: bash scripts/setup-kserve-argocd-local.sh
 set -euo pipefail
@@ -22,9 +19,7 @@ ARGOCD_VERSION="v3.5.1"
 # Must match kind-config.yaml's extraPortMappings.
 ARGOCD_NODE_PORT=32748
 PORTAL_NODE_PORT=32749
-# No real domain/LoadBalancer on kind — a fixed placeholder is enough for
-# InferenceServices to reach Ready; calling predict() for real is out of
-# scope (see adapters/kserve_adapter.py's predict() — not implemented yet).
+# No real domain on kind — a placeholder is enough for InferenceServices to reach Ready.
 KSERVE_LOCAL_DOMAIN="kserve-local.dev"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -68,18 +63,14 @@ kubectl patch configmap/config-domain \
   --patch "{\"data\":{\"${KSERVE_LOCAL_DOMAIN}\":\"\"}}"
 
 echo "=== [5/9] KServe ${KSERVE_VERSION} (Serverless is the default deployMode) ==="
-# NOTE: verify these 2 filenames against the v${KSERVE_VERSION} release
-# assets — this is KServe's long-standing release pattern but wasn't
-# confirmed against the live asset list.
+# NOTE: verify these 2 filenames against the v${KSERVE_VERSION} release assets.
 kubectl apply --server-side -f "https://github.com/kserve/kserve/releases/download/${KSERVE_VERSION}/kserve.yaml"
 kubectl apply --server-side -f "https://github.com/kserve/kserve/releases/download/${KSERVE_VERSION}/kserve-cluster-resources.yaml"
 kubectl -n kserve rollout status deployment/kserve-controller-manager --timeout=180s
 
 echo "=== [6/9] ArgoCD ${ARGOCD_VERSION} ==="
 kubectl get namespace "${ARGOCD_NAMESPACE}" >/dev/null 2>&1 || kubectl create namespace "${ARGOCD_NAMESPACE}"
-# --server-side --force-conflicts: same reason as Argo Workflows in
-# setup-k8s-local.sh — ArgoCD's CRDs exceed client-side apply's 256KB
-# annotation limit.
+# --force-conflicts: ArgoCD's CRDs exceed client-side apply's 256KB limit.
 kubectl apply -n "${ARGOCD_NAMESPACE}" --server-side --force-conflicts \
   -f "https://raw.githubusercontent.com/argoproj/argo-cd/${ARGOCD_VERSION}/manifests/install.yaml"
 kubectl -n "${ARGOCD_NAMESPACE}" rollout status deployment/argocd-server --timeout=300s

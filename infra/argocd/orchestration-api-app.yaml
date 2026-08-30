@@ -1,8 +1,5 @@
 # Additive to `docker compose up -d`, not a replacement — this is the
-# GitOps/production-like verification path for the Golden Path templates
-# (orchestration-api reachable in-cluster via KServeAdapter's kubeconfig
-# and via the Custom Scaffolder Actions calling it over HTTP), local dev
-# still uses docker-compose for the fast code-then-see-it loop.
+# GitOps/production-like verification path; local dev still uses docker-compose.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

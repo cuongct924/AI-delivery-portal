@@ -1,18 +1,8 @@
 """Model Registry / Training / Deploy-prep API — the HTTP surface Golden Path
 #1 (Train -> Track -> Register) and #2 (Register -> Deploy) drive.
 
-Callers are deliberately mixed, unlike prompts.py/monitoring.py:
-- `/trigger-training*`, `/models` (list), `/policy-check`, `/deploy-model/*`
-  are called by Backstage Custom Scaffolder Actions (packages/backend), so
-  each of those routes carries a `Depends(get_current_user)` guard.
-- `POST /models/register` is the one exception — it's called by the
-  `register-step` container running *inside* an Argo workflow pod (see
-  infra/argo-workflows/), not from Backstage, so it has no Keycloak user
-  session to check.
-
-Business logic lives here, not in Backstage (CLAUDE.md) — this router only
-orchestrates calls into the Adapter layer (adapters/mlflow_adapter.py,
-adapters/argo_adapter.py) plus the Evaluate Gate (evaluations/).
+`POST /models/register` is the one route with no `Depends(get_current_user)`
+— it's called from inside an Argo workflow pod, not from Backstage.
 """
 
 from pathlib import Path
@@ -48,9 +38,7 @@ mlflow_adapter = MlflowAdapter()
 argo_adapter = ArgoAdapter()
 feast_adapter = FeastAdapter()
 
-# Single Argo WorkflowTemplate (infra/argo-workflows/train-register-template.yaml)
-# now covers both train and fine-tune — mode is a workflow parameter, not a
-# choice between two near-duplicate templates.
+# One WorkflowTemplate covers both train and fine-tune; mode is a parameter.
 TRAIN_REGISTER_TEMPLATE: Final[str] = "train-register-golden-path"
 
 _TEMPLATES_DIR: Final[Path] = Path(__file__).resolve().parent.parent / "templates"
@@ -189,9 +177,7 @@ class PolicyCheckRequest(BaseModel):
 class PrepareDeployRequest(BaseModel):
     model_name: str
     model_version: str
-    # "direct" | "canary" | "ab" | "blue-green" — canary/ab/blue-green all
-    # render the same canaryTrafficPercent field, only the Dev-facing
-    # suggested default differs.
+    # "direct" | "canary" | "ab" | "blue-green".
     traffic_strategy: str = "direct"
     traffic_percent: int | None = None
     # "pr-gated" | "instant"
@@ -300,9 +286,7 @@ def register_model(request: RegisterModelRequest) -> RegisterModelResponse:
     result = mlflow_adapter.register_model(
         request.name, request.artifact_uri, request.dataset_version
     )
-    # Tagged separately (not an IModelRegistryAdapter.register_model() param)
-    # so policy_check() can read it back at deploy time without Backstage
-    # having to resend taskType.
+    # Tagged separately so policy_check() can read it back at deploy time.
     mlflow_adapter.set_model_version_tag(
         result["name"], result["version"], "task_type", request.task_type
     )
@@ -328,9 +312,7 @@ def enrich_dataset_features(
     entity_ids = df[request.entity_id_column].astype(str).tolist()
 
     features = feast_adapter.get_offline_features(entity_ids, request.feature_names)
-    # get_offline_features() also returns Feast's own "event_timestamp" —
-    # only "entity_id" (the join key) and the requested features belong in
-    # the enriched training dataset.
+    # Drop Feast's own "event_timestamp" — only entity_id + features are kept.
     feature_columns = [name.split(":", 1)[1] for name in request.feature_names]
     features_df = pd.DataFrame(features)[["entity_id", *feature_columns]]
 
@@ -392,9 +374,7 @@ def get_latest_version(name: str, user: dict = Depends(get_current_user)) -> Lat
 def policy_check(
     request: PolicyCheckRequest, user: dict = Depends(get_current_user)
 ) -> dict[str, object]:
-    # Classical ML models have ground-truth metrics — compare them directly
-    # against thresholds instead of routing through LLM-as-judge (no LiteLLM
-    # cost). LLM/RAG artifacts still use evaluate_gate() (evaluations/gate.py).
+    # Classical ML has ground-truth metrics — compare directly, no LLM-as-judge.
     details = mlflow_adapter.get_model_version_details(request.model_name, request.model_version)
     task_type = details["tags"].get("task_type")
     if task_type is None:
@@ -419,16 +399,11 @@ def policy_check(
 def prepare_deploy_manifest(
     request: PrepareDeployRequest, user: dict = Depends(get_current_user)
 ) -> PrepareDeployResponse:
-    # Canonical MLflow Model Registry URI — resolvable by any MLflow-aware
-    # loader (mlflow.pyfunc.load_model, KServe's "mlflow" modelFormat) without
-    # needing the run's underlying artifact path.
+    # Canonical MLflow Model Registry URI — resolvable by any MLflow-aware loader.
     storage_uri = f"models:/{request.model_name}/{request.model_version}"
 
-    # Constructed lazily, only when actually needed — KServeAdapter.__init__
-    # calls config.load_kube_config() eagerly, which would crash
-    # orchestration-api startup in any environment without a kubeconfig
-    # (this container, CI, dev before `kind` is running) if it were a
-    # module-level singleton like mlflow_adapter/argo_adapter.
+    # Lazy: KServeAdapter.__init__ eagerly calls load_kube_config(), which
+    # would crash startup wherever no kubeconfig exists (CI, before `kind`).
     needs_kserve = request.traffic_strategy != "direct" or request.release_strategy == "instant"
     kserve_adapter = KServeAdapter() if needs_kserve else None
 
@@ -436,10 +411,8 @@ def prepare_deploy_manifest(
     if request.traffic_strategy == "direct":
         traffic_strategy = DirectStrategy()
     else:
-        # Canary/A-B/Blue-Green only make sense with a prior deploy to
-        # compare/rollback against — Backstage Scaffolder v1beta3 can't
-        # gate form fields on live cluster state, so it's enforced here
-        # instead.
+        # Needs a prior deploy to compare/rollback against — enforced here
+        # since the Scaffolder form can't gate on live cluster state.
         assert kserve_adapter is not None
         try:
             kserve_adapter.get_inference_status(request.model_name)

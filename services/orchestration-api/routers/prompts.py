@@ -61,9 +61,7 @@ class EvaluatePromptResponse(BaseModel):
     passed: bool
     pass_rate: float
     results: list[dict[str, object]]
-    # Same fields, same reasoning as routers/rag.py's RagEvaluateResponse —
-    # judge_response()'s own LLM call isn't tracked, total_cost_usd is None
-    # when the model has no cost entry in litellm-config.yaml.
+    # total_cost_usd is None when the model has no cost entry configured.
     total_tokens: int
     total_cost_usd: float | None
 

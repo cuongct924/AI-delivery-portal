@@ -1,12 +1,6 @@
-"""File-backed IVersionRegistryAdapter — no DB exists for
-orchestration-api today; this fills that gap for LLMOps prompt/RAG-index
-version tracking without inventing new infra.
-
-Not MlflowAdapter.set_model_version_tag() reused instead — that's coupled
-to the MLflow Model Registry's "model version" (created by
-mlflow.register_model(artifact_uri=...), which must be MLflow-loadable). A
-prompt or a RAG index pointer isn't a model artifact — see
-docs/llmops-lifecycle-plan.md mục 8 Q2 for the full reasoning.
+"""File-backed IVersionRegistryAdapter for LLMOps prompt/RAG-index version
+tracking — not MlflowAdapter, since a prompt isn't an MLflow model artifact.
+See docs/llmops-lifecycle-plan.md mục 8 Q2.
 """
 
 import json
@@ -28,9 +22,7 @@ class JsonFileVersionRegistryAdapter(IVersionRegistryAdapter):
             entry = data.setdefault(kind, {}).setdefault(
                 name, {"versions": {}, "active_version": None}
             )
-            # Same string-of-an-incrementing-int shape MLflow uses for
-            # model versions — cheap, no UUID needed for a single-writer
-            # local file.
+            # Same incrementing-int-string shape MLflow uses for versions.
             version = str(len(entry["versions"]) + 1)
             entry["versions"][version] = metadata
             self._write(data)

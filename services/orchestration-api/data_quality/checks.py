@@ -14,15 +14,9 @@ import pandas as pd
 
 Severity = Literal["blocking", "warning", "info"]
 
-# pandas' bundled type stubs resolve `df[a_str_variable]` to `Series | DataFrame`
-# (they can't narrow on a plain `str`, only on `Literal` column names) even
-# though a scalar string key always returns a Series at runtime — cast()
-# throughout this module documents that known, harmless mismatch instead of
-# silencing it broadly.
+# cast() below works around pandas' stubs over-widening `df[str]` to `Series | DataFrame`.
 
-# Thresholds below are deliberately simple, fixed cutoffs — not tuned to any
-# one dataset — good enough to flag "worth a human look", not a claim of
-# statistical rigor.
+# Thresholds are simple fixed cutoffs, not tuned per dataset.
 _HIGH_MISSING_RATIO = 0.3
 _HIGH_CORRELATION = 0.9
 _LEAKAGE_CORRELATION = 0.98
@@ -291,10 +285,8 @@ def check_time_gaps(df: pd.DataFrame, time_column: str) -> CheckResult:
     )
 
 
-# RecSys checks — don't fit registry.run_checks()'s shared
-# `(df, target_column=...)` shape (RecSys has no single df/target — 2
-# required id columns, no target), so they're called directly by
-# routers/recommendations.py instead of through TASK_TYPE_CHECKS.
+# RecSys checks don't fit run_checks()'s (df, target_column) shape — called
+# directly by routers/recommendations.py instead.
 _MIN_INTERACTIONS_PER_ENTITY = 5  # k-core threshold for "not cold-start"
 
 

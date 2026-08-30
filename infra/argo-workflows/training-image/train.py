@@ -17,10 +17,8 @@ import mlflow
 import numpy as np
 import pandas as pd
 
-# Must load before xgboost/lightgbm/catboost (algorithm_registry, next
-# import): on macOS the reverse order loads two conflicting OpenMP runtimes
-# and segfaults on the first CrossEntropyLoss call. Harmless on Linux (the
-# actual training-image target).
+# Must import before xgboost/lightgbm — reverse order segfaults on macOS
+# (OpenMP conflict), harmless on Linux.
 import torch  # noqa: F401
 from algorithm_registry import AlgorithmSpec, get_algorithm_spec
 from byoc_runner import run_custom_training
@@ -28,9 +26,7 @@ from hpo_runner import build_search_spaces, run_hpo
 from hpo_strategies import build_search_strategy
 from metrics import compute_metrics
 
-# Submodule imports, not `import mlflow` + `mlflow.sklearn.x` — mlflow's
-# top-level stub doesn't declare `sklearn`/`data`/`pytorch`/`pyfunc`/
-# `transformers` as exported attributes.
+# Submodule imports — mlflow's top-level stub doesn't declare these as exported attributes.
 from mlflow import data as mlflow_data
 from mlflow import pyfunc as mlflow_pyfunc
 from mlflow import pytorch as mlflow_pytorch
@@ -144,10 +140,7 @@ def _split(
         )
     if len(df) < _SMALL_DATASET_THRESHOLD:
         splitter = TimeSeriesSplit(n_splits=min(_KFOLD_SPLITS, len(df) - 1))
-        # Not time-ordered here — TimeSeriesSplit is reused purely as a
-        # convenient "last N% held out" k-fold-style splitter, matching the
-        # "k-fold for small datasets" strategy without a shuffle argument to
-        # worry about aligning with a stratify option.
+        # Reused as a "last N% held out" splitter here, not for time ordering.
         train_idx, test_idx = list(splitter.split(features))[-1]
         return (
             features.iloc[train_idx],
@@ -215,9 +208,7 @@ def _read_dl_hyperparameters() -> dict[str, object]:
         hyperparameters["num_layers"] = int(num_layers)
     if hidden_size := os.environ.get("HIDDEN_SIZE"):
         hyperparameters["hidden_size"] = int(hidden_size)
-    # Dev-facing optimizer choice (optimizers.py) — absent means
-    # train_dl.py/train_cv.py's own "adam" default applies, same convention
-    # as every other optional hyperparameter above.
+    # Absent means train_dl.py/train_cv.py's own "adam" default applies.
     if optimizer := os.environ.get("OPTIMIZER"):
         hyperparameters["optimizer"] = optimizer
     return hyperparameters
@@ -261,9 +252,7 @@ def main() -> None:
     # branch below) so the tokenizer gets raw strings.
     is_nlp = architecture == "nlp"
     text_column = os.environ.get("TEXT_COLUMN") or None
-    # DATASET_URI is a .zip of images, not a CSV, for this architecture —
-    # the dataset-loading section below branches before ever calling
-    # pd.read_csv().
+    # DATASET_URI is a .zip of images for this architecture, not a CSV.
     is_cv = architecture == "cv"
 
     if is_nlp and text_column is None:
@@ -345,9 +334,7 @@ def main() -> None:
             spec = get_algorithm_spec(task_type, cast(str, algorithm))
             mlflow.log_param("algorithm", algorithm)
             if task_type == "clustering":
-                # DBSCAN/AgglomerativeClustering are transductive (no
-                # .predict on new data) — clustering always fits+predicts
-                # on the full dataset, no train/test split.
+                # Transductive (no .predict) — clustering always fits+predicts on full data.
                 if mode != "train":
                     raise RuntimeError("clustering does not support MODE=finetune")
                 train_features, _ = _handle_missing_values(features, features, spec)
@@ -378,11 +365,7 @@ def main() -> None:
             assert df is not None
             assert text_column is not None
             assert target_column is not None
-            # df[[text_column]], not `features` — that went through
-            # _encode_categoricals() above, which would corrupt raw text
-            # into category codes. pandas-stubs doesn't resolve a 1-item
-            # list-of-str indexer to DataFrame confidently, same gap as the
-            # `labels_full` cast below.
+            # Raw df[[text_column]], not `features` — that's already category-encoded.
             text_features = cast(pd.DataFrame, df[[text_column]])
             labels_full = cast(pd.Series, df[target_column])
             train_features, test_features, train_labels, test_labels = _split(
@@ -411,10 +394,7 @@ def main() -> None:
                 python_model=GenericPyfuncWrapper(cv_model), artifact_path="model"
             )
         else:
-            # architecture != "sklearn"/"nlp"/"cv" already ruled out
-            # task_type == "clustering" above, so target_column is
-            # guaranteed set; df/features are None only for is_cv, which
-            # can't reach this branch (mutually exclusive elif chain).
+            # target_column/df/features guaranteed set (is_cv can't reach this branch).
             assert df is not None
             assert features is not None
             assert target_column is not None

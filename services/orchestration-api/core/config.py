@@ -17,15 +17,11 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
 
     backstage_base_url: str = "http://localhost:7007"
-    # Backstage's new-backend-system rejects unauthenticated calls to
-    # /api/catalog/entities by default (verified: returns 401
-    # AuthenticationError) — this must match a secret configured under
-    # app-config.yaml's backend.auth.keys for catalog_client.py to work.
+    # Must match a secret in app-config.yaml's backend.auth.externalAccess.
     backstage_service_token: str = ""
 
-    # extra="ignore": .env is shared with unrelated tooling (dvc-pull/push,
-    # ArgoCD) and carries vars this service doesn't declare — without this,
-    # pydantic-settings' default extra="forbid" crashes Settings() on startup.
+    # extra="ignore": .env carries vars other tooling uses that this
+    # service doesn't declare.
     model_config = SettingsConfigDict(env_file="../../.env", extra="ignore")
 
 

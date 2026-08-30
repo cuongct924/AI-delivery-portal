@@ -2,21 +2,14 @@
 
 Central module for AI Agent & MCP (Model Context Protocol).
 
-- `mcp-servers/` — each MCP server is an independent process (packaged as its
-  own Docker image), exposing tools over the MCP protocol for Claude (running
-  inside `services/orchestration-api`) to call. Split by functional domain,
-  not by backend: read-only "health" tools vs. action tools. Both use
-  `streamable-http` transport (not `stdio`) so `orchestration-api` can
-  discover and connect to them at runtime via the Backstage Catalog
-  (`services/orchestration-api/catalog_client.py`) instead of a hardcoded
-  local path.
-  - `mlops-observability-server/` — read-only: MLflow (`list_experiments`,
-    `get_model_metrics`), K8s (mock, not wired to a real cluster yet),
-    Prometheus (`query_metric`, `check_model_latency`).
-  - `golden-paths-server/` — the 6 LLMOps Lifecycle Golden Path actions
-    (draft/evaluate/activate prompt, rag ingest/evaluate/activate), each a
-    thin HTTP client into `services/orchestration-api`'s existing endpoints.
-    Contains no complex business logic — calls through `adapters/`.
+- `mcp-servers/` — each MCP server is an independent process exposing tools
+  over MCP for `orchestration-api` to call. Split by functional domain:
+  read-only "health" vs. action. `streamable-http` transport, discovered
+  via the Backstage Catalog (`catalog_client.py`), not a hardcoded path.
+  - `mlops-observability-server/` — read-only: MLflow, K8s (mock),
+    Prometheus.
+  - `golden-paths-server/` — the 6 LLMOps Lifecycle Golden Path actions,
+    thin HTTP clients into `orchestration-api`.
 - `skills/` — specific business logic (e.g. evaluating model drift), calls
   `adapters/` directly; reusable from both MCP tools and regular FastAPI routes.
 

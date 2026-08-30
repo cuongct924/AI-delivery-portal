@@ -1,16 +1,7 @@
-"""Serving LLM API — deploys a self-hosted LLM (referenced by HuggingFace
-Hub id, not an MLflow-registered artifact) as a KServe InferenceService via
-vLLM. A separate router from models.py: prepare_deploy_manifest() there
-hardcodes the MLflow Model Registry URI formula (`models:/{name}/{version}`)
-twice over (once itself, once inside adapters/deploy_strategies.py's
-InstantStrategy) — a raw HuggingFace LLM was never registered in MLflow, so
-that formula doesn't apply here. No Evaluate Gate/policy-check step either:
-an off-the-shelf LLM's weights don't change, there's no metric to compare
-against a threshold the way a trained model has.
-
-`Depends(get_current_user)` on the one route here — called by a Backstage
-Custom Scaffolder Action, same as every route in models.py except
-`/models/register`.
+"""Serving LLM API — deploys a self-hosted LLM (by HuggingFace Hub id, not
+an MLflow-registered artifact) as a KServe InferenceService via vLLM.
+Separate from models.py: no MLflow Model Registry URI, no Evaluate Gate
+(an off-the-shelf LLM's weights don't change).
 """
 
 from pathlib import Path
@@ -45,9 +36,7 @@ class PrepareLlmDeployRequest(BaseModel):
     gpu_count: int = 1
     quantization: str = "none"
     max_context_length: int = 4096
-    # "direct" | "canary" | "ab" | "blue-green" — same shape as
-    # models.py's PrepareDeployRequest, canary/ab/blue-green all render the
-    # same canaryTrafficPercent field.
+    # "direct" | "canary" | "ab" | "blue-green" — same shape as models.py.
     traffic_strategy: str = "direct"
     traffic_percent: int | None = None
     # "pr-gated" | "instant"
@@ -68,9 +57,7 @@ def prepare_llm_deploy_manifest(
     runtime_spec = get_llm_serving_runtime(request.runtime)
     vllm_quantization = VLLM_QUANTIZATION_ARGS.get(request.quantization)
 
-    # Constructed lazily, only when actually needed — KServeAdapter.__init__
-    # calls config.load_kube_config() eagerly, same reasoning as
-    # models.py::prepare_deploy_manifest().
+    # Lazy: KServeAdapter.__init__ eagerly calls load_kube_config().
     needs_kserve = request.traffic_strategy != "direct" or request.release_strategy == "instant"
     kserve_adapter = KServeAdapter() if needs_kserve else None
 
@@ -120,9 +107,7 @@ def prepare_llm_deploy_manifest(
         )
         deployed = True
     else:
-        # PRGatedStrategy.release() is a no-op ({"deployed": False}) that
-        # doesn't touch model_name/model_version/manifest_content — safe to
-        # reuse unchanged, same as models.py does.
+        # PRGatedStrategy.release() is a no-op — safe to reuse unchanged.
         deployed = PRGatedStrategy().release(request.model_name, "1", content)["deployed"]
 
     return PrepareLlmDeployResponse(file_name=file_name, content=content, deployed=deployed)

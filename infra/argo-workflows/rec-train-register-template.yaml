@@ -37,9 +37,7 @@ spec:
       - name: algorithm
       - name: k
         value: "10"
-      # Free-form per-algorithm hyperparameters — 1 JSON field instead of
-      # a form field per algorithm's own hyperparameter names, same
-      # pattern as BYOC's customConfig/HPO's searchSpaceJson.
+      # Free-form per-algorithm hyperparameters, same pattern as BYOC's customConfig.
       - name: hyperparameters-json
         value: "{}"
   templates:
@@ -73,9 +71,7 @@ spec:
                 - name: hyperparameters-json
                   value: '{{workflow.parameters.hyperparameters-json}}'
           - name: register
-            # Reuses train-register-golden-path's register-step unchanged
-            # — it only cares about model-name/task-type/artifact-uri/
-            # dataset-digest, all identical in shape here.
+            # Reuses train-register-golden-path's register-step unchanged.
             templateRef:
               name: train-register-golden-path
               template: register-step
@@ -114,9 +110,7 @@ spec:
             valueFrom:
               path: /tmp/dataset-digest
       container:
-        # Same image as Golden Path #1 (infra/argo-workflows/training-image/)
-        # — train_rec.py is 1 more *.py file the Dockerfile already copies
-        # in, not a separate image to build/maintain.
+        # Same image as Golden Path #1 — train_rec.py is just 1 more .py file in it.
         image: training-image:local
         imagePullPolicy: IfNotPresent
         command: [python, train_rec.py]

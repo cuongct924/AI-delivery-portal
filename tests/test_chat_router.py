@@ -1,9 +1,6 @@
 """services/orchestration-api/routers/chat.py — patches the module-level
-`llm_gateway_adapter`/`vector_store_adapter`/`registry_adapter` singletons,
-same pattern as tests/test_rag_router.py. `send_message` is now `async def`
-(needed for `use_tools=True`'s `await registry.call_tool(...)`); tests that
-don't use tools pass a bare mock for `http_request` since `app.state` is
-never touched on that path.
+adapter singletons, same pattern as tests/test_rag_router.py. `send_message`
+is async; tests without tools pass a bare mock for `http_request`.
 """
 
 import json
@@ -164,8 +161,7 @@ async def test_send_message_use_tools_calls_auto_executable_tool() -> None:
 
 @pytest.mark.asyncio
 async def test_send_message_use_tools_gates_destructive_tool_behind_confirmation() -> None:
-    """activate_prompt/rag_activate must never be auto-executed — LLMOps has
-    no PR-gate, so this confirmation step is the only safety net."""
+    """Destructive tools must never be auto-executed."""
     request = ChatRequest(message="activate version 2", use_tools=True)
     mock_mcp_registry = MagicMock()
     mock_mcp_registry.list_tools.return_value = [

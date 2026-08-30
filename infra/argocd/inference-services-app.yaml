@@ -1,7 +1,5 @@
-# Golden Path #2's GitOps sync target — infra/inference-services/ is already
-# flat, fully-rendered YAML (services/orchestration-api/templates/
-# inference_service.yaml.j2, one file per model/version), so a plain
-# `directory` source is enough — no Helm chart needed here.
+# Golden Path #2's GitOps sync target — infra/inference-services/ is
+# already flat, rendered YAML, so a plain `directory` source is enough.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -18,12 +16,7 @@ spec:
     namespace: default
   syncPolicy:
     automated:
-      # A file deleted from the repo (e.g. a model version rollback) means
-      # the matching InferenceService should disappear too — cluster state
-      # always matches git state.
-      prune: true
-      # A manual kubectl edit on the cluster gets reverted back to git —
-      # git is the single source of truth, not a suggestion.
-      selfHeal: true
+      prune: true  # a file deleted from git removes the matching resource too
+      selfHeal: true  # manual kubectl edits get reverted back to git
     syncOptions:
       - CreateNamespace=false

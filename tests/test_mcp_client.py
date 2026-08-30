@@ -1,7 +1,4 @@
-"""services/orchestration-api/mcp_client.py — verified live during
-development (real Catalog discovery, real streamable-http servers, one
-live + one dead server isolated correctly, a full tool-call round trip).
-These are the mocked regression tests, patching `discover_mcp_servers`,
+"""services/orchestration-api/mcp_client.py — patches `discover_mcp_servers`,
 `streamable_http_client`, and `ClientSession` directly."""
 
 from contextlib import asynccontextmanager
@@ -117,9 +114,7 @@ async def test_call_tool_extracts_text_content() -> None:
 
 @pytest.mark.asyncio
 async def test_connect_all_isolates_one_failing_server() -> None:
-    """A server that fails to connect must not prevent a different
-    server's tools from being registered — verified live against a real
-    dead server + a real live one."""
+    """A failed server must not block another server's tools."""
     good_server = {"name": "good", "endpoint": "http://good/mcp", "transport": "streamable-http"}
     bad_server = {"name": "bad", "endpoint": "http://bad/mcp", "transport": "streamable-http"}
 

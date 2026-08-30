@@ -15,10 +15,8 @@ include .env
 export
 endif
 
-# Per-service requirements.txt (source of truth) -> requirements.lock.txt
-# (fully pinned incl. transitive deps, what each Dockerfile actually installs
-# from). Kept separate per service on purpose: each is resolved for its own
-# Docker build context and they are NOT required to agree with each other.
+# Each service's requirements.txt -> its own requirements.lock.txt; not
+# required to agree with each other.
 SERVICE_REQS := requirements-dev.txt \
 	adapters/requirements.txt \
 	services/orchestration-api/requirements.txt \
@@ -32,42 +30,21 @@ SERVICE_REQS := requirements-dev.txt \
 	dvc-pull dvc-push \
 	clean-venv
 
-# Pinned to 3.12 to match the Dockerfile base image (python:3.12-slim) — avoids
-# version drift from the machine's default python3 (which may be newer via pyenv/brew).
-# Install: brew install python@3.12
+# Pinned to 3.12 to match the Dockerfile base image. Install: brew install python@3.12
 venv:
 	$(PYTHON312) -m venv $(VENV)
 	$(PIP) install --upgrade pip uv -q
 
-## Installs from dev.lock.txt — one lock file resolved across every service's
-## requirements.txt together, so the single shared local .venv (and your
-## editor's Pylance, which reads it) can see every import in the repo without
-## version conflicts. This file is NOT used by any Dockerfile — each service
-## builds from its own requirements.lock.txt instead (see `make lock`).
-## Also installs the pre-commit git hook.
+## Installs the merged dev.lock.txt into the shared local .venv (not used by
+## any Dockerfile) and the pre-commit hook.
 install: venv
 	$(UV) pip install -r dev.lock.txt
 	$(VENV)/bin/pre-commit install
 
-## Regenerates dev.lock.txt (merged, local-venv-only) and every service's own
-## requirements.lock.txt (what its Dockerfile installs from) after you edit a
-## requirements.txt. Review the diff, then commit the *.lock.txt files too.
-## dev.lock.txt uses --universal (keeps each package's own platform markers,
-## e.g. xgboost's Linux-only nvidia-nccl-cu12 dependency) so `make install`
-## works on any dev machine's OS/arch, not just Linux. Each service's own
-## *.lock.txt stays pinned to linux/x86_64 (--python-platform) to match the
-## Docker images and GitHub Actions runners those actually build/run on.
-## --index-strategy unsafe-best-match: training-image/requirements.txt's
-## --extra-index-url (torch CPU wheels) otherwise makes uv refuse to
-## resolve *any* package's version past what that one extra index offers
-## (e.g. its stale urllib3), even for packages that never touch torch —
-## both PyPI and download.pytorch.org are trusted here, so relaxing this
-## uv default (meant to guard against dependency-confusion attacks) is safe.
-## --emit-index-url writes --extra-index-url back into the generated
-## *.lock.txt so `uv pip install -r *.lock.txt` (each Dockerfile's builder
-## stage) can still find torch==...+cpu on its own — without this, the
-## lock file has no record of which index that pinned version came from
-## and the Docker build fails to resolve it.
+## Regenerates dev.lock.txt (--universal, any dev OS) and each service's own
+## *.lock.txt (pinned linux/x86_64, matches Docker/CI). --index-strategy
+## unsafe-best-match + --emit-index-url: needed for torch's extra index to
+## resolve without breaking unrelated packages. Commit the *.lock.txt diff.
 lock: venv
 	$(UV) pip compile $(SERVICE_REQS) --python-version 3.12 --universal --index-strategy unsafe-best-match --emit-index-url -o dev.lock.txt
 	@for f in $(SERVICE_REQS); do \
@@ -96,12 +73,8 @@ test:
 
 check: lint format-check typecheck test
 
-# ---------------------------------------------------------------------------
-# Security scanners — same commands/args as the security-* and
-# docker-build-and-scan jobs in .github/workflows/ci.yml, run from natively
-# installed CLIs instead of Docker (faster, and doesn't need a working Docker
-# daemon for gitleaks/checkov). Install once: brew install gitleaks checkov trivy
-# ---------------------------------------------------------------------------
+# Security scanners — same as CI's jobs, run from native CLIs (faster, no
+# Docker daemon needed). Install once: brew install gitleaks checkov trivy
 
 ## Secret scanning — scans full git history, same as CI.
 gitleaks:
@@ -116,10 +89,10 @@ checkov:
 ## Builds the 4 service images, then Trivy-scans each — needs Docker running.
 trivy:
 	docker build -t orchestration-api:local -f services/orchestration-api/Dockerfile .
-	docker build -t mlops-server:local -f agents/mcp-servers/mlops-server/Dockerfile .
-	docker build -t k8s-server:local -f agents/mcp-servers/k8s-server/Dockerfile .
-	docker build -t metrics-server:local -f agents/mcp-servers/metrics-server/Dockerfile .
-	@for img in orchestration-api mlops-server k8s-server metrics-server; do \
+	docker build -t mlops-observability-server:local -f agents/mcp-servers/mlops-observability-server/Dockerfile .
+	docker build -t golden-paths-server:local -f agents/mcp-servers/golden-paths-server/Dockerfile .
+	docker build -t training-image:local -f infra/argo-workflows/training-image/Dockerfile .
+	@for img in orchestration-api mlops-observability-server golden-paths-server training-image; do \
 		echo "=== Trivy scan: $$img ==="; \
 		trivy image --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 "$$img:local"; \
 	done
@@ -136,9 +109,7 @@ run-observability-mcp:
 run-golden-paths-mcp:
 	bash scripts/run-mcp-local.sh golden-paths
 
-## Pulls/pushes the DVC-tracked dataset (data/) against the local MinIO
-## remote — needs AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, auto-loaded from
-## .env above instead of exporting them by hand.
+## Pulls/pushes the DVC-tracked dataset against the local MinIO remote.
 dvc-pull:
 	$(DVC) pull
 

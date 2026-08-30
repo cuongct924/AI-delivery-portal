@@ -1,9 +1,6 @@
-"""Evaluate Gate — decides whether a model/response is fit to go to
-production. Two independent mechanisms, picked per artifact type:
-evaluate_metrics_gate() compares objective metrics directly (classical ML
-models with a ground-truth test set — no LLM call, no LiteLLM cost) and
-evaluate_gate() uses LLM-as-a-judge (free-text output with no single correct
-answer — LLMOps prompts/RAG, see llm_judge.py).
+"""Evaluate Gate — decides whether a model/response is fit for production.
+evaluate_metrics_gate() compares objective metrics (classical ML);
+evaluate_gate() uses LLM-as-a-judge (LLMOps prompts/RAG, see llm_judge.py).
 """
 
 from dataclasses import asdict, dataclass
@@ -50,9 +47,8 @@ class MetricThreshold:
         return not (self.maximum is not None and value > self.maximum)
 
 
-# Classical ML has a different "good" metric set per task type — a single
-# accuracy/precision/recall threshold (the old MetricsGateThresholds) only
-# ever made sense for classification.
+# Each task type has its own "good" metric set — accuracy/precision/recall
+# alone only ever made sense for classification.
 TASK_TYPE_THRESHOLDS: Final[dict[str, list[MetricThreshold]]] = {
     "classification": [
         MetricThreshold("accuracy", minimum=0.7),
@@ -67,10 +63,7 @@ TASK_TYPE_THRESHOLDS: Final[dict[str, list[MetricThreshold]]] = {
     "clustering": [
         MetricThreshold("silhouette_score", minimum=0.25),
     ],
-    # RecSys — evaluated on warm users/items only (cold-start excluded,
-    # reported separately as reference info: a cold-start user has no
-    # history, so its ranking score is close to random). map_at_k has no
-    # threshold entry, so it's never part of the pass/fail decision.
+    # RecSys: warm users/items only, cold-start reported separately.
     "ranking": [
         MetricThreshold("recall_at_k", minimum=0.20),
         MetricThreshold("ndcg_at_k", minimum=0.30),

@@ -29,10 +29,7 @@ def test_no_token_and_auth_enabled_raises_401() -> None:
 
 
 def test_valid_token_is_verified_even_when_auth_disabled() -> None:
-    """A caller that presents a token gets it checked for real regardless of
-    AUTH_ENABLED — what lets golden-paths-server get a trustworthy identity
-    without flipping auth on for every caller (Backstage Scaffolder never
-    sends a token — see packages/backend/src/actions/mlopsActions.ts)."""
+    """A presented token is always verified, regardless of AUTH_ENABLED."""
     with (
         patch("auth.keycloak.settings") as mock_settings,
         patch("auth.keycloak._jwks", return_value={"keys": []}),
@@ -44,8 +41,7 @@ def test_valid_token_is_verified_even_when_auth_disabled() -> None:
 
 
 def test_invalid_token_raises_401_even_when_auth_disabled() -> None:
-    """A caller that presents a bad token must not silently fall back to the
-    fake dev user — that would mask a real bug in the caller."""
+    """A bad token must not silently fall back to the fake dev user."""
     with (
         patch("auth.keycloak.settings") as mock_settings,
         patch("auth.keycloak._jwks", return_value={"keys": []}),

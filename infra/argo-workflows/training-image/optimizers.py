@@ -10,9 +10,7 @@ from typing import Final
 
 import torch
 
-# Callable, not type[torch.optim.Optimizer] — Adam/SGD's own __init__
-# signatures (which accept `lr=`) are what's actually called below; the
-# base Optimizer.__init__(params, defaults) signature doesn't.
+# Callable, not type[Optimizer] — Adam/SGD's __init__ accepts lr=, the base class's doesn't.
 _OPTIMIZERS: Final[dict[str, Callable[..., torch.optim.Optimizer]]] = {
     "adam": torch.optim.Adam,
     "sgd": torch.optim.SGD,

@@ -133,9 +133,7 @@ def _train_implicit(
     item_ids: list[str] = sorted(cast(list[str], train_df["item_id"].unique()))
     user_index: dict[str, int] = {user_id: idx for idx, user_id in enumerate(user_ids)}
     item_index: dict[str, int] = {item_id: idx for idx, item_id in enumerate(item_ids)}
-    # .map(dict.get), not .map(dict) — pandas-stubs' .map() overload set
-    # only resolves a callable, not a mapping, even though both work at
-    # runtime.
+    # .map(dict.get), not .map(dict) — pandas-stubs only resolves a callable.
     rows = train_df["user_id"].map(user_index.get)
     cols = train_df["item_id"].map(item_index.get)
     values = np.ones(len(train_df), dtype="float32")

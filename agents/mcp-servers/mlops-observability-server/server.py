@@ -1,10 +1,6 @@
-"""MCP Server for the "system/model health" domain — merges what used to be
-3 separate servers (mlops-server, k8s-server, metrics-server) into one, since
-all 6 tools answer the same class of question ("is the model/system healthy?")
-and together stay within the 5-8 tools/server sweet spot.
-
-Read-only by design: every tool here only queries state, never mutates it —
-see agents/mcp-servers/golden-paths-server/ for the write-side domain.
+"""MCP Server for the "system/model health" domain — read-only, merges
+what used to be 3 separate servers (mlops/k8s/metrics). See
+agents/mcp-servers/golden-paths-server/ for the write-side domain.
 """
 
 import os

@@ -1,13 +1,6 @@
-"""MCP Server for the LLMOps Lifecycle Golden Path actions — the "action"
-domain, separate from mlops-observability-server's read-only "health"
-domain. Each tool is a thin HTTP client into services/orchestration-api's
-existing endpoints (the same ones
-packages/backend/src/actions/mlopsActions.ts calls) — no business logic
-duplicated here.
-
-Requires orchestration-api running with AUTH_ENABLED=false (dev-bypass) — no
-machine-to-machine auth exists yet, a known and accepted limitation for
-local/demo scope (see README.md).
+"""MCP Server for the LLMOps Lifecycle Golden Path actions. Each tool is a
+thin HTTP client into orchestration-api's existing endpoints — no business
+logic duplicated here. See README.md for auth requirements.
 """
 
 import os
@@ -22,10 +15,7 @@ mcp = MCPServer("golden-paths-server")
 ORCHESTRATION_API_URL = os.getenv("ORCHESTRATION_API_URL", "http://localhost:8000")
 
 AUTO_EXECUTABLE = ToolAnnotations(read_only_hint=False)
-# destructive_hint=True signals the caller (routers/chat.py's tool-calling
-# loop) that this mutates live state and must go through a human
-# confirmation step before ever being invoked — LLMOps has no PR-gate
-# equivalent to fall back on.
+# Mutates live state — chat.py's tool loop must confirm before calling.
 NEEDS_CONFIRMATION = ToolAnnotations(read_only_hint=False, destructive_hint=True)
 
 

@@ -20,10 +20,7 @@ class LLMServingRuntimeSpec:
     serving_runtime_name: str
 
 
-# Only vLLM today — the registry exists so a second runtime (e.g. SGLang,
-# which exposes the same OpenAI-compatible server shape) is a new entry,
-# not a rewrite. Not pre-populated with runtimes that have no confirmed
-# need yet (same call as dropping lightfm rather than half-supporting it).
+# Only vLLM today — a second runtime is a new entry, not a rewrite.
 LLM_SERVING_RUNTIMES: Final[dict[str, LLMServingRuntimeSpec]] = {
     "vllm": LLMServingRuntimeSpec(serving_runtime_name="vllm-runtime"),
 }
@@ -49,13 +46,8 @@ def get_llm_serving_runtime(runtime: str) -> LLMServingRuntimeSpec:
     return spec
 
 
-# Which quantization schemes each GPU architecture supports for vLLM,
-# confirmed against vLLM's own hardware-support docs (not assumed) — Ampere
-# (A100) lacks full FP8 W8A8 compute (weight-only FP8 only, via Marlin
-# kernels), Blackwell (B200) drops INT8 (unsupported at compute
-# capability >= 10.0). Checked server-side, not just in the Scaffolder
-# form's JSON Schema — the form narrows the enum for UX, this is the
-# actual enforcement (CLAUDE.md: business logic lives in orchestration-api).
+# Per vLLM's hardware docs: A100 lacks full FP8 W8A8, B200 drops INT8.
+# Enforced server-side, not just in the Scaffolder form's JSON Schema.
 GPU_QUANTIZATION_COMPATIBILITY: Final[dict[str, frozenset[str]]] = {
     "L4": frozenset({"none", "fp8", "int8", "int4-awq"}),
     "L40S": frozenset({"none", "fp8", "int8", "int4-awq"}),
@@ -66,15 +58,9 @@ GPU_QUANTIZATION_COMPATIBILITY: Final[dict[str, frozenset[str]]] = {
 }
 
 
-# Dev-facing quantization label -> vLLM's own `--quantization` CLI value.
-# "none" has no entry — vLLM auto-detects an unquantized checkpoint, the
-# flag is omitted entirely rather than passed as "none" (see
-# adapters/kserve_adapter.py's deploy_llm_model()). "int8" is mapped
-# best-effort (compressed-tensors/LLM-Compressor int8 W8A8 checkpoints are
-# normally auto-detected from the model's own config rather than needing
-# an explicit value) — verify against the specific model chosen at deploy
-# time, this mapping isn't independently confirmed the way the GPU
-# compatibility matrix above is.
+# Dev-facing label -> vLLM's --quantization CLI value. "none" has no entry
+# (flag omitted, auto-detected). "int8" is best-effort, unlike the
+# GPU matrix above — verify against the actual model at deploy time.
 VLLM_QUANTIZATION_ARGS: Final[dict[str, str]] = {
     "fp8": "fp8",
     "int8": "int8",

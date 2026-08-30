@@ -1,9 +1,7 @@
 # mlops-observability-server
 
-MCP server for the "system/model health" domain — read-only, no mutation
-tools. Merges what used to be 3 separate servers (`mlops-server`,
-`k8s-server`, `metrics-server`) since all 6 tools answer the same class of
-question and stay within the 5-8 tools/server sweet spot for a single domain.
+MCP server for the "system/model health" domain — read-only, merges what
+used to be 3 separate servers (`mlops-server`, `k8s-server`, `metrics-server`).
 
 Tools:
 - `list_experiments`, `get_model_metrics` — reads MLflow
@@ -16,10 +14,8 @@ Tools:
   Prometheus (set up via `docker compose up`, scrape config at
   `infra/monitoring/prometheus.yml`).
 
-Transport: `streamable-http` (not `stdio`) — this server is meant to be
-discovered and connected to over the network (see
-`services/orchestration-api/catalog_client.py`), not spawned as a local
-subprocess. Listens on `MCP_HOST`/`MCP_PORT` (default `0.0.0.0:9001`).
+Transport: `streamable-http` — discovered via the Backstage Catalog, not a
+local subprocess. `MCP_HOST`/`MCP_PORT` (default `0.0.0.0:9001`).
 
 ## Run locally
 

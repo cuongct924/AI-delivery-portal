@@ -8,10 +8,8 @@ replicaCount: 1
 service:
   port: 8000
 
-# Mirrors docker-compose.yml's orchestration-api service, with the
-# docker-compose service hostnames (mlflow/keycloak/litellm/qdrant) swapped
-# for host.docker.internal — those still run via docker-compose on the
-# host, this chart doesn't stand up a second copy of them in the cluster.
+# Mirrors docker-compose.yml, with service hostnames swapped for
+# host.docker.internal — those still run via docker-compose, not in-cluster.
 env:
   AUTH_ENABLED: "true"
   KEYCLOAK_URL: http://host.docker.internal:8082
