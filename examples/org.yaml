@@ -15,3 +15,12 @@ metadata:
 spec:
   type: team
   children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: platform-team
+  description: Owns and operates the AI Delivery Portal.
+spec:
+  type: team
+  children: []

@@ -11,16 +11,6 @@ metadata:
 spec:
   owner: group:platform-team
 ---
-# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-group
-apiVersion: backstage.io/v1alpha1
-kind: Group
-metadata:
-  name: platform-team
-  description: Owns and operates the AI Delivery Portal.
-spec:
-  type: team
-  children: []
----
 # https://backstage.io/docs/features/software-catalog/descriptor-format#kind-component
 apiVersion: backstage.io/v1alpha1
 kind: Component

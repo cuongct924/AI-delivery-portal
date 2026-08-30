@@ -107,12 +107,23 @@ organization:
   name: AI Delivery Portal
 
 backend:
-  # Used for enabling authentication, secret is shared by all backend plugins
-  # See https://backstage.io/docs/auth/service-to-service-auth for
-  # information on the format
-  # auth:
-  #   keys:
-  #     - secret: ${BACKEND_SECRET}
+  # See https://backstage.io/docs/auth/service-to-service-auth for the
+  # format — externalAccess (not the deprecated backend.auth.keys, verified
+  # live: it logs "DEPRECATION WARNING: The backend.auth.keys config has
+  # been replaced by backend.auth.externalAccess").
+  #
+  # Required for services/orchestration-api/catalog_client.py — verified
+  # against a live instance that /api/catalog/entities rejects unauthenticated
+  # calls (401 AuthenticationError) by default in the new backend system.
+  # `static` is a plain raw bearer token — schema confirmed in
+  # node_modules/@backstage/backend-defaults/config.schema.json.
+  # BACKEND_SECRET is set in .env (gitignored, local dev only).
+  auth:
+    externalAccess:
+      - type: static
+        options:
+          token: ${BACKEND_SECRET}
+          subject: orchestration-api-catalog-client
   baseUrl: http://localhost:7007
   listen:
     port: 7007
@@ -199,26 +210,21 @@ mcpChat:
       token: ${LITELLM_MASTER_KEY}
       model: claude-sonnet-5 # model_name in infra/llm-gateways/litellm-config.yaml
   mcpServers:
-    # Paths relative to packages/backend/ (this process's cwd when spawning
-    # them), not the repo root — hence the ../..
-    - id: mlops-mcp
-      name: MLOps MCP Server
-      type: stdio
-      scriptPath: ../../agents/mcp-servers/mlops-server/server.py
-      env:
-        PYTHONPATH: '../..'
-    - id: k8s-mcp
-      name: Kubernetes MCP Server
-      type: stdio
-      scriptPath: ../../agents/mcp-servers/k8s-server/server.py
-      env:
-        PYTHONPATH: '../..'
-    - id: metrics-mcp
-      name: Metrics MCP Server
-      type: stdio
-      scriptPath: ../../agents/mcp-servers/metrics-server/server.py
-      env:
-        PYTHONPATH: '../..'
+    # Both servers now run over streamable-http (see
+    # agents/mcp-servers/*/server.py), not stdio — `type: streamable-http` +
+    # `url` confirmed as the supported shape by reading
+    # node_modules/@backstage-community/plugin-mcp-chat-backend/dist/services/MCPClientServiceImpl.cjs.js
+    # directly (MCPServerType.STREAMABLE_HTTP requires serverConfig.url).
+    # Ports match docker-compose.yml; start both servers first
+    # (docker compose --profile llmops up -d mlops-observability-server golden-paths-server).
+    - id: mlops-observability-mcp
+      name: MLOps Observability MCP Server
+      type: streamable-http
+      url: http://localhost:9001/mcp
+    - id: golden-paths-mcp
+      name: Golden Paths MCP Server
+      type: streamable-http
+      url: http://localhost:9002/mcp
 
 # Reference documentation http://backstage.io/docs/features/techdocs/configuration
 # Note: After experimenting with basic setup, use CI/CD to generate docs
