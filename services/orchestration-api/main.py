@@ -2,9 +2,16 @@
 to the AI LLM (Claude, or any model registered in
 infra/llm-gateways/litellm-config.yaml)."""
 
+import logging
+
 from fastapi import FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
 from routers import chat, llm_serving, models, monitoring, prompts, rag, recommendations
+
+# Without this, the root logger defaults to WARNING and every app-level
+# logger.info() call (e.g. auth/keycloak.py's authenticated-identity line)
+# is silently dropped — uvicorn only configures its own uvicorn.* loggers.
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="AI Delivery Portal — Orchestration API")
 app.include_router(chat.router)

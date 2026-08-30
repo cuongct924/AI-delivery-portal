@@ -23,6 +23,7 @@ SERVICE_REQS := requirements-dev.txt \
 	adapters/requirements.txt \
 	services/orchestration-api/requirements.txt \
 	agents/mcp-servers/mlops-observability-server/requirements.txt \
+	agents/mcp-servers/golden-paths-server/requirements.txt \
 	infra/argo-workflows/training-image/requirements.txt
 
 .PHONY: venv install lock hooks lint format format-check typecheck test check \
@@ -131,6 +132,9 @@ run-orchestration-api:
 
 run-observability-mcp:
 	bash scripts/run-mcp-local.sh observability
+
+run-golden-paths-mcp:
+	bash scripts/run-mcp-local.sh golden-paths
 
 ## Pulls/pushes the DVC-tracked dataset (data/) against the local MinIO
 ## remote — needs AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, auto-loaded from

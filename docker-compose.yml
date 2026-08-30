@@ -14,10 +14,19 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.2
     container_name: ai-delivery-portal-keycloak
-    command: start-dev
+    # --import-realm loads infra/keycloak/realm-export.json on startup —
+    # only if the "ai-delivery-portal" realm doesn't already exist (won't
+    # clobber a manually-configured realm from an existing volume). Adds
+    # the golden-paths-agent service-account client used for real
+    # client_credentials auth (see agents/mcp-servers/golden-paths-server/auth.py) —
+    # the rest of the realm (human login, if any) is still set up manually,
+    # unchanged from before.
+    command: start-dev --import-realm
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+    volumes:
+      - ./infra/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
     ports:
       # Host 8082 — 8080 is held by the kind cluster (kind-config.yaml extraPortMappings).
       - "8082:8080"
@@ -119,3 +128,26 @@ services:
     # at runtime via the Backstage Catalog (mcp/endpoint annotation), not a
     # hardcoded local path.
     profiles: ["mlops", "llmops", "observability"]
+
+  golden-paths-server:
+    build:
+      context: .
+      dockerfile: agents/mcp-servers/golden-paths-server/Dockerfile
+    container_name: ai-delivery-portal-golden-paths-server
+    ports:
+      - "9002:9002"
+    environment:
+      ORCHESTRATION_API_URL: http://orchestration-api:8000
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ai-delivery-portal
+      KEYCLOAK_CLIENT_ID: golden-paths-agent
+      KEYCLOAK_CLIENT_SECRET: golden-paths-agent-dev-secret
+    # No depends_on: orchestration-api/keycloak are different profiles —
+    # start them yourself first (docker compose --profile mlops up -d
+    # orchestration-api keycloak). Authenticates as its own Keycloak
+    # service-account identity (client_credentials) — see
+    # agents/mcp-servers/golden-paths-server/auth.py — works regardless of
+    # orchestration-api's AUTH_ENABLED value (see auth/keycloak.py).
+    # streamable-http transport — discovered at runtime via the Backstage
+    # Catalog (mcp/endpoint annotation), not a hardcoded local path.
+    profiles: ["llmops"]
