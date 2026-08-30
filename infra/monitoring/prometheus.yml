@@ -7,7 +7,14 @@ scrape_configs:
     static_configs:
       - targets: ['orchestration-api:8000']
 
-  # Add a real target once KServe/BentoML expose /metrics
+  # Not a matter of KServe/BentoML exposing /metrics (they already do) — this
+  # docker-compose Prometheus container and the local `kind` cluster
+  # (infra/k8s-local-cluster/kind-config.yaml) sit on separate Docker
+  # networks with no bridge between them. kind-config.yaml's
+  # extraPortMappings only cover Knative/Kourier ingress, Argo, ArgoCD, and
+  # Backstage — nothing for a KServe predictor's metrics port. Needs a real
+  # network bridge (or running Prometheus inside the cluster) before this
+  # target can resolve at all.
   # - job_name: kserve-inference
   #   static_configs:
   #     - targets: ['<inference-service>:8080']
