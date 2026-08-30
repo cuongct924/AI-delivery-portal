@@ -1,6 +1,4 @@
-# Profiles: mlops (Golden Path #1/#2), llmops (RAG/vector search), observability
-# (metrics/dashboards, optional for either). Run one with e.g.
-# `docker compose --profile mlops up -d`, or combine multiple --profile flags.
+# Profiles: mlops, llmops, observability — e.g. `docker compose --profile mlops up -d`.
 services:
   # Image tags pinned to verified releases, not `latest`, for reproducible builds.
   mlflow:
@@ -14,13 +12,8 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.2
     container_name: ai-delivery-portal-keycloak
-    # --import-realm loads infra/keycloak/realm-export.json on startup —
-    # only if the "ai-delivery-portal" realm doesn't already exist (won't
-    # clobber a manually-configured realm from an existing volume). Adds
-    # the golden-paths-agent service-account client used for real
-    # client_credentials auth (see agents/mcp-servers/golden-paths-server/auth.py) —
-    # the rest of the realm (human login, if any) is still set up manually,
-    # unchanged from before.
+    # --import-realm loads infra/keycloak/realm-export.json (skipped if the
+    # realm already exists). Rest of the realm is still set up manually.
     command: start-dev --import-realm
     environment:
       KEYCLOAK_ADMIN: admin
@@ -122,11 +115,7 @@ services:
     environment:
       MLFLOW_TRACKING_URI: http://mlflow:5000
       PROMETHEUS_URL: http://prometheus:9090
-    # No depends_on: mlflow/prometheus are different profiles — start them
-    # yourself first if you need them reachable.
-    # streamable-http transport — a normal long-lived HTTP service, discovered
-    # at runtime via the Backstage Catalog (mcp/endpoint annotation), not a
-    # hardcoded local path.
+    # mlflow/prometheus are different profiles — start them first if needed.
     profiles: ["mlops", "llmops", "observability"]
 
   golden-paths-server:
@@ -142,12 +131,5 @@ services:
       KEYCLOAK_REALM: ai-delivery-portal
       KEYCLOAK_CLIENT_ID: golden-paths-agent
       KEYCLOAK_CLIENT_SECRET: golden-paths-agent-dev-secret
-    # No depends_on: orchestration-api/keycloak are different profiles —
-    # start them yourself first (docker compose --profile mlops up -d
-    # orchestration-api keycloak). Authenticates as its own Keycloak
-    # service-account identity (client_credentials) — see
-    # agents/mcp-servers/golden-paths-server/auth.py — works regardless of
-    # orchestration-api's AUTH_ENABLED value (see auth/keycloak.py).
-    # streamable-http transport — discovered at runtime via the Backstage
-    # Catalog (mcp/endpoint annotation), not a hardcoded local path.
+    # orchestration-api/keycloak are different profiles — start them first.
     profiles: ["llmops"]

@@ -5,8 +5,6 @@ image:
 
 replicaCount: 1
 
-# Must match infra/k8s-local-cluster/kind-config.yaml's extraPortMappings
-# (containerPort 32749 -> host port 3002) and the NodePort in
-# scripts/setup-kserve-argocd-local.sh.
+# Must match kind-config.yaml's extraPortMappings and setup-kserve-argocd-local.sh.
 nodePort: 32749
 externalUrl: http://localhost:3002

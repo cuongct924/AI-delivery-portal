@@ -14,9 +14,7 @@ spec:
       labels:
         {{- include "orchestration-api.labels" . | nindent 8 }}
     spec:
-      # Matches the Dockerfile's own `USER appuser --uid 1000` — same
-      # convention already used for the Argo Workflow pod's securityContext
-      # (infra/argo-workflows/train-register-template.yaml).
+      # Matches the Dockerfile's `USER appuser --uid 1000`.
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

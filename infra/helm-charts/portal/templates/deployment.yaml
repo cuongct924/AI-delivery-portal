@@ -14,9 +14,7 @@ spec:
       labels:
         {{- include "portal.labels" . | nindent 8 }}
     spec:
-      # Matches the Dockerfile's own `USER node` (node:24-trixie-slim's
-      # built-in UID 1000 user) — same securityContext convention already
-      # used for orchestration-api's chart / the Argo Workflow pod.
+      # Matches the Dockerfile's `USER node` (built-in UID 1000).
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -29,9 +27,8 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
-          # Dockerfile's own CMD bakes in app-config.production.yaml (needs
-          # Postgres) — overridden here to use app-config.local.yaml
-          # instead (dev-mode SQLite + corrected baseUrl, see configmap.yaml).
+          # Overrides the Dockerfile's CMD to use app-config.local.yaml
+          # (dev-mode SQLite) instead of app-config.production.yaml (needs Postgres).
           command: ["node", "packages/backend"]
           args:
             - --config

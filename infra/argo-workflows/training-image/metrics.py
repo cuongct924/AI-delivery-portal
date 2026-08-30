@@ -33,10 +33,7 @@ def compute_metrics(task_type: str, y_true: ArrayLike, y_pred: ArrayLike) -> dic
         ValueError: task_type isn't recognized.
     """
     if task_type == "classification":
-        # average="weighted" accounts for class imbalance and is defined for
-        # multiclass, unlike the binary-only default.
-        # sklearn's stub types zero_division as str-only even though sklearn
-        # itself documents/accepts the int 0 — a known stub gap, not a bug here.
+        # weighted average handles multiclass/imbalance; zero_division stub type is wrong.
         precision = precision_score(
             y_true,
             y_pred,
@@ -62,9 +59,7 @@ def compute_metrics(task_type: str, y_true: ArrayLike, y_pred: ArrayLike) -> dic
             "f1": f1,
         }
     if task_type == "regression":
-        # r2/mean_absolute_percentage_error are both scale-free — usable as
-        # default gate thresholds without knowing the dataset's units
-        # (mean_absolute_error isn't — logged for reference, not gated).
+        # r2/MAPE are scale-free, usable as gate thresholds; MAE isn't (logged only).
         return {
             "r2": r2_score(y_true, y_pred),
             "mean_absolute_percentage_error": mean_absolute_percentage_error(y_true, y_pred),

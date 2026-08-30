@@ -17,9 +17,7 @@ COPY --chown=appuser:appuser agents/mcp-servers/golden-paths-server/ ./agents/mc
 USER appuser
 ENV PYTHONPATH=/app
 EXPOSE 9002
-# streamable-http transport — a bare GET/POST against /mcp without a valid
-# MCP session legitimately returns 4xx, so probe TCP reachability rather than
-# expecting a 200 (that would false-fail a healthy server).
+# Probe TCP reachability, not HTTP 200 — a bare request to /mcp returns 4xx.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD python -c "import socket; socket.create_connection(('localhost', 9002), timeout=3)" || exit 1
 CMD ["python", "agents/mcp-servers/golden-paths-server/server.py"]

@@ -20,17 +20,9 @@ metadata:
     FastAPI BFF — MCP client, Keycloak auth, LLMOps evaluations, and the
     real business logic every Golden Path action calls into.
   annotations:
-    # Real query against a metric actually scraped today (infra/monitoring/prometheus.yml,
-    # job "orchestration-api") — grouped by the "handler" label, same as the
-    # p95-by-handler panel in infra/monitoring/grafana/dashboards/orchestration-api.json.
-    # Format/keys verified against @roadiehq/backstage-plugin-prometheus source
-    # (dist/components/util.esm.js) — isPrometheusAvailable() checks this key.
+    # Metric scraped in infra/monitoring/prometheus.yml, grouped by handler.
     prometheus.io/rule: 'sum(rate(http_requests_total{job="orchestration-api"}[5m])) by (handler)|handler'
-    # Embeds the real provisioned dashboard (uid "orchestration-api", folder
-    # "AI Delivery Portal" — infra/monitoring/grafana/provisioning/dashboards/dashboards.yml)
-    # as an iframe src, per @backstage-community/plugin-grafana's
-    # DashboardViewer.esm.js. Only shows real orchestration-api HTTP metrics —
-    # no model-level/KServe data (see infra/monitoring/README.md for the gap).
+    # Real provisioned dashboard — no model-level/KServe data (see infra/monitoring/README.md).
     grafana/overview-dashboard: "http://localhost:3001/d/orchestration-api/orchestration-api?kiosk"
 spec:
   type: service
@@ -94,8 +86,7 @@ metadata:
     mcp/endpoint: http://mlops-observability-server:9001/mcp
     mcp/transport: streamable-http
 spec:
-  # "mcp" isn't a Backstage-native API type — no schema/UI support for it
-  # yet, this is a self-invented convention, not an official one.
+  # "mcp" is a self-invented type — no Backstage-native support yet.
   type: mcp
   lifecycle: experimental
   owner: group:platform-team

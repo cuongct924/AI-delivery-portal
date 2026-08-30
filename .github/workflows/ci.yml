@@ -107,17 +107,9 @@ jobs:
       - run: yarn tsc
       - run: yarn lint:all
 
-  # ---------------------------------------------------------------------
   # Docker — build all 4 service images, then Trivy-scan each.
-  # --ignore-unfixed: don't fail on upstream CVEs with no patch available yet
-  # (e.g. perl-base in python:3.12-slim) — only on CVEs we can actually act
-  # on. See docs/architecture.md for the one currently-tracked exception
-  # (cryptography, pinned below 50 by mlflow itself).
-  #
-  # NOTE: packages/backend/Dockerfile (the Backstage backend image) is not
-  # built here yet — it needs a full `yarn build:backend` first and hasn't
-  # been wired into this pipeline yet.
-  # ---------------------------------------------------------------------
+  # --ignore-unfixed: skip upstream CVEs with no available patch yet.
+  # NOTE: packages/backend (Backstage) isn't built/scanned here yet.
   docker-build-and-scan:
     needs: [python-checks, frontend-checks]
     runs-on: ubuntu-latest

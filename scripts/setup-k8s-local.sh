@@ -46,9 +46,8 @@ kubectl -n "${ARGO_NAMESPACE}" rollout status deployment/workflow-controller --t
 kubectl -n "${ARGO_NAMESPACE}" rollout status deployment/argo-server --timeout=300s
 
 echo "=== [4/7] Reconfiguring argo-server for local dev (server auth-mode, plain HTTP) ==="
-# Default HTTPS + client-auth mode doesn't match ArgoAdapter's plain HTTP calls.
-# The readinessProbe must switch to HTTP too, or it keeps probing HTTPS on a
-# plain-HTTP server, the pod never goes Ready, and the old pod never rotates out.
+# Default HTTPS+client-auth doesn't match ArgoAdapter's plain HTTP calls;
+# readinessProbe must switch to HTTP too or the pod never goes Ready.
 kubectl -n "${ARGO_NAMESPACE}" patch deployment argo-server --type=json \
   -p='[
     {"op": "replace", "path": "/spec/template/spec/containers/0/args", "value": ["server", "--auth-mode", "server", "--secure=false"]},

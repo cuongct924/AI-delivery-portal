@@ -1,16 +1,9 @@
-"""Chat API — routes requests to an LLM (Claude, or any model registered in
-infra/llm-gateways/litellm-config.yaml, including a self-hosted model
-deployed via the Serving LLM Golden Path) via the LLM Gateway, using the
-persona's active system prompt and, optionally, RAG retrieval from an
-active index. See docs/llmops-lifecycle-plan.md mục 9.4.
+"""Chat API — sends a message to the persona's active prompt via the LLM
+Gateway, optionally with RAG context or MCP tool-calling.
 
-MCP tool-routing (use_tools=True) lets the Agent call the LLMOps Lifecycle
-Golden Path tools (mcp_client.py, discovered via catalog_client.py) inside
-a chat turn — bounded to one tool call and one follow-up model call, no
-further looping. `activate_prompt`/`rag_activate` are never auto-executed:
-LLMOps activation has no PR-gate (unlike MLOps), so a tool tagged
-destructive_hint=True is only ever proposed, never called, until the user
-explicitly confirms in a follow-up turn.
+use_tools=True lets the Agent call Golden Path tools, bounded to one tool
+call per turn. Destructive tools (activate_prompt, rag_activate) are only
+proposed, never auto-executed.
 """
 
 import json
@@ -39,12 +32,9 @@ class ChatRequest(BaseModel):
     persona: str = "mlops"
     use_rag: bool = False
     rag_collection: str | None = None
-    # Lets the Agent call MCP tools (mcp_client.py) inside this turn — see
-    # module docstring for the confirmation-gate behavior on destructive tools.
+    # Lets the Agent call MCP tools during this turn.
     use_tools: bool = False
-    # Overridable — same reasoning as routers/rag.py's RagEvaluateRequest.model:
-    # a hardcoded model= here would lock every chat to Claude regardless of
-    # what's registered in litellm-config.yaml.
+    # Overridable so chat isn't locked to Claude.
     model: str = "claude-sonnet-5"
 
 
@@ -56,12 +46,9 @@ class ChatResponse(BaseModel):
     # self-hosted model via the Serving LLM Golden Path).
     tokens: int
     cost_usd: float | None
-    # Names of tools actually executed this turn — empty unless use_tools=True
-    # and the model called a non-destructive tool.
+    # Tools actually executed this turn.
     tools_used: list[str] = []
-    # Set instead of executing when the model wants to call a tool tagged
-    # destructive_hint=True — the reply already explains the proposal; the
-    # caller must send a new chat turn to actually confirm and act on it.
+    # Set when a destructive tool was proposed but not executed.
     pending_confirmation: str | None = None
 
 
@@ -107,9 +94,7 @@ async def send_message(
         tool_calls = message.get("tool_calls") or []
 
         if tool_calls:
-            # Bounded to 1 tool call per turn — avoids an unbounded
-            # tool-call loop and keeps LLM cost/latency predictable.
-            call = tool_calls[0]
+            call = tool_calls[0]  # bounded to 1 tool call per turn
             tool_name = call["function"]["name"]
             tool_args = json.loads(call["function"]["arguments"])
 

@@ -49,9 +49,7 @@ docker compose --profile llmops up -d      # LLMOps only: qdrant, litellm
 docker compose --profile observability up -d   # optional: prometheus, grafana
 docker compose --profile mlops --profile llmops --profile observability up -d   # everything
 
-# MCP servers use streamable-http transport — run detached like any other
-# service, discoverable at runtime via the Backstage Catalog (see
-# services/orchestration-api/catalog_client.py), no fixed local path needed:
+# MCP servers run detached, discoverable via the Backstage Catalog:
 docker compose up -d mlops-observability-server golden-paths-server
 bash scripts/run-mcp-local.sh observability   # or: run a single MCP server standalone, no Docker needed
 

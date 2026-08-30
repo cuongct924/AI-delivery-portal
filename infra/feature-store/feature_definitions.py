@@ -18,15 +18,8 @@ from feast.value_type import ValueType
 
 entity = Entity(name="entity", join_keys=["entity_id"], value_type=ValueType.STRING)
 
-# FEAST_S3_ENDPOINT_URL/FEAST_OFFLINE_STORE_PATH unset (or blank, per
-# .env.example's convention for optional vars like GITHUB_TOKEN) -> local
-# demo parquet, same "swap only env vars, code stays the same" convention
-# data/README.md uses for DVC. `or` (not a bare .get() default) matters
-# here — env_file: .env in docker-compose.yml passes a blank value through
-# as an empty string, not an unset key, which .get()'s default wouldn't
-# catch. Real deploys point FEAST_OFFLINE_STORE_PATH at an s3://<bucket>/...
-# URI and set FEAST_S3_ENDPOINT_URL; credentials come from the same
-# AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY DVC already uses.
+# `or`, not .get() default — docker-compose passes a blank var as "", not unset.
+# Unset/blank falls back to local parquet; real deploys set both FEAST_* vars to s3://.
 transaction_features_source = FileSource(
     name="transaction_features_source",
     path=os.environ.get("FEAST_OFFLINE_STORE_PATH") or "data/transaction_features.parquet",

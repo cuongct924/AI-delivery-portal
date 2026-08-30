@@ -1,8 +1,6 @@
-"""Registry of which checks run for which task type — same registry-by-
-dimension pattern as TASK_TYPE_ALGORITHMS (training image) and
-TASK_TYPE_THRESHOLDS (evaluations/gate.py): universal checks every dataset
-gets, plus a task-type-specific list, plus an optional time-column check
-that's an independent axis (same convention as `timeColumn` for algorithms)."""
+"""Registry of which checks run for which task type: universal checks plus
+a task-type-specific list, plus an optional time-column check.
+"""
 
 from collections.abc import Callable
 from typing import Final
@@ -28,9 +26,7 @@ UNIVERSAL_CHECKS: Final[list[Callable[..., CheckResult]]] = [
     check_duplicate_rows,
 ]
 
-# NLP reuses the "classification" list unchanged; CV and RecSys don't fit
-# this dict's shared (df, target_column=...) signature — see
-# run_rec_checks() below for RecSys, and CV skips validate-dataset entirely.
+# CV and RecSys don't fit this shared (df, target_column) signature.
 TASK_TYPE_CHECKS: Final[dict[str, list[Callable[..., CheckResult]]]] = {
     "classification": [
         check_target_leakage_correlation,

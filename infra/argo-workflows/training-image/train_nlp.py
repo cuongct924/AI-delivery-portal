@@ -17,11 +17,8 @@ from transformers import (
     TrainingArguments,
 )
 
-# Dev-facing "adam"/"sgd" (same vocabulary as optimizers.py, used by
-# train_dl.py/train_cv.py) mapped to the transformers.TrainingArguments
-# `optim` string HuggingFace's Trainer actually expects — "adam" maps to
-# the decoupled-weight-decay AdamW variant (plain non-decoupled Adam isn't
-# one of transformers' supported optimizer names).
+# Maps optimizers.py's "adam"/"sgd" vocabulary to Trainer's `optim` string —
+# "adam" maps to AdamW since plain Adam isn't a supported optimizer name.
 _OPTIM_NAMES: Final[dict[str, str]] = {"adam": "adamw_torch", "sgd": "sgd"}
 
 
@@ -101,9 +98,7 @@ def train_and_evaluate(
     )
     trainer.train()
 
-    # datasets.Dataset's stub isn't parametrized the way Trainer.predict()
-    # expects, and PredictionOutput.predictions is typed as a tuple to
-    # account for multi-output models — this one only has 1 output head.
+    # Cast: stub types predictions as a tuple for multi-output; this model has 1 head.
     predictions = trainer.predict(cast(Any, test_dataset))
     predicted_ids = cast(np.ndarray, predictions.predictions).argmax(axis=-1)
     metrics = compute_metrics("classification", test_label_ids, predicted_ids)

@@ -1,7 +1,5 @@
 """services/orchestration-api/catalog_client.py — patches `httpx.get` and
-`settings` directly, same pattern as tests/test_auth_keycloak.py. Verified
-live against a real Backstage instance during development (see commit
-message); these are the mocked regression tests."""
+`settings` directly, same pattern as tests/test_auth_keycloak.py."""
 
 from unittest.mock import MagicMock, patch
 

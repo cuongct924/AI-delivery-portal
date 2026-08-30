@@ -1,14 +1,7 @@
 """Keycloak client_credentials token fetch/cache — gives this server its own
-verifiable service-account identity, distinct from any human, instead of a
-self-reported header a caller could set to anything. orchestration-api
-verifies the resulting JWT for real (see
-services/orchestration-api/auth/keycloak.py) regardless of its own
-AUTH_ENABLED setting, since a caller that presents a token always gets it
-checked.
+verifiable service-account identity instead of a self-reported header.
 
-Client `golden-paths-agent` must exist in the `ai-delivery-portal` Keycloak
-realm with `serviceAccountsEnabled=true` and an audience mapper adding
-"orchestration-api" — provisioned via infra/keycloak/realm-export.json.
+Client `golden-paths-agent` is provisioned via infra/keycloak/realm-export.json.
 """
 
 import os

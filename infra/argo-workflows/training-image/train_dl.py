@@ -77,9 +77,7 @@ def train_and_evaluate(
     is_regression = task_type == "regression"
     target_mean, target_std = 0.0, 1.0
     if is_regression:
-        # Standardizing the target too — otherwise MSELoss's gradient scale
-        # depends on the target's raw units, and predictions must be
-        # un-scaled before compute_metrics() (R2/MAPE need the real scale).
+        # Target standardized too (MSELoss needs it); predictions un-scaled below.
         target_mean = float(train_labels.mean())
         target_std = float(train_labels.std()) or 1.0
         train_y_raw = ((train_labels - target_mean) / target_std).to_numpy(dtype="float64")

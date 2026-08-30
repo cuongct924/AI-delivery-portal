@@ -1,20 +1,10 @@
-"""Dynamic MCP session manager — discovers MCP servers via catalog_client.py
-(the Backstage Catalog, not a hardcoded local path) and keeps live
-`ClientSession`s open for the app's lifetime, wired up once at FastAPI
-startup (see main.py's lifespan).
+"""Dynamic MCP session manager — discovers MCP servers via the Backstage
+Catalog (catalog_client.py) and keeps live sessions open for the app's
+lifetime (see main.py's lifespan).
 
-Each server's connection runs in its own dedicated `asyncio.Task` rather
-than sharing one `AsyncExitStack` across servers — verified live that
-sharing a stack is unsafe here: `streamable_http_client`'s internal anyio
-`TaskGroup` uses cancel scopes that must be entered and exited in the same
-task, and one server's connection failure corrupted the shared stack's
-ability to manage an already-successful entry for a different server. A
-dedicated task per server keeps each connection's enter/exit within its own
-task, which is what anyio actually requires.
-
-Verified end-to-end during development: real Catalog discovery -> real
-streamable-http MCP connection -> a real Golden Path tool call, with a
-verified Keycloak identity on the orchestration-api side.
+Each server connects in its own `asyncio.Task`: anyio cancel scopes must
+enter/exit in the same task, so sharing one `AsyncExitStack` across servers
+lets one failure corrupt another server's connection.
 """
 
 import asyncio
@@ -36,12 +26,8 @@ class ToolSchema(TypedDict):
 
 class McpToolRegistry:
     """Holds live MCP sessions discovered via the Catalog and routes tool
-    calls to the right one.
-
-    Every method that talks to a server degrades gracefully on failure — a
-    server that can't be reached (or wasn't discovered at all) must never
-    prevent orchestration-api from starting or from serving chat requests
-    with `use_tools=False`.
+    calls to the right one. Unreachable servers degrade gracefully, never
+    block startup.
     """
 
     def __init__(self) -> None:
@@ -52,9 +38,8 @@ class McpToolRegistry:
         self._shutdown = asyncio.Event()
 
     async def connect_all(self) -> None:
-        """Discover MCP servers via the Catalog and open a session to each,
-        one dedicated task per server. Returns once every connection
-        attempt has either succeeded or failed (not before)."""
+        """Connect to every discovered server; returns once each has
+        succeeded or failed."""
         servers = discover_mcp_servers()
         ready_events = [asyncio.Event() for _ in servers]
         self._tasks = [
@@ -80,9 +65,7 @@ class McpToolRegistry:
         ]
 
     def is_destructive(self, tool_name: str) -> bool:
-        """True for tools (activate_prompt, rag_activate) that must go
-        through a human confirmation step rather than being auto-called —
-        LLMOps activation has no PR-gate, so this is the only safety gate."""
+        """True for tools that need human confirmation, not auto-calling."""
         tool = self._tools.get(tool_name)
         return bool(tool and tool.annotations and tool.annotations.destructive_hint)
 
@@ -103,10 +86,7 @@ class McpToolRegistry:
             await asyncio.gather(*self._tasks, return_exceptions=True)
 
     async def _run_server(self, server: McpServerInfo, ready: asyncio.Event) -> None:
-        """Owns one server's connection for the task's whole lifetime —
-        enters the transport/session, publishes its tools, then blocks
-        until `aclose()` signals shutdown, so exit happens in this same
-        task too."""
+        """Owns one server's connection until `aclose()` signals shutdown."""
         if server["transport"] != "streamable-http":
             logger.warning(
                 "Unsupported MCP transport %s for %s, skipping",
@@ -135,14 +115,8 @@ class McpToolRegistry:
 
                 await self._shutdown.wait()
         except BaseException as exc:
-            # Deliberately broad: verified live that a failed connection
-            # here can surface as a plain Exception, a BaseExceptionGroup
-            # (anyio TaskGroup wrapping a CancelledError, which is itself a
-            # BaseException — `except Exception` doesn't catch it), or a
-            # bare CancelledError propagated from the aborted transport.
-            # This task's entire job is "isolate one server's failure so
-            # every other server's task is unaffected" — re-raise only the
-            # 2 signals that must always propagate.
+            # Broad on purpose: a failed connection can raise a
+            # BaseExceptionGroup, not just Exception.
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
             logger.warning(

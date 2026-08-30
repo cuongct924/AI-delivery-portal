@@ -98,9 +98,7 @@ def test_rag_evaluate_computes_pass_rate_and_forwards_model() -> None:
 
 
 def test_rag_evaluate_reports_none_cost_when_model_has_no_pricing() -> None:
-    # A self-hosted model (e.g. via the Serving LLM Golden Path) has no
-    # cost entry in litellm-config.yaml — LiteLLM omits the cost header,
-    # response_cost_usd is None. Token count must still be reported.
+    # No cost entry -> LiteLLM omits the header -> response_cost_usd is None.
     request = RagEvaluateRequest(
         collection="smoke-test",
         index_version="1",

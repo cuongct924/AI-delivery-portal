@@ -66,9 +66,8 @@ def test_train_and_evaluate_encodes_labels_consistently_and_returns_metrics(
     mock_trainer.train.assert_called_once()
     fake_tokenizer = mock_auto_tokenizer.from_pretrained.return_value
     assert model == {"model": fake_model, "tokenizer": fake_tokenizer}
-    # "positive"/"negative" sorted -> negative=0, positive=1; predicted
-    # [1, 0] means ["positive", "negative"] vs. true ["negative", "positive"]
-    # — both wrong, accuracy 0.
+    # Labels sorted: negative=0, positive=1. Predicted [1,0] vs true
+    # [0,1] — both wrong.
     assert metrics["accuracy"] == 0.0
     assert set(metrics) == {"accuracy", "precision", "recall", "f1"}
 

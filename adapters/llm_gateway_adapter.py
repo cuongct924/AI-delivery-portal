@@ -25,12 +25,7 @@ class LiteLLMGatewayAdapter(ILLMGatewayAdapter):
         )
         response.raise_for_status()
         result = response.json()
-        # Per-call cost — LiteLLM returns this as a response header, not in
-        # the OpenAI-compatible JSON body, so it has to be read here or
-        # callers (who only see the parsed JSON) can't get at it. None
-        # when the model has no cost entry in litellm-config.yaml (e.g. a
-        # self-hosted model from the Serving LLM Golden Path) — callers
-        # must handle that, not assume a number.
+        # LiteLLM returns per-call cost as a header, not in the JSON body.
         cost_header = response.headers.get("x-litellm-response-cost")
         result["response_cost_usd"] = float(cost_header) if cost_header is not None else None
         return result

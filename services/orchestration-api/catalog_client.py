@@ -1,13 +1,10 @@
-"""Discovers MCP servers by querying the Backstage Software Catalog's REST
-API for `API, type: mcp` entities and reading their `mcp/endpoint`/
-`mcp/transport` annotations — instead of a hardcoded local subprocess path
-(see agents/mcp-servers/*/server.py and examples/entities.yaml).
+"""Discovers MCP servers by querying the Backstage Catalog for
+`API, type: mcp` entities and reading their `mcp/endpoint`/`mcp/transport`
+annotations, instead of a hardcoded local path.
 
-Backstage's new-backend-system rejects unauthenticated calls to
-`/api/catalog/entities` (verified against a live instance: 401
-AuthenticationError) — a static service token
-(`settings.backstage_service_token`, matching app-config.yaml's
-`backend.auth.keys`) is required for this to actually return entities.
+Requires a static service token (`settings.backstage_service_token`,
+matching app-config.yaml's `backend.auth.externalAccess`) — Backstage
+rejects unauthenticated Catalog reads.
 """
 
 import logging
@@ -26,13 +23,8 @@ class McpServerInfo(TypedDict):
 
 
 def discover_mcp_servers() -> list[McpServerInfo]:
-    """Query the Catalog for `API, type: mcp` entities and return their
-    connection info.
-
-    Never raises — the Catalog or Backstage being unreachable must not
-    prevent orchestration-api from starting; tool-calling just becomes
-    unavailable (an empty list) instead.
-    """
+    """Return connection info for every `API, type: mcp` Catalog entity.
+    Never raises — an unreachable Catalog just yields an empty list."""
     headers = {}
     if settings.backstage_service_token:
         headers["Authorization"] = f"Bearer {settings.backstage_service_token}"

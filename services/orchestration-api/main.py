@@ -11,19 +11,15 @@ from mcp_client import McpToolRegistry
 from prometheus_fastapi_instrumentator import Instrumentator
 from routers import chat, llm_serving, models, monitoring, prompts, rag, recommendations
 
-# Without this, the root logger defaults to WARNING and every app-level
-# logger.info() call (e.g. auth/keycloak.py's authenticated-identity line)
-# is silently dropped — uvicorn only configures its own uvicorn.* loggers.
+# Without this, app-level logger.info() calls are silently dropped —
+# uvicorn only configures its own loggers.
 logging.basicConfig(level=logging.INFO)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     registry = McpToolRegistry()
-    # connect_all() never raises — a Catalog/MCP server outage must not
-    # prevent orchestration-api from starting; chat just serves
-    # use_tools=False requests until connectivity is restored.
-    await registry.connect_all()
+    await registry.connect_all()  # never raises; degrades gracefully
     app.state.mcp_registry = registry
     yield
     await registry.aclose()
