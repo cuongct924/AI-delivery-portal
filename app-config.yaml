@@ -124,6 +124,14 @@ backend:
         options:
           token: ${BACKEND_SECRET}
           subject: orchestration-api-catalog-client
+  # examples/entities.yaml's `API, type: openapi` entity for orchestration-api
+  # uses `$text: http://localhost:8000/openapi.json` — Backstage's
+  # PlaceholderProcessor blocks that by default (verified live: "Reading
+  # from 'http://localhost:8000/openapi.json' is not allowed... configure
+  # an integration... or add it to backend.reading.allow").
+  reading:
+    allow:
+      - host: localhost:8000
   baseUrl: http://localhost:7007
   listen:
     port: 7007
