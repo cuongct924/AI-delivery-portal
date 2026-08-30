@@ -21,6 +21,7 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path"]
 pythonpath = [".", "services/orchestration-api", "infra/argo-workflows/training-image"]
 testpaths = ["tests"]
 addopts = "--cov --cov-report=term-missing"
+asyncio_mode = "auto"
 
 [tool.coverage.run]
 source = ["adapters", "agents", "services/orchestration-api", "infra/argo-workflows/training-image"]
