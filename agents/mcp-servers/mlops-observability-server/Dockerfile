@@ -4,7 +4,7 @@
 FROM python:3.12-slim AS builder
 WORKDIR /app
 RUN pip install --no-cache-dir uv
-COPY agents/mcp-servers/mlops-server/requirements.lock.txt .
+COPY agents/mcp-servers/mlops-observability-server/requirements.lock.txt .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --target /deps -r requirements.lock.txt
 
@@ -14,11 +14,13 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /deps /usr/local/lib/python3.12/site-packages
 RUN useradd --create-home --uid 1000 appuser
 COPY --chown=appuser:appuser adapters/ ./adapters/
-COPY --chown=appuser:appuser agents/mcp-servers/mlops-server/ ./agents/mcp-servers/mlops-server/
+COPY --chown=appuser:appuser agents/mcp-servers/mlops-observability-server/ ./agents/mcp-servers/mlops-observability-server/
 USER appuser
 ENV PYTHONPATH=/app
-# stdio-transport tool, no HTTP port to probe — verify our code + deps still
-# import cleanly inside the running container instead.
+EXPOSE 9001
+# streamable-http transport — a bare GET/POST against /mcp without a valid
+# MCP session legitimately returns 4xx, so probe TCP reachability rather than
+# expecting a 200 (that would false-fail a healthy server).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD python -c "from adapters.mlflow_adapter import MlflowAdapter" || exit 1
-CMD ["python", "agents/mcp-servers/mlops-server/server.py"]
+    CMD python -c "import socket; socket.create_connection(('localhost', 9001), timeout=3)" || exit 1
+CMD ["python", "agents/mcp-servers/mlops-observability-server/server.py"]

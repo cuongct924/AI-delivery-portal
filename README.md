@@ -49,10 +49,11 @@ docker compose --profile llmops up -d      # LLMOps only: qdrant, litellm
 docker compose --profile observability up -d   # optional: prometheus, grafana
 docker compose --profile mlops --profile llmops --profile observability up -d   # everything
 
-# MCP servers use stdio transport — not meant to run detached (`up -d` exits
-# them immediately). Spawn one on demand instead:
-docker compose run -i mlops-mcp-server     # or k8s-mcp-server / metrics-mcp-server
-bash scripts/run-mcp-local.sh mlops   # or: run a single MCP server standalone, no Docker needed
+# MCP servers use streamable-http transport — run detached like any other
+# service, discoverable at runtime via the Backstage Catalog (see
+# services/orchestration-api/catalog_client.py), no fixed local path needed:
+docker compose up -d mlops-observability-server golden-paths-server
+bash scripts/run-mcp-local.sh observability   # or: run a single MCP server standalone, no Docker needed
 
 make install    # create a Python 3.12 .venv, install ruff + pyright + pytest + every service's requirements.txt
 make lint       # ruff check .

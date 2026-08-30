@@ -22,14 +22,12 @@ endif
 SERVICE_REQS := requirements-dev.txt \
 	adapters/requirements.txt \
 	services/orchestration-api/requirements.txt \
-	agents/mcp-servers/mlops-server/requirements.txt \
-	agents/mcp-servers/k8s-server/requirements.txt \
-	agents/mcp-servers/metrics-server/requirements.txt \
+	agents/mcp-servers/mlops-observability-server/requirements.txt \
 	infra/argo-workflows/training-image/requirements.txt
 
 .PHONY: venv install lock hooks lint format format-check typecheck test check \
 	gitleaks checkov trivy security \
-	run-orchestration-api run-mlops-mcp run-k8s-mcp run-metrics-mcp \
+	run-orchestration-api run-observability-mcp run-golden-paths-mcp \
 	dvc-pull dvc-push \
 	clean-venv
 
@@ -131,14 +129,8 @@ security: gitleaks checkov trivy
 run-orchestration-api:
 	cd services/orchestration-api && PYTHONPATH=$(CURDIR) $(CURDIR)/$(PY) -m uvicorn main:app --reload
 
-run-mlops-mcp:
-	bash scripts/run-mcp-local.sh mlops
-
-run-k8s-mcp:
-	bash scripts/run-mcp-local.sh k8s
-
-run-metrics-mcp:
-	bash scripts/run-mcp-local.sh metrics
+run-observability-mcp:
+	bash scripts/run-mcp-local.sh observability
 
 ## Pulls/pushes the DVC-tracked dataset (data/) against the local MinIO
 ## remote — needs AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, auto-loaded from

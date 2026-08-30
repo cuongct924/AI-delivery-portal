@@ -21,13 +21,13 @@ Python (each service under `adapters/`, `services/orchestration-api/`,
 make install   # create .venv, install dev.lock.txt + pre-commit hook
 make lock       # regenerate all *.lock.txt — run after editing any requirements.txt
 make check      # lint + format-check + typecheck + test (what CI runs)
-make run-orchestration-api / run-mlops-mcp / run-k8s-mcp / run-metrics-mcp
+make run-orchestration-api / run-observability-mcp / run-golden-paths-mcp
 ```
 
 Local infra:
 ```bash
 docker compose up -d   # mlflow, keycloak, prometheus, grafana, qdrant, minio, litellm, orchestration-api, 3 MCP servers
-bash scripts/run-mcp-local.sh mlops|k8s|metrics   # run one MCP server without Docker
+bash scripts/run-mcp-local.sh observability|golden-paths   # run one MCP server without Docker
 ```
 
 Run `make check` and `yarn tsc && yarn lint:all` before committing — CI

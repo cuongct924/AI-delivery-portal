@@ -42,7 +42,8 @@ from adapters.mlflow_adapter import MlflowAdapter
 
 router = APIRouter(tags=["models"])
 
-# Module-level singletons — same convention as agents/mcp-servers/mlops-server/server.py.
+# Module-level singletons — same convention as
+# agents/mcp-servers/mlops-observability-server/server.py.
 mlflow_adapter = MlflowAdapter()
 argo_adapter = ArgoAdapter()
 feast_adapter = FeastAdapter()

@@ -103,37 +103,19 @@ services:
       - keycloak
     profiles: ["mlops"]
 
-  mlops-mcp-server:
+  mlops-observability-server:
     build:
       context: .
-      dockerfile: agents/mcp-servers/mlops-server/Dockerfile
-    container_name: ai-delivery-portal-mlops-mcp-server
+      dockerfile: agents/mcp-servers/mlops-observability-server/Dockerfile
+    container_name: ai-delivery-portal-mlops-observability-server
+    ports:
+      - "9001:9001"
     environment:
       MLFLOW_TRACKING_URI: http://mlflow:5000
-    # No depends_on: mlflow is a different profile — start it yourself first
-    # if you need it reachable (docker compose --profile mlops up -d mlflow).
-    # stdio transport exits on EOF with no attached stdin — `up -d` isn't the
-    # right way to run it. Spawn on demand: `docker compose run -i mlops-mcp-server`.
-    profiles: ["manual"]
-
-  k8s-mcp-server:
-    build:
-      context: .
-      dockerfile: agents/mcp-servers/k8s-server/Dockerfile
-    container_name: ai-delivery-portal-k8s-mcp-server
-    # stdio transport exits on EOF with no attached stdin — `up -d` isn't the
-    # right way to run it. Spawn on demand: `docker compose run -i k8s-mcp-server`.
-    profiles: ["manual"]
-
-  metrics-mcp-server:
-    build:
-      context: .
-      dockerfile: agents/mcp-servers/metrics-server/Dockerfile
-    container_name: ai-delivery-portal-metrics-mcp-server
-    environment:
       PROMETHEUS_URL: http://prometheus:9090
-    # No depends_on: prometheus is a different profile — start it yourself
-    # first if needed (docker compose --profile observability up -d prometheus).
-    # stdio transport exits on EOF with no attached stdin — `up -d` isn't the
-    # right way to run it. Spawn on demand: `docker compose run -i metrics-mcp-server`.
-    profiles: ["manual"]
+    # No depends_on: mlflow/prometheus are different profiles — start them
+    # yourself first if you need them reachable.
+    # streamable-http transport — a normal long-lived HTTP service, discovered
+    # at runtime via the Backstage Catalog (mcp/endpoint annotation), not a
+    # hardcoded local path.
+    profiles: ["mlops", "llmops", "observability"]
