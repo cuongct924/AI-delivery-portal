@@ -5583,6 +5583,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@internal/plugin-mlops-dashboard@workspace:^, @internal/plugin-mlops-dashboard@workspace:plugins/mlops-dashboard":
+  version: 0.0.0-use.local
+  resolution: "@internal/plugin-mlops-dashboard@workspace:plugins/mlops-dashboard"
+  dependencies:
+    "@backstage/cli": "npm:^0.36.5"
+    "@backstage/core-components": "npm:^0.18.13"
+    "@backstage/core-plugin-api": "npm:^1.12.9"
+    "@backstage/frontend-plugin-api": "npm:^0.18.0"
+    "@material-ui/core": "npm:^4.12.2"
+    "@material-ui/icons": "npm:^4.9.1"
+  peerDependencies:
+    react: ^18.0.2
+  languageName: unknown
+  linkType: soft
+
 "@internal/plugin-prompt-registry@workspace:^, @internal/plugin-prompt-registry@workspace:plugins/prompt-registry":
   version: 0.0.0-use.local
   resolution: "@internal/plugin-prompt-registry@workspace:plugins/prompt-registry"
@@ -13091,6 +13106,7 @@ __metadata:
     "@backstage/plugin-user-settings": "npm:^0.9.6"
     "@backstage/ui": "npm:^0.17.1"
     "@cakecrusher/plugin-litellm": "npm:^0.1.4"
+    "@internal/plugin-mlops-dashboard": "workspace:^"
     "@internal/plugin-prompt-registry": "workspace:^"
     "@material-ui/core": "npm:^4.12.2"
     "@material-ui/icons": "npm:^4.9.1"
@@ -13686,6 +13702,7 @@ __metadata:
   dependencies:
     "@backstage-community/plugin-mcp-chat-backend": "npm:^0.13.0"
     "@backstage/backend-defaults": "npm:^0.17.7"
+    "@backstage/backend-plugin-api": "npm:^1.10.0"
     "@backstage/cli": "npm:^0.36.5"
     "@backstage/config": "npm:^1.3.8"
     "@backstage/plugin-app-backend": "npm:^0.5.17"
@@ -13707,6 +13724,7 @@ __metadata:
     "@backstage/plugin-scaffolder-backend": "npm:^4.0.3"
     "@backstage/plugin-scaffolder-backend-module-github": "npm:^0.9.12"
     "@backstage/plugin-scaffolder-backend-module-notifications": "npm:^0.1.25"
+    "@backstage/plugin-scaffolder-node": "npm:^0.13.6"
     "@backstage/plugin-search-backend": "npm:^2.1.5"
     "@backstage/plugin-search-backend-module-catalog": "npm:^0.3.18"
     "@backstage/plugin-search-backend-module-pg": "npm:^0.5.58"

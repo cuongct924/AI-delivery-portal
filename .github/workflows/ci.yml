@@ -6,6 +6,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,6 +21,7 @@ jobs:
   # ---------------------------------------------------------------------
   security-gitleaks:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,6 +31,7 @@ jobs:
 
   security-checkov:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - run: docker run --rm -v "${{ github.workspace }}:/repo" -w /repo
@@ -42,6 +45,7 @@ jobs:
   python-checks:
     needs: [security-gitleaks, security-checkov]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       # NOTE: plain ubuntu-latest, not a python:3.12-slim container — that
@@ -88,6 +92,7 @@ jobs:
   frontend-checks:
     needs: [security-gitleaks, security-checkov]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     container:
       image: node:22-bookworm
     steps:
@@ -116,26 +121,28 @@ jobs:
   docker-build-and-scan:
     needs: [python-checks, frontend-checks]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
+      # Pinned release tarball, not `curl | sh` from a script URL.
       - name: Install Trivy
-        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+        run: curl -sSfL https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.tar.gz | sudo tar -xz -C /usr/local/bin trivy
       - name: Set image tag vars
         run: |
           echo "SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)" >> "$GITHUB_ENV"
           echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
       - name: Build images
         run: |
-          docker build -t orchestration-api:$SHORT_SHA -f services/orchestration-api/Dockerfile services/orchestration-api
-          docker build -t mlops-server:$SHORT_SHA -f agents/mcp-servers/mlops-server/Dockerfile .
-          docker build -t k8s-server:$SHORT_SHA -f agents/mcp-servers/k8s-server/Dockerfile .
-          docker build -t metrics-server:$SHORT_SHA -f agents/mcp-servers/metrics-server/Dockerfile .
+          docker build -t orchestration-api:$SHORT_SHA -f services/orchestration-api/Dockerfile .
+          docker build -t mlops-observability-server:$SHORT_SHA -f agents/mcp-servers/mlops-observability-server/Dockerfile .
+          docker build -t golden-paths-server:$SHORT_SHA -f agents/mcp-servers/golden-paths-server/Dockerfile .
+          docker build -t training-image:$SHORT_SHA -f infra/argo-workflows/training-image/Dockerfile .
       - name: Trivy scan
         run: |
-          for img in orchestration-api mlops-server k8s-server metrics-server; do
+          for img in orchestration-api mlops-observability-server golden-paths-server training-image; do
             echo "=== Trivy scan: $img ==="
             trivy image --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 "$img:$SHORT_SHA"
           done
@@ -149,7 +156,7 @@ jobs:
       - name: Push images
         if: github.ref == 'refs/heads/main'
         run: |
-          for img in orchestration-api mlops-server k8s-server metrics-server; do
+          for img in orchestration-api mlops-observability-server golden-paths-server training-image; do
             docker tag "$img:$SHORT_SHA" "ghcr.io/$REPO_LC/$img:$SHORT_SHA"
             docker tag "$img:$SHORT_SHA" "ghcr.io/$REPO_LC/$img:latest"
             docker push "ghcr.io/$REPO_LC/$img:$SHORT_SHA"

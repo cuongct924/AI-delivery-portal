@@ -42,9 +42,51 @@ catalog:
     - type: file
       target: ./examples/entities.yaml
 
-    # Local example template
+    # AI Delivery Portal — Golden Path #1 (Train→Track→Register)
     - type: file
-      target: ./examples/template/template.yaml
+      target: ./examples/templates/train-track-register/template.yaml
+      rules:
+        - allow: [Template]
+
+    # AI Delivery Portal — Golden Path #2 (Register→Deploy)
+    - type: file
+      target: ./examples/templates/register-deploy/template.yaml
+      rules:
+        - allow: [Template]
+
+    # AI Delivery Portal — Register External Run
+    - type: file
+      target: ./examples/templates/register-external-run/template.yaml
+      rules:
+        - allow: [Template]
+
+    # AI Delivery Portal — Golden Path #3 (Recommend→Track→Register)
+    - type: file
+      target: ./examples/templates/recommend-train-register/template.yaml
+      rules:
+        - allow: [Template]
+
+    # AI Delivery Portal — Setup Model Monitoring
+    - type: file
+      target: ./examples/templates/setup-model-monitoring/template.yaml
+      rules:
+        - allow: [Template]
+
+    # AI Delivery Portal — Serving LLM
+    - type: file
+      target: ./examples/templates/deploy-llm/template.yaml
+      rules:
+        - allow: [Template]
+
+    # AI Delivery Portal — LLMOps Golden Path #1 (Draft/Ingest→Register)
+    - type: file
+      target: ./examples/templates/llm-draft-register/template.yaml
+      rules:
+        - allow: [Template]
+
+    # AI Delivery Portal — LLMOps Golden Path #2 (Evaluate→Deploy)
+    - type: file
+      target: ./examples/templates/llm-evaluate-deploy/template.yaml
       rules:
         - allow: [Template]
 

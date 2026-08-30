@@ -10,13 +10,7 @@ from abc import ABC, abstractmethod
 
 class IModelRegistryAdapter(ABC):
     @abstractmethod
-    def register_model(
-        self,
-        name: str,
-        version: str,
-        artifact_uri: str,
-        dataset_version: str | None = None,
-    ) -> dict: ...
+    def register_model(self, name: str, artifact_uri: str) -> dict: ...
 
     @abstractmethod
     def list_models(self, project: str | None = None) -> list[dict]: ...
@@ -24,16 +18,78 @@ class IModelRegistryAdapter(ABC):
     @abstractmethod
     def get_model_metrics(self, name: str, version: str) -> dict: ...
 
+    @abstractmethod
+    def get_dataset_lineage(self, name: str, version: str) -> list[dict]: ...
+
+    @abstractmethod
+    def set_model_version_tag(self, name: str, version: str, key: str, value: str) -> None: ...
+
+    @abstractmethod
+    def get_model_version_details(self, name: str, version: str) -> dict: ...
+
+
+class IVersionRegistryAdapter(ABC):
+    """Tracks versions of an artifact that isn't a trained model (prompt
+    text, RAG index pointer) and which one is currently active — the
+    LLMOps equivalent of IModelRegistryAdapter's "model version", without
+    assuming an MLflow-loadable artifact exists."""
+
+    @abstractmethod
+    def register_version(self, kind: str, name: str, metadata: dict) -> str: ...
+
+    @abstractmethod
+    def list_names(self, kind: str) -> list[str]: ...
+
+    @abstractmethod
+    def get_version(self, kind: str, name: str, version: str) -> dict: ...
+
+    @abstractmethod
+    def list_versions(self, kind: str, name: str) -> dict[str, dict]: ...
+
+    @abstractmethod
+    def get_active_version(self, kind: str, name: str) -> str | None: ...
+
+    @abstractmethod
+    def set_active_version(self, kind: str, name: str, version: str) -> None: ...
+
 
 class IInferenceAdapter(ABC):
     @abstractmethod
-    def deploy_model(self, name: str, version: str, model_uri: str) -> dict: ...
+    def deploy_model(
+        self, name: str, version: str, model_uri: str, traffic_fields: dict | None = None
+    ) -> dict: ...
 
     @abstractmethod
     def get_inference_status(self, name: str) -> dict: ...
 
     @abstractmethod
     def predict(self, name: str, payload: dict) -> dict: ...
+
+
+class IDeployTrafficStrategy(ABC):
+    """How traffic moves to the new model version — Golden Path #2.
+
+    Direct and TrafficSplit (Canary/A-B/Blue-Green) are the only 2
+    concrete strategies: KServe's `canaryTrafficPercent` field is one
+    mechanism that Canary/A-B/Blue-Green only differ in *intent* over —
+    not 3 separate classes.
+    """
+
+    @abstractmethod
+    def render(self) -> dict:
+        """Fields to merge into the InferenceService's spec.predictor
+        block — {} for Direct, {"canaryTrafficPercent": N} for TrafficSplit."""
+
+
+class IReleaseStrategy(ABC):
+    """How a deploy gets approved — PR-gated (default, unchanged) vs
+    Instant (calls the inference adapter directly, no Git/PR)."""
+
+    @abstractmethod
+    def release(self, model_name: str, model_version: str, manifest_content: str) -> dict:
+        """Performs the release action. PRGatedStrategy is a no-op — the
+        caller still publishes manifest_content as a PR itself. Instant
+        actually deploys and returns {"deployed": True}."""
 
 
 class IWorkflowAdapter(ABC):
@@ -46,10 +102,18 @@ class IWorkflowAdapter(ABC):
 
 class IVectorStoreAdapter(ABC):
     @abstractmethod
-    def upsert(self, ids: list[str], vectors: list[list[float]], payloads: list[dict]) -> dict: ...
+    def upsert(
+        self,
+        ids: list[str],
+        vectors: list[list[float]],
+        payloads: list[dict],
+        collection: str | None = None,
+    ) -> dict: ...
 
     @abstractmethod
-    def search(self, query_vector: list[float], top_k: int = 5) -> list[dict]: ...
+    def search(
+        self, query_vector: list[float], top_k: int = 5, collection: str | None = None
+    ) -> list[dict]: ...
 
 
 class ILLMGatewayAdapter(ABC):
@@ -58,3 +122,29 @@ class ILLMGatewayAdapter(ABC):
 
     @abstractmethod
     def list_models(self) -> list[dict]: ...
+
+    @abstractmethod
+    def embed(self, model: str, input_texts: list[str]) -> list[list[float]]: ...
+
+
+class IFeatureStoreAdapter(ABC):
+    @abstractmethod
+    def get_offline_features(
+        self, entity_ids: list[str], feature_names: list[str], dataset_version: str | None = None
+    ) -> list[dict]: ...
+
+    @abstractmethod
+    def get_online_features(self, entity_id: str, feature_names: list[str]) -> dict: ...
+
+
+class INotebookAdapter(ABC):
+    @abstractmethod
+    def create_notebook(
+        self, environment: str, ram_gb: int, gpu_type: str | None = None
+    ) -> dict: ...
+
+    @abstractmethod
+    def get_notebook_status(self, notebook_id: str) -> dict: ...
+
+    @abstractmethod
+    def delete_notebook(self, notebook_id: str) -> dict: ...

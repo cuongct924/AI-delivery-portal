@@ -1,0 +1,15 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: {{ model_name }}
+  labels:
+    version: "{{ model_version }}"
+spec:
+  predictor:
+    {% if canary_traffic_percent is not none %}
+    canaryTrafficPercent: {{ canary_traffic_percent }}
+    {% endif %}
+    model:
+      modelFormat:
+        name: mlflow
+      storageUri: {{ storage_uri }}

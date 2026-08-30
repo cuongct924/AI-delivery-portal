@@ -9,8 +9,7 @@ dashboard at `http://localhost:6333/dashboard`).
 `IVectorStoreAdapter` to upsert/search vectors — shared between
 `agents/skills/` and `services/orchestration-api/`.
 
-Helm chart to deploy Qdrant to a real K8s cluster — not implemented yet,
-week 8+ (`docs/roadmap.md`).
+Helm chart to deploy Qdrant to a real K8s cluster — not implemented yet.
 
 ## Note on the embedding model
 

@@ -1,0 +1,27 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: {{ model_name }}
+  labels:
+    version: "{{ model_version }}"
+spec:
+  predictor:
+    {% if canary_traffic_percent is not none %}
+    canaryTrafficPercent: {{ canary_traffic_percent }}
+    {% endif %}
+    model:
+      modelFormat:
+        name: huggingface
+      runtime: {{ serving_runtime_name }}
+      storageUri: hf://{{ huggingface_model_id }}
+      args:
+        - --tensor-parallel-size={{ gpu_count }}
+        - --max-model-len={{ max_context_length }}
+        {% if vllm_quantization is not none %}
+        - --quantization={{ vllm_quantization }}
+        {% endif %}
+      resources:
+        requests:
+          nvidia.com/gpu: "{{ gpu_count }}"
+        limits:
+          nvidia.com/gpu: "{{ gpu_count }}"

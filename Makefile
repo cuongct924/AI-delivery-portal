@@ -6,6 +6,14 @@ UV := $(VENV)/bin/uv
 RUFF := $(VENV)/bin/ruff
 PYRIGHT := $(VENV)/bin/pyright
 PYTEST := $(VENV)/bin/pytest
+DVC := $(VENV)/bin/dvc
+
+# Auto-loads .env (AWS_ACCESS_KEY_ID, KEYCLOAK_URL, ...) into every recipe's
+# environment — no more manually exporting before dvc/uvicorn/etc.
+ifneq (,$(wildcard .env))
+include .env
+export
+endif
 
 # Per-service requirements.txt (source of truth) -> requirements.lock.txt
 # (fully pinned incl. transitive deps, what each Dockerfile actually installs
@@ -14,13 +22,14 @@ PYTEST := $(VENV)/bin/pytest
 SERVICE_REQS := requirements-dev.txt \
 	adapters/requirements.txt \
 	services/orchestration-api/requirements.txt \
-	agents/mcp-servers/mlops-server/requirements.txt \
-	agents/mcp-servers/k8s-server/requirements.txt \
-	agents/mcp-servers/metrics-server/requirements.txt
+	agents/mcp-servers/mlops-observability-server/requirements.txt \
+	agents/mcp-servers/golden-paths-server/requirements.txt \
+	infra/argo-workflows/training-image/requirements.txt
 
 .PHONY: venv install lock hooks lint format format-check typecheck test check \
 	gitleaks checkov trivy security \
-	run-orchestration-api run-mlops-mcp run-k8s-mcp run-metrics-mcp \
+	run-orchestration-api run-observability-mcp run-golden-paths-mcp \
+	dvc-pull dvc-push \
 	clean-venv
 
 # Pinned to 3.12 to match the Dockerfile base image (python:3.12-slim) — avoids
@@ -43,13 +52,27 @@ install: venv
 ## Regenerates dev.lock.txt (merged, local-venv-only) and every service's own
 ## requirements.lock.txt (what its Dockerfile installs from) after you edit a
 ## requirements.txt. Review the diff, then commit the *.lock.txt files too.
-## Pinned to linux/x86_64 (--python-platform) to match the Docker images and
-## GitHub Actions runners, regardless of what OS/arch `make lock` runs on.
+## dev.lock.txt uses --universal (keeps each package's own platform markers,
+## e.g. xgboost's Linux-only nvidia-nccl-cu12 dependency) so `make install`
+## works on any dev machine's OS/arch, not just Linux. Each service's own
+## *.lock.txt stays pinned to linux/x86_64 (--python-platform) to match the
+## Docker images and GitHub Actions runners those actually build/run on.
+## --index-strategy unsafe-best-match: training-image/requirements.txt's
+## --extra-index-url (torch CPU wheels) otherwise makes uv refuse to
+## resolve *any* package's version past what that one extra index offers
+## (e.g. its stale urllib3), even for packages that never touch torch —
+## both PyPI and download.pytorch.org are trusted here, so relaxing this
+## uv default (meant to guard against dependency-confusion attacks) is safe.
+## --emit-index-url writes --extra-index-url back into the generated
+## *.lock.txt so `uv pip install -r *.lock.txt` (each Dockerfile's builder
+## stage) can still find torch==...+cpu on its own — without this, the
+## lock file has no record of which index that pinned version came from
+## and the Docker build fails to resolve it.
 lock: venv
-	$(UV) pip compile $(SERVICE_REQS) --python-version 3.12 --python-platform x86_64-unknown-linux-gnu -o dev.lock.txt
+	$(UV) pip compile $(SERVICE_REQS) --python-version 3.12 --universal --index-strategy unsafe-best-match --emit-index-url -o dev.lock.txt
 	@for f in $(SERVICE_REQS); do \
 		echo "Locking $$f..."; \
-		$(UV) pip compile "$$f" --python-version 3.12 --python-platform x86_64-unknown-linux-gnu -o "$${f%.txt}.lock.txt"; \
+		$(UV) pip compile "$$f" --python-version 3.12 --python-platform x86_64-unknown-linux-gnu --index-strategy unsafe-best-match --emit-index-url -o "$${f%.txt}.lock.txt"; \
 	done
 
 hooks:
@@ -92,7 +115,7 @@ checkov:
 
 ## Builds the 4 service images, then Trivy-scans each — needs Docker running.
 trivy:
-	docker build -t orchestration-api:local -f services/orchestration-api/Dockerfile services/orchestration-api
+	docker build -t orchestration-api:local -f services/orchestration-api/Dockerfile .
 	docker build -t mlops-server:local -f agents/mcp-servers/mlops-server/Dockerfile .
 	docker build -t k8s-server:local -f agents/mcp-servers/k8s-server/Dockerfile .
 	docker build -t metrics-server:local -f agents/mcp-servers/metrics-server/Dockerfile .
@@ -107,14 +130,20 @@ security: gitleaks checkov trivy
 run-orchestration-api:
 	cd services/orchestration-api && PYTHONPATH=$(CURDIR) $(CURDIR)/$(PY) -m uvicorn main:app --reload
 
-run-mlops-mcp:
-	bash scripts/run-mcp-local.sh mlops
+run-observability-mcp:
+	bash scripts/run-mcp-local.sh observability
 
-run-k8s-mcp:
-	bash scripts/run-mcp-local.sh k8s
+run-golden-paths-mcp:
+	bash scripts/run-mcp-local.sh golden-paths
 
-run-metrics-mcp:
-	bash scripts/run-mcp-local.sh metrics
+## Pulls/pushes the DVC-tracked dataset (data/) against the local MinIO
+## remote — needs AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, auto-loaded from
+## .env above instead of exporting them by hand.
+dvc-pull:
+	$(DVC) pull
+
+dvc-push:
+	$(DVC) push
 
 clean-venv:
 	rm -rf $(VENV)

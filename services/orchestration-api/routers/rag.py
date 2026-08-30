@@ -1,0 +1,174 @@
+"""RAG (Retrieval-Augmented Generation) API — ingest → evaluate → activate,
+the RAG-index half of the LLMOps lifecycle (docs/llmops-lifecycle-plan.md).
+The prompt-versioning half lives in routers/prompts.py; both use the same
+JsonFileVersionRegistryAdapter, keyed by a different `kind`.
+
+`Depends(get_current_user)` on all 3 routes — called from Backstage Custom
+Scaffolder Actions, same as every route in models.py except
+`/models/register`.
+"""
+
+import uuid
+from pathlib import Path
+from typing import Final
+
+from auth.keycloak import get_current_user
+from evaluations.gate import evaluate_gate
+from evaluations.llm_judge import judge_response
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+
+from adapters.llm_gateway_adapter import LiteLLMGatewayAdapter
+from adapters.vector_db_adapter import QdrantAdapter
+from adapters.version_registry_adapter import JsonFileVersionRegistryAdapter
+
+router = APIRouter(prefix="/rag", tags=["rag"])
+
+llm_gateway_adapter = LiteLLMGatewayAdapter()
+vector_store_adapter = QdrantAdapter()
+registry_adapter = JsonFileVersionRegistryAdapter()
+
+EMBEDDING_MODEL: Final[str] = "voyage-3"
+
+
+class RagIngestRequest(BaseModel):
+    collection: str
+    source_paths: list[str]
+    chunk_size: int = 800
+    chunk_overlap: int = 100
+
+
+class RagIngestResponse(BaseModel):
+    collection: str
+    index_version: str
+    chunks_ingested: int
+
+
+class RagEvalCase(BaseModel):
+    question: str
+
+
+class RagEvaluateRequest(BaseModel):
+    collection: str
+    index_version: str
+    eval_cases: list[RagEvalCase]
+    top_k: int = 5
+    # Overridable — a hardcoded model= here would lock every RAG eval to
+    # Claude regardless of what's registered in litellm-config.yaml
+    # (including a self-hosted model deployed via the Serving LLM Golden
+    # Path). Default kept for convenience, not as a floor.
+    model: str = "claude-sonnet-5"
+
+
+class RagEvaluateResponse(BaseModel):
+    passed: bool
+    pass_rate: float
+    results: list[dict[str, object]]
+    # Answer-generation calls only — judge_response()'s own LLM call isn't
+    # tracked (it constructs its own adapter instance internally, no usage
+    # returned). total_cost_usd is None when the model has no cost entry
+    # in litellm-config.yaml (e.g. a self-hosted model via the Serving LLM
+    # Golden Path) — token count is still meaningful even without a price.
+    total_tokens: int
+    total_cost_usd: float | None
+
+
+class RagActivateRequest(BaseModel):
+    collection: str
+    index_version: str
+
+
+class RagActivateResponse(BaseModel):
+    collection: str
+    active_version: str
+
+
+def _chunk_text(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
+    step = max(1, chunk_size - chunk_overlap)
+    return [text[i : i + chunk_size] for i in range(0, len(text), step)]
+
+
+@router.post("/ingest", response_model=RagIngestResponse)
+def rag_ingest(
+    request: RagIngestRequest, user: dict = Depends(get_current_user)
+) -> RagIngestResponse:
+    chunks: list[str] = []
+    sources: list[str] = []
+    for source_path in request.source_paths:
+        text = Path(source_path).read_text()
+        for chunk in _chunk_text(text, request.chunk_size, request.chunk_overlap):
+            chunks.append(chunk)
+            sources.append(source_path)
+
+    vectors = llm_gateway_adapter.embed(EMBEDDING_MODEL, chunks)
+    vector_store_adapter.ensure_collection(
+        vector_size=len(vectors[0]), collection=request.collection
+    )
+    ids = [str(uuid.uuid4()) for _ in chunks]
+    payloads = [
+        {"text": chunk, "source": source} for chunk, source in zip(chunks, sources, strict=True)
+    ]
+    vector_store_adapter.upsert(ids, vectors, payloads, collection=request.collection)
+
+    index_version = registry_adapter.register_version(
+        "rag-index",
+        request.collection,
+        {"chunks_ingested": len(chunks), "source_paths": request.source_paths},
+    )
+    return RagIngestResponse(
+        collection=request.collection, index_version=index_version, chunks_ingested=len(chunks)
+    )
+
+
+@router.post("/evaluate", response_model=RagEvaluateResponse)
+def rag_evaluate(
+    request: RagEvaluateRequest, user: dict = Depends(get_current_user)
+) -> RagEvaluateResponse:
+    results: list[dict[str, object]] = []
+    total_tokens = 0
+    total_cost_usd = 0.0
+    cost_known = True
+    for eval_case in request.eval_cases:
+        query_vector = llm_gateway_adapter.embed(EMBEDDING_MODEL, [eval_case.question])[0]
+        hits = vector_store_adapter.search(
+            query_vector, top_k=request.top_k, collection=request.collection
+        )
+        context = "\n\n".join(str(hit["payload"]["text"]) for hit in hits)
+        system_prompt = f"Answer using only this context:\n\n{context}"
+        response = llm_gateway_adapter.chat_completion(
+            model=request.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": eval_case.question},
+            ],
+        )
+        answer = response["choices"][0]["message"]["content"]
+        total_tokens += (response.get("usage") or {}).get("total_tokens", 0)
+        response_cost = response.get("response_cost_usd")
+        if response_cost is None:
+            cost_known = False
+        else:
+            total_cost_usd += response_cost
+        judge_result = judge_response(eval_case.question, answer)
+        gate_result = evaluate_gate(judge_result)
+        results.append(
+            {"question": eval_case.question, "answer": answer, "passed": gate_result["passed"]}
+        )
+
+    passed_count = sum(1 for r in results if r["passed"])
+    pass_rate = passed_count / len(results) if results else 0.0
+    return RagEvaluateResponse(
+        passed=pass_rate >= 0.8,
+        pass_rate=pass_rate,
+        results=results,
+        total_tokens=total_tokens,
+        total_cost_usd=total_cost_usd if cost_known else None,
+    )
+
+
+@router.post("/activate", response_model=RagActivateResponse)
+def rag_activate(
+    request: RagActivateRequest, user: dict = Depends(get_current_user)
+) -> RagActivateResponse:
+    registry_adapter.set_active_version("rag-index", request.collection, request.index_version)
+    return RagActivateResponse(collection=request.collection, active_version=request.index_version)

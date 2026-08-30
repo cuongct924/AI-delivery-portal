@@ -3,39 +3,125 @@
 apiVersion: backstage.io/v1alpha1
 kind: System
 metadata:
-  name: examples
+  name: ai-delivery-portal
+  description: >
+    Internal Developer Platform for MLOps/LLMOps — Backstage Portal +
+    orchestration-api + MCP servers + Adapter layer, wired to real local
+    infrastructure (MLflow, Qdrant, Prometheus, Keycloak).
 spec:
-  owner: guests
+  owner: group:platform-team
 ---
 # https://backstage.io/docs/features/software-catalog/descriptor-format#kind-component
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: example-website
+  name: orchestration-api
+  description: >
+    FastAPI BFF — MCP client, Keycloak auth, LLMOps evaluations, and the
+    real business logic every Golden Path action calls into.
+  annotations:
+    # Real query against a metric actually scraped today (infra/monitoring/prometheus.yml,
+    # job "orchestration-api") — grouped by the "handler" label, same as the
+    # p95-by-handler panel in infra/monitoring/grafana/dashboards/orchestration-api.json.
+    # Format/keys verified against @roadiehq/backstage-plugin-prometheus source
+    # (dist/components/util.esm.js) — isPrometheusAvailable() checks this key.
+    prometheus.io/rule: 'sum(rate(http_requests_total{job="orchestration-api"}[5m])) by (handler)|handler'
+    # Embeds the real provisioned dashboard (uid "orchestration-api", folder
+    # "AI Delivery Portal" — infra/monitoring/grafana/provisioning/dashboards/dashboards.yml)
+    # as an iframe src, per @backstage-community/plugin-grafana's
+    # DashboardViewer.esm.js. Only shows real orchestration-api HTTP metrics —
+    # no model-level/KServe data (see infra/monitoring/README.md for the gap).
+    grafana/overview-dashboard: "http://localhost:3001/d/orchestration-api/orchestration-api?kiosk"
 spec:
-  type: website
+  type: service
   lifecycle: experimental
-  owner: guests
-  system: examples
-  providesApis: [example-grpc-api]
+  owner: group:platform-team
+  system: ai-delivery-portal
+  providesApis: [orchestration-api-openapi]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: mlops-observability-server
+  description: >
+    MCP server — read-only "system/model health" tools (MLflow, K8s,
+    Prometheus). streamable-http, discovered via this Catalog, not a
+    hardcoded local path.
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:platform-team
+  system: ai-delivery-portal
+  providesApis: [mlops-observability-mcp]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: golden-paths-server
+  description: >
+    MCP server — the 6 LLMOps Lifecycle Golden Path actions, callable by
+    any MCP-compatible AI Agent, not just through this Portal's UI.
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:platform-team
+  system: ai-delivery-portal
+  providesApis: [golden-paths-mcp]
+  consumesApis: [orchestration-api-openapi]
 ---
 # https://backstage.io/docs/features/software-catalog/descriptor-format#kind-api
 apiVersion: backstage.io/v1alpha1
 kind: API
 metadata:
-  name: example-grpc-api
+  name: orchestration-api-openapi
+  description: orchestration-api's REST API (FastAPI-generated OpenAPI schema).
 spec:
-  type: grpc
+  type: openapi
   lifecycle: experimental
-  owner: guests
-  system: examples
+  owner: group:platform-team
+  system: ai-delivery-portal
+  definition:
+    $text: http://localhost:8000/openapi.json
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: mlops-observability-mcp
+  description: >
+    Read-only MCP tools: list_experiments, get_model_metrics,
+    check_pod_status (mock), get_logs (mock), query_metric, check_model_latency.
+  annotations:
+    mcp/endpoint: http://mlops-observability-server:9001/mcp
+    mcp/transport: streamable-http
+spec:
+  # "mcp" isn't a Backstage-native API type — no schema/UI support for it
+  # yet, this is a self-invented convention, not an official one.
+  type: mcp
+  lifecycle: experimental
+  owner: group:platform-team
+  system: ai-delivery-portal
   definition: |
-    syntax = "proto3";
-
-    service Exampler {
-      rpc Example (ExampleMessage) returns (ExampleMessage) {};
-    }
-
-    message ExampleMessage {
-      string example = 1;
-    };
+    MCP tools exposed by agents/mcp-servers/mlops-observability-server/server.py.
+    All read-only (ToolAnnotations.read_only_hint=True) — this server never
+    mutates state.
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: golden-paths-mcp
+  description: >
+    LLMOps Lifecycle MCP tools: draft_prompt, evaluate_prompt,
+    activate_prompt, rag_ingest, rag_evaluate, rag_activate.
+  annotations:
+    mcp/endpoint: http://golden-paths-server:9002/mcp
+    mcp/transport: streamable-http
+spec:
+  type: mcp
+  lifecycle: experimental
+  owner: group:platform-team
+  system: ai-delivery-portal
+  definition: |
+    MCP tools exposed by agents/mcp-servers/golden-paths-server/server.py.
+    activate_prompt/rag_activate are tagged destructive_hint=True — LLMOps
+    activation is Instant with no PR-gate, so a calling Agent must treat
+    these as propose-then-confirm, never auto-executable.

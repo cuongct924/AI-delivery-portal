@@ -1,0 +1,25 @@
+# Additive to `docker compose up -d`, not a replacement — this is the
+# GitOps/production-like verification path for the Golden Path templates
+# (orchestration-api reachable in-cluster via KServeAdapter's kubeconfig
+# and via the Custom Scaffolder Actions calling it over HTTP), local dev
+# still uses docker-compose for the fast code-then-see-it loop.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: orchestration-api
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/cuongct924/AI-delivery-portal.git
+    targetRevision: main
+    path: infra/helm-charts/orchestration-api
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

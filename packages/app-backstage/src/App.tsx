@@ -1,6 +1,7 @@
 import { createApp } from '@backstage/frontend-defaults';
 import catalogPlugin from '@backstage/plugin-catalog/alpha';
 import promptRegistryPlugin from '@internal/plugin-prompt-registry/alpha';
+import mlopsDashboardPlugin from '@internal/plugin-mlops-dashboard/alpha';
 import { navModule } from './modules/nav';
 import { homeModule } from './modules/home';
 import argocdPlugin from '@roadiehq/backstage-plugin-argo-cd/alpha';
@@ -46,6 +47,7 @@ export default createApp({
   features: [
     catalogPlugin,
     promptRegistryPlugin,
+    mlopsDashboardPlugin,
     navModule,
     homeModule,
     argocdPlugin,

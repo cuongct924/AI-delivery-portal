@@ -8,15 +8,26 @@ change, `.dvc/config` stays the same).
 Only the small `.dvc` pointer files (md5 hash + size) are committed to git —
 the real data goes to the `storage` remote configured in `.dvc/config`.
 
-## First time (pull the demo dataset)
+## Sample datasets (Golden Path #1)
+
+| File | Task type | Notes |
+|---|---|---|
+| `fraud-detection-sample.csv` | classification | has an ID column (`transaction_id`) — pass it as `idColumns` |
+| `house-price-sample.csv` | regression | no ID column |
+| `sensor-timeseries-sample.csv` | regression | synthetic (trend+seasonality+noise, numpy, not downloaded), 500 rows, `timestamp` column — for Deep Learning (mục 5): the demo datasets above are too small (~10-15 rows) for MLP/LSTM to learn a real signal, and `timeColumn=timestamp` is required for `architecture=lstm`'s sequence windowing |
+
+Clustering test runs reuse either of the first two datasets with
+`targetColumn` left empty.
+
+## First time (pull the demo datasets)
 
 ```bash
 docker compose up -d minio
 # create the bucket once — minio doesn't auto-create it
 docker run --rm --network host minio/mc alias set local http://localhost:9000 minioadmin minioadmin
 docker run --rm --network host minio/mc mb local/mlops-datasets
-.venv/bin/dvc push   # uploads data/fraud-detection-sample.csv to the remote
-.venv/bin/dvc pull   # (on another machine) downloads it back
+.venv/bin/dvc push   # uploads every tracked dataset to the remote
+.venv/bin/dvc pull   # (on another machine) downloads them back
 ```
 
 ## Adding a new dataset version
@@ -27,7 +38,8 @@ git add data/<file>.dvc data/.gitignore
 .venv/bin/dvc push
 ```
 
-`dvc add` prints an md5 hash into the resulting `data/<file>.dvc` — that hash is
-the `dataset_version` passed to `IModelRegistryAdapter.register_model()`
-(`adapters/mlflow_adapter.py`), so a registered model version is traceable back
-to the exact dataset file that trained it.
+`dvc add` prints an md5 hash into the resulting `data/<file>.dvc` — the
+training step embeds that hash in a `mlflow.data` `Dataset`'s digest/name and
+calls `mlflow.log_input()` on it, so `IModelRegistryAdapter.get_dataset_lineage()`
+(`adapters/mlflow_adapter.py`) can trace a model version back to the exact
+dataset file(s) that trained it — a run can log more than one.

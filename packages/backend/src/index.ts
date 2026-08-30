@@ -19,6 +19,8 @@ backend.add(import('@backstage/plugin-scaffolder-backend-module-github'));
 backend.add(
   import('@backstage/plugin-scaffolder-backend-module-notifications'),
 );
+// AI Delivery Portal — orchestration-api Custom Scaffolder Actions (Golden Paths #1/#2)
+backend.add(import('./actions'));
 
 // techdocs plugin
 backend.add(import('@backstage/plugin-techdocs-backend'));

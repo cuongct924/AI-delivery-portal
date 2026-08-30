@@ -1,3 +1,6 @@
+# Profiles: mlops (Golden Path #1/#2), llmops (RAG/vector search), observability
+# (metrics/dashboards, optional for either). Run one with e.g.
+# `docker compose --profile mlops up -d`, or combine multiple --profile flags.
 services:
   # Image tags pinned to verified releases, not `latest`, for reproducible builds.
   mlflow:
@@ -6,16 +9,28 @@ services:
     command: mlflow server --host 0.0.0.0 --port 5000
     ports:
       - "5000:5000"
+    profiles: ["mlops"]
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.2
     container_name: ai-delivery-portal-keycloak
-    command: start-dev
+    # --import-realm loads infra/keycloak/realm-export.json on startup —
+    # only if the "ai-delivery-portal" realm doesn't already exist (won't
+    # clobber a manually-configured realm from an existing volume). Adds
+    # the golden-paths-agent service-account client used for real
+    # client_credentials auth (see agents/mcp-servers/golden-paths-server/auth.py) —
+    # the rest of the realm (human login, if any) is still set up manually,
+    # unchanged from before.
+    command: start-dev --import-realm
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+    volumes:
+      - ./infra/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
     ports:
-      - "8080:8080"
+      # Host 8082 — 8080 is held by the kind cluster (kind-config.yaml extraPortMappings).
+      - "8082:8080"
+    profiles: ["mlops"]
 
   prometheus:
     image: prom/prometheus:v3.14.0
@@ -24,6 +39,7 @@ services:
       - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
       - "9090:9090"
+    profiles: ["observability"]
 
   grafana:
     image: grafana/grafana:13.2.0
@@ -40,6 +56,7 @@ services:
       - "3001:3000"  # host 3001 — Backstage's dev server already owns 3000
     depends_on:
       - prometheus
+    profiles: ["observability"]
 
   qdrant:
     image: qdrant/qdrant:v1.19.0  # matches qdrant-client==1.19.0 in the Python lock files
@@ -47,6 +64,7 @@ services:
     ports:
       - "6333:6333"
       - "6334:6334"
+    profiles: ["llmops"]
 
   minio:
     image: minio/minio:RELEASE.2025-04-08T15-41-24Z
@@ -58,6 +76,7 @@ services:
     ports:
       - "9000:9000"  # S3 API — DVC remote (.dvc/config) points here for local dev
       - "9001:9001"  # web console
+    profiles: ["mlops"]
 
   litellm:
     image: ghcr.io/berriai/litellm:main-v1.66.0-stable
@@ -67,13 +86,16 @@ services:
       - ./infra/llm-gateways/litellm-config.yaml:/app/config.yaml:ro
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-local-dev}
     ports:
       - "4000:4000"
+    profiles: ["llmops"]
 
   orchestration-api:
     build:
-      context: ./services/orchestration-api
+      context: .
+      dockerfile: services/orchestration-api/Dockerfile
     container_name: ai-delivery-portal-orchestration-api
     ports:
       - "8000:8000"
@@ -88,31 +110,44 @@ services:
     depends_on:
       - mlflow
       - keycloak
-      - litellm
-      - qdrant
+    profiles: ["mlops"]
 
-  mlops-mcp-server:
+  mlops-observability-server:
     build:
       context: .
-      dockerfile: agents/mcp-servers/mlops-server/Dockerfile
-    container_name: ai-delivery-portal-mlops-mcp-server
+      dockerfile: agents/mcp-servers/mlops-observability-server/Dockerfile
+    container_name: ai-delivery-portal-mlops-observability-server
+    ports:
+      - "9001:9001"
     environment:
       MLFLOW_TRACKING_URI: http://mlflow:5000
-    depends_on:
-      - mlflow
-
-  k8s-mcp-server:
-    build:
-      context: .
-      dockerfile: agents/mcp-servers/k8s-server/Dockerfile
-    container_name: ai-delivery-portal-k8s-mcp-server
-
-  metrics-mcp-server:
-    build:
-      context: .
-      dockerfile: agents/mcp-servers/metrics-server/Dockerfile
-    container_name: ai-delivery-portal-metrics-mcp-server
-    environment:
       PROMETHEUS_URL: http://prometheus:9090
-    depends_on:
-      - prometheus
+    # No depends_on: mlflow/prometheus are different profiles — start them
+    # yourself first if you need them reachable.
+    # streamable-http transport — a normal long-lived HTTP service, discovered
+    # at runtime via the Backstage Catalog (mcp/endpoint annotation), not a
+    # hardcoded local path.
+    profiles: ["mlops", "llmops", "observability"]
+
+  golden-paths-server:
+    build:
+      context: .
+      dockerfile: agents/mcp-servers/golden-paths-server/Dockerfile
+    container_name: ai-delivery-portal-golden-paths-server
+    ports:
+      - "9002:9002"
+    environment:
+      ORCHESTRATION_API_URL: http://orchestration-api:8000
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ai-delivery-portal
+      KEYCLOAK_CLIENT_ID: golden-paths-agent
+      KEYCLOAK_CLIENT_SECRET: golden-paths-agent-dev-secret
+    # No depends_on: orchestration-api/keycloak are different profiles —
+    # start them yourself first (docker compose --profile mlops up -d
+    # orchestration-api keycloak). Authenticates as its own Keycloak
+    # service-account identity (client_credentials) — see
+    # agents/mcp-servers/golden-paths-server/auth.py — works regardless of
+    # orchestration-api's AUTH_ENABLED value (see auth/keycloak.py).
+    # streamable-http transport — discovered at runtime via the Backstage
+    # Catalog (mcp/endpoint annotation), not a hardcoded local path.
+    profiles: ["llmops"]

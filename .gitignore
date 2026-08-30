@@ -42,5 +42,8 @@ htmlcov/
 .env
 .env.local
 
+# LLMOps version registry — local file-backed state (JsonFileVersionRegistryAdapter)
+services/orchestration-api/.state/
+
 *.tgz
 charts/*/charts/
