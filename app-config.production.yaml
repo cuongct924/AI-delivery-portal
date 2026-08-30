@@ -42,12 +42,6 @@ catalog:
     - type: file
       target: ./examples/entities.yaml
 
-    # AI Delivery Portal — sample entity for the Model Registry
-    - type: file
-      target: ./examples/catalog/model-entity.yaml
-      rules:
-        - allow: [Resource]
-
     # AI Delivery Portal — Golden Path #1 (Train→Track→Register)
     - type: file
       target: ./examples/templates/train-track-register/template.yaml
