@@ -52,3 +52,18 @@ class LiteLLMGatewayAdapter(ILLMGatewayAdapter):
         )
         response.raise_for_status()
         return [item["embedding"] for item in response.json()["data"]]
+
+    def get_spend_report(
+        self, start_date: str, end_date: str, group_by: str | None = None
+    ) -> list[dict[str, object]]:
+        params: dict[str, str] = {"start_date": start_date, "end_date": end_date}
+        if group_by is not None:
+            params["group_by"] = group_by
+        response = httpx.get(
+            f"{self.base_url}/global/spend/report",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            params=params,
+            timeout=10,
+        )
+        response.raise_for_status()
+        return cast(list[dict[str, object]], response.json())

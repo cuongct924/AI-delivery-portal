@@ -74,9 +74,27 @@ class RagActivateResponse(BaseModel):
     active_version: str
 
 
+class RagActiveVersionResponse(BaseModel):
+    collection: str
+    active_version: str | None
+
+
 def _chunk_text(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
     step = max(1, chunk_size - chunk_overlap)
     return [text[i : i + chunk_size] for i in range(0, len(text), step)]
+
+
+@router.get("/{collection}", response_model=RagActiveVersionResponse)
+def get_rag_active_version(
+    collection: str, user: dict = Depends(get_current_user)
+) -> RagActiveVersionResponse:
+    # Mirrors routers/prompts.py's list_prompts()/get_prompt() read pattern —
+    # added for agents/mcp-servers/observability-server's
+    # get_active_rag_version tool, which had no endpoint to call before.
+    return RagActiveVersionResponse(
+        collection=collection,
+        active_version=registry_adapter.get_active_version("rag-index", collection),
+    )
 
 
 @router.post("/ingest", response_model=RagIngestResponse)

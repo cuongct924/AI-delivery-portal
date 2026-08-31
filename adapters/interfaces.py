@@ -234,6 +234,16 @@ class ILLMGatewayAdapter(ABC):
     @abstractmethod
     def embed(self, model: str, input_texts: list[str]) -> list[list[float]]: ...
 
+    @abstractmethod
+    def get_spend_report(
+        self, start_date: str, end_date: str, group_by: str | None = None
+    ) -> list[dict[str, object]]:
+        """Aggregate spend over [start_date, end_date] (YYYY-MM-DD). Shape
+        varies by `group_by` ("team"/"customer"/None for api_key level) —
+        same polymorphic-dict reasoning as IVersionRegistryAdapter above,
+        no single fixed key set exists across groupings."""
+        ...
+
 
 class IFeatureStoreAdapter(ABC):
     """Feature columns are named by the caller's `feature_names` — the

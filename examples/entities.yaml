@@ -34,7 +34,7 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: mlops-observability-server
+  name: observability-server
   description: >
     MCP server — read-only "system/model health" tools (MLflow, K8s,
     Prometheus). streamable-http, discovered via this Catalog, not a
@@ -44,7 +44,7 @@ spec:
   lifecycle: experimental
   owner: group:platform-team
   system: ai-delivery-portal
-  providesApis: [mlops-observability-mcp]
+  providesApis: [observability-mcp]
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Component
@@ -78,13 +78,15 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: API
 metadata:
-  name: mlops-observability-mcp
+  name: observability-mcp
   description: >
-    Read-only MCP tools: list_experiments, get_model_metrics,
+    Read-only MCP tools — MLOps: list_experiments, get_model_metrics,
     check_pod_status (mock), get_logs (mock), query_metric, check_model_latency,
-    get_promotion_status (mock).
+    get_promotion_status (mock). LLMOps: get_llm_spend,
+    get_active_prompt_version, get_active_rag_version,
+    get_eval_score_trend (mock).
   annotations:
-    mcp/endpoint: http://mlops-observability-server:9001/mcp
+    mcp/endpoint: http://observability-server:9001/mcp
     mcp/transport: streamable-http
 spec:
   # "mcp" is a self-invented type — no Backstage-native support yet.
@@ -93,7 +95,7 @@ spec:
   owner: group:platform-team
   system: ai-delivery-portal
   definition: |
-    MCP tools exposed by agents/mcp-servers/mlops-observability-server/server.py.
+    MCP tools exposed by agents/mcp-servers/observability-server/server.py.
     All read-only (ToolAnnotations.read_only_hint=True) — this server never
     mutates state.
 ---

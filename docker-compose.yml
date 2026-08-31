@@ -105,17 +105,22 @@ services:
       - keycloak
     profiles: ["mlops"]
 
-  mlops-observability-server:
+  observability-server:
     build:
       context: .
-      dockerfile: agents/mcp-servers/mlops-observability-server/Dockerfile
-    container_name: ai-delivery-portal-mlops-observability-server
+      dockerfile: agents/mcp-servers/observability-server/Dockerfile
+    container_name: ai-delivery-portal-observability-server
     ports:
       - "9001:9001"
     environment:
       MLFLOW_TRACKING_URI: http://mlflow:5000
       PROMETHEUS_URL: http://prometheus:9090
-    # mlflow/prometheus are different profiles — start them first if needed.
+      LITELLM_GATEWAY_URL: http://litellm:4000
+      ORCHESTRATION_API_URL: http://orchestration-api:8000
+    # mlflow/prometheus/litellm/orchestration-api are different profiles —
+    # start them first if needed (no depends_on: this server's tools each
+    # degrade independently, same as query_metric already did against
+    # Prometheus, not an all-or-nothing service).
     profiles: ["mlops", "llmops", "observability"]
 
   golden-paths-server:

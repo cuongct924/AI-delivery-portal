@@ -11,11 +11,21 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
 from adapters.interfaces import ModelSummary
+from adapters.llm_gateway_adapter import LiteLLMGatewayAdapter
 from adapters.mlflow_adapter import MlflowAdapter
 
-mcp = MCPServer("mlops-observability-server")
+mcp = MCPServer("observability-server")
 adapter = MlflowAdapter()
+llm_gateway_adapter = LiteLLMGatewayAdapter()
 PROMETHEUS_URL: Final[str] = os.getenv("PROMETHEUS_URL", "http://localhost:9090")
+# orchestration-api owns prompt/RAG active-version state
+# (services/orchestration-api/.state/llmops-registry.json, via
+# JsonFileVersionRegistryAdapter) — this server calls it over HTTP rather
+# than reading that file directly. It runs in its own container with no
+# shared filesystem (see docker-compose.yml), and every other real
+# integration here (MLflow, Prometheus, LiteLLM) is already an HTTP call
+# to another service, not a shared file — same pattern, not a new one.
+ORCHESTRATION_API_URL: Final[str] = os.getenv("ORCHESTRATION_API_URL", "http://localhost:8000")
 
 READ_ONLY: Final = ToolAnnotations(read_only_hint=True)
 
@@ -40,6 +50,18 @@ class PromotionStatus(TypedDict):
     tenant: str
     environments: dict[str, str]
     prod_pending_approval: bool
+    note: str
+
+
+class ActiveVersion(TypedDict):
+    name: str
+    active_version: str | None
+
+
+class EvalScoreTrend(TypedDict):
+    name: str
+    kind: str
+    scores: list[dict[str, object]]
     note: str
 
 
@@ -123,6 +145,58 @@ def get_promotion_status(model_name: str, tenant: str) -> PromotionStatus:
         "environments": {"dev": "unknown", "staging": "unknown", "prod": "unknown"},
         "prod_pending_approval": False,
         "note": "mock data — infra/kargo/ is not installed/verified in this environment yet",
+    }
+
+
+@mcp.tool(annotations=READ_ONLY)
+def get_llm_spend(
+    start_date: str, end_date: str, group_by: str | None = None
+) -> list[dict[str, object]]:
+    """LLM spend/cost over [start_date, end_date] (YYYY-MM-DD), from
+    LiteLLM's real spend ledger (GET /global/spend/report — not a mock).
+    group_by: "team", "customer", or omit for per-api-key totals."""
+    return llm_gateway_adapter.get_spend_report(start_date, end_date, group_by)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def get_active_prompt_version(name: str) -> ActiveVersion:
+    """Which version of a system prompt is currently active. LLMOps
+    releases are Instant-only, not PR-gated (docs/llmops-lifecycle-plan.md
+    mục Q4) — there is no Git/ArgoCD trail to read this from, unlike a
+    model deploy, so this calls orchestration-api's own registry directly."""
+    response = httpx.get(f"{ORCHESTRATION_API_URL}/prompts", timeout=10)
+    response.raise_for_status()
+    for prompt in response.json():
+        if prompt["name"] == name:
+            return {"name": name, "active_version": prompt["version"]}
+    return {"name": name, "active_version": None}
+
+
+@mcp.tool(annotations=READ_ONLY)
+def get_active_rag_version(collection: str) -> ActiveVersion:
+    """Which RAG index version is currently active for a collection. Same
+    Instant-only reasoning as get_active_prompt_version — calls
+    orchestration-api's GET /rag/{collection} (added alongside this tool;
+    no read endpoint existed for RAG's active version before)."""
+    response = httpx.get(f"{ORCHESTRATION_API_URL}/rag/{collection}", timeout=10)
+    response.raise_for_status()
+    data = response.json()
+    return {"name": collection, "active_version": data["active_version"]}
+
+
+@mcp.tool(annotations=READ_ONLY)
+def get_eval_score_trend(name: str, kind: str = "prompt") -> EvalScoreTrend:
+    """Score history (safety/correctness/relevance) for a prompt or
+    RAG index over time. (mock — evaluations/llm_judge.py's judge_response()
+    computes a score per call but nothing persists it anywhere today; a
+    real version would need evaluate_prompt/rag_evaluate in
+    routers/prompts.py|rag.py to write each result into the registry
+    first, which they currently don't)."""
+    return {
+        "name": name,
+        "kind": kind,
+        "scores": [],
+        "note": "mock data — judge scores aren't persisted anywhere yet, see this tool's docstring",
     }
 
 
