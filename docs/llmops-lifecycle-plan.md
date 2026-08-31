@@ -266,9 +266,12 @@ LLMOps #2) — xem mục 9.
 **Chốt: Instant — duy nhất, không có lựa chọn PR-gated.** Không phải vì
 "nhanh hơn nên chọn nhanh" — mà vì PR-gated **không hoạt động đúng** cho
 LLMOps với hạ tầng hiện có: MLOps PR-gated hoạt động vì ArgoCD
-(`infra/argocd/inference-services-app.yaml`) đang theo dõi
-`infra/inference-services/` và tự sync — merge PR **chính là** deploy, không
-cần bước nào thêm. LLMOps không có cơ chế tương đương nào theo dõi và tự nạp
+(nay `infra/argocd/applicationset-inference-services-dev.yaml` — đã tái
+cấu trúc multi-env/multi-tenant, xem `infra/argocd/README.md`; tại thời
+điểm viết mục này vẫn là `inference-services-app.yaml`) đang theo dõi
+`infra/environments/dev/inference-services/` (trước đó:
+`infra/inference-services/`) và tự sync — merge PR **chính là** deploy,
+không cần bước nào thêm. LLMOps không có cơ chế tương đương nào theo dõi và tự nạp
 lại `services/orchestration-api/.state/llmops-registry.json` vào process
 `orchestration-api` đang chạy sau khi 1 PR merge — nếu chọn PR-gated làm mặc
 định, "merge PR" sẽ âm thầm **không** activate gì cho tới khi có người chạy

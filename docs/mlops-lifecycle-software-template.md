@@ -337,7 +337,10 @@ script `scripts/setup-kserve-argocd-local.sh`.
 `canaryTrafficPercent`/Knative Revision mà `IDeployTrafficStrategy` (mục
 4.2) đã thiết kế; RawDeployment không có cơ chế này.
 
-**3 ArgoCD Application** (`infra/argocd/`):
+**3 ArgoCD Application** (`infra/argocd/`) — tại thời điểm viết mục này.
+Đã tái cấu trúc thành multi-env × multi-tenant (`ApplicationSet`/
+`AppProject`, xem `infra/argocd/README.md`) — lý do gốc bên dưới vẫn đúng,
+chỉ tên file/số lượng đã đổi:
 - `inference-services-app.yaml` — `directory` source trỏ
   `infra/inference-services/` (đã là YAML phẳng, không cần Helm) — đóng
   đúng gap "merge PR không làm gì" của Golden Path #2.

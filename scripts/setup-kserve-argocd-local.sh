@@ -97,11 +97,15 @@ fi
 docker build -t portal:local -f "${REPO_ROOT}/packages/backend/Dockerfile" "${REPO_ROOT}"
 kind load docker-image portal:local --name "${CLUSTER_NAME}"
 
-echo "=== [9/9] Applying the 3 ArgoCD Applications ==="
-kubectl apply \
-  -f "${REPO_ROOT}/infra/argocd/inference-services-app.yaml" \
-  -f "${REPO_ROOT}/infra/argocd/orchestration-api-app.yaml" \
-  -f "${REPO_ROOT}/infra/argocd/portal-app.yaml"
+echo "=== [9/9] Applying ArgoCD AppProjects + ApplicationSets (multi-env x multi-tenant — see infra/argocd/README.md) ==="
+# kubectl apply -f <dir> only picks up .yaml/.yml/.json in that directory
+# (README.md is skipped) — AppProjects + ApplicationSets in one pass is
+# fine even though ApplicationSets reference AppProjects by name: ArgoCD
+# reconciles as each object appears, order isn't required here.
+kubectl apply -f "${REPO_ROOT}/infra/argocd/"
+# Namespaces (ai-delivery-portal-{dev,staging,prod}[-{mlops-team,llmops-team}])
+# are created by ArgoCD itself — every generated Application has
+# syncOptions: [CreateNamespace=true].
 
 ARGOCD_PASSWORD="$(kubectl -n "${ARGOCD_NAMESPACE}" get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)"
 
@@ -110,10 +114,12 @@ cat <<MSG
 Done.
 
 ArgoCD UI: http://localhost:${ARGOCD_NODE_PORT} (user: admin, password: ${ARGOCD_PASSWORD})
-Portal (once orchestration-api/portal Applications finish syncing): http://localhost:${PORTAL_NODE_PORT}
+Portal, dev only (staging/prod have no fixed hostPort — see
+infra/environments/staging/portal/values.yaml — use kubectl port-forward):
+http://localhost:${PORTAL_NODE_PORT}
 
 Check sync status: kubectl get applications -n ${ARGOCD_NAMESPACE}
-Check InferenceServices: kubectl get inferenceservice
+Check InferenceServices (per env-tenant namespace): kubectl get inferenceservice -n ai-delivery-portal-dev-mlops-team
 
 Note: Serverless/Kourier on kind has no real LoadBalancer — actually
 calling a deployed model's predict endpoint needs a Host header trick or
@@ -122,6 +128,15 @@ implemented yet). This setup only needs InferenceServices to reach Ready.
 
 Re-run this script after changing infra/helm-charts/orchestration-api,
 infra/helm-charts/portal, or anything under services/orchestration-api/ —
-it rebuilds and reloads both images and re-applies the Applications
+it rebuilds and reloads both images and re-applies infra/argocd/
 (ArgoCD's selfHeal picks up the rest automatically).
+
+NOT done by this script (separate, not-yet-verified setup — see each
+README before running):
+  - Kargo (infra/kargo/) — a real controller, not applied here. Install
+    per docs.kargo.io/quickstart/, then \`kubectl apply -f infra/kargo/\`.
+    Promotion to staging/prod does not happen without it.
+  - Kubara (infra/kubara/) — a generator, not a cluster install. Only
+    relevant if you want infra/argocd/ + infra/environments/ regenerated
+    from infra/kubara/config.yaml instead of hand-maintained.
 MSG

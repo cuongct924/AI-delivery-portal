@@ -9,7 +9,9 @@ Helm chart per service, each at `infra/helm-charts/<service-name>/` with
   which needs a Postgres that doesn't exist anywhere in this project yet)
 
 Synced onto the local `kind` cluster via ArgoCD (`infra/argocd/
-orchestration-api-app.yaml` / `portal-app.yaml`) — see
+applicationset-orchestration-api.yaml` / `applicationset-portal.yaml` — 1
+`Application`/environment, `helm.valueFiles` overlay from
+`infra/environments/<env>/`) — see
 `scripts/setup-kserve-argocd-local.sh`. **Additive to `docker compose up
 -d`/`yarn start`, not a replacement** — this is the GitOps/production-like
 verification path, local dev keeps using docker-compose for its fast
