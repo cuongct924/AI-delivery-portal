@@ -16,6 +16,19 @@ spec:
   type: service
 
   parameters:
+    - title: Ownership
+      required:
+        - owner
+      properties:
+        owner:
+          title: Owning team
+          type: string
+          enum: [mlops-team, platform-team]
+          default: mlops-team
+          description: >
+            Sets the registered model's Catalog `owner:` — see
+            examples/org.yaml and infra/argocd/appproject-*-mlops-team.yaml
+            for what this maps to downstream.
     - title: Model to train
       required:
         - modelName
@@ -437,6 +450,7 @@ spec:
         values:
           modelName: ${{ parameters.modelName }}
           modelVersion: ${{ steps['trigger-training'].output.modelVersion }}
+          owner: ${{ parameters.owner }}
 
     - id: publish-catalog-pr
       name: "Open the catalog entry PR"

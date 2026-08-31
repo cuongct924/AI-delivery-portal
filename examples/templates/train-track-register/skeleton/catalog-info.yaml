@@ -14,4 +14,4 @@ metadata:
     mlflow.org/model-version: ${{ values.modelVersion }}
 spec:
   type: ml-model
-  owner: user:guest
+  owner: group:${{ values.owner }}
