@@ -493,7 +493,10 @@ def test_prepare_deploy_manifest_renders_registry_uri_into_template() -> None:
 
     response = prepare_deploy_manifest(request)
 
-    assert response.file_name == "infra/inference-services/fraud-detection/3.yaml"
+    assert (
+        response.file_name
+        == "infra/environments/dev/inference-services/mlops-team/fraud-detection/3.yaml"
+    )
     assert "name: fraud-detection" in response.content
     assert 'version: "3"' in response.content
     assert "storageUri: models:/fraud-detection/3" in response.content

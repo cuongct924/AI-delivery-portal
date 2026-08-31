@@ -57,9 +57,17 @@ def get_feature_store_adapter() -> FeastAdapter:
     return FeastAdapter()
 
 
-def get_kserve_adapter() -> KServeAdapter:
+def get_kserve_adapter(tenant: str) -> KServeAdapter:
     """Not cached — KServeAdapter.__init__ loads a real kubeconfig, so
     callers only construct it when a request actually needs KServe
     (see routers/models.py, routers/llm_serving.py), never eagerly at
-    import time."""
-    return KServeAdapter()
+    import time.
+
+    Always targets `ai-delivery-portal-dev-<tenant>` — orchestration-api
+    only ever writes/deploys into dev (staging/prod are Kargo-only, see
+    infra/kargo/README.md), so there is no code path here that can target
+    any other namespace, which is what keeps `release_strategy=instant`
+    (adapters/deploy_strategies.py's InstantStrategy) from being able to
+    bypass Kargo's approval gate.
+    """
+    return KServeAdapter(namespace=f"ai-delivery-portal-dev-{tenant}")

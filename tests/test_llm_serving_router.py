@@ -21,7 +21,10 @@ def test_prepare_llm_deploy_manifest_renders_manifest_correctly() -> None:
 
     response = prepare_llm_deploy_manifest(request)
 
-    assert response.file_name == "infra/inference-services/llama-3-8b/llm.yaml"
+    assert (
+        response.file_name
+        == "infra/environments/dev/inference-services/llmops-team/llama-3-8b/llm.yaml"
+    )
     assert "name: llama-3-8b" in response.content
     assert 'version: "1"' in response.content
     assert "storageUri: hf://meta-llama/Llama-3.1-8B-Instruct" in response.content

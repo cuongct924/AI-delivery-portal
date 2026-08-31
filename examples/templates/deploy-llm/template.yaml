@@ -147,8 +147,8 @@ spec:
           GPU-enabled cluster with the vLLM ServingRuntime installed
           (infra/llm-serving/README.md) — merging this PR only deploys if
           ArgoCD is watching a cluster that actually has that GPU capacity.
-        sourcePath: infra/inference-services
-        targetPath: infra/inference-services
+        sourcePath: infra/environments/dev/inference-services/llmops-team
+        targetPath: infra/environments/dev/inference-services/llmops-team
 
   output:
     text:
@@ -160,7 +160,9 @@ spec:
           {% if parameters.releaseStrategy === 'pr-gated' %}
           Deploy PR opened: ${{ steps['publish-pr'].output.remoteUrl }}
 
-          It contains `infra/inference-services/${{ parameters.modelName }}/llm.yaml`.
+          It contains `infra/environments/dev/inference-services/llmops-team/${{ parameters.modelName }}/llm.yaml`.
+          Promotion to staging/prod is Kargo's job, not this Portal's —
+          see infra/kargo/README.md.
           Merging it only deploys on a cluster with GPU capacity and the
           vLLM ServingRuntime installed — see infra/llm-serving/README.md.
           {% else %}

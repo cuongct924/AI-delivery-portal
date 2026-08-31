@@ -59,7 +59,7 @@ def prepare_llm_deploy_manifest(
 
     # Lazy: KServeAdapter.__init__ eagerly calls load_kube_config().
     needs_kserve = request.traffic_strategy != "direct" or request.release_strategy == "instant"
-    kserve_adapter = get_kserve_adapter() if needs_kserve else None
+    kserve_adapter = get_kserve_adapter("llmops-team") if needs_kserve else None
 
     traffic_strategy: IDeployTrafficStrategy
     if request.traffic_strategy == "direct":
@@ -91,7 +91,12 @@ def prepare_llm_deploy_manifest(
         max_context_length=request.max_context_length,
         canary_traffic_percent=traffic_fields.get("canaryTrafficPercent"),
     )
-    file_name = f"infra/inference-services/{request.model_name}/llm.yaml"
+    # Always dev — this Golden Path is llmops-team's, and orchestration-api
+    # never writes anywhere but dev (staging/prod are Kargo-only, see
+    # infra/kargo/README.md).
+    file_name = (
+        f"infra/environments/dev/inference-services/llmops-team/{request.model_name}/llm.yaml"
+    )
 
     if request.release_strategy == "instant":
         assert kserve_adapter is not None

@@ -100,12 +100,12 @@ spec:
           Adds the KServe InferenceService manifest for
           **${{ parameters.modelName }}** version **${{ parameters.modelVersion }}**
           (Evaluate Gate passed, deployStrategy=${{ parameters.deployStrategy }}).
-          ArgoCD (infra/argocd/inference-services-app.yaml) watches this
+          ArgoCD (infra/argocd/applicationset-inference-services-dev.yaml) watches this
           path with automated sync — merging this PR deploys the model,
           no manual `kubectl apply` needed (assumes
           scripts/setup-kserve-argocd-local.sh has been run).
-        sourcePath: infra/inference-services
-        targetPath: infra/inference-services
+        sourcePath: infra/environments/dev/inference-services/mlops-team
+        targetPath: infra/environments/dev/inference-services/mlops-team
 
     - id: record-deploy
       name: "Record the deploy"
@@ -129,10 +129,12 @@ spec:
           {% if parameters.releaseStrategy === 'pr-gated' %}
           Deploy PR opened: ${{ steps['publish-pr'].output.remoteUrl }}
 
-          It contains `infra/inference-services/${{ parameters.modelName }}/${{ parameters.modelVersion }}.yaml`.
+          It contains `infra/environments/dev/inference-services/mlops-team/${{ parameters.modelName }}/${{ parameters.modelVersion }}.yaml`.
           Once merged, ArgoCD (infra/argocd/README.md) picks it up
           automatically — by default within ~3 minutes, or run
-          `argocd app sync inference-services` to sync immediately.
+          `argocd app sync inference-services-dev-mlops-team` to sync
+          immediately. Promotion to staging/prod is Kargo's job, not this
+          Portal's — see infra/kargo/README.md.
           {% else %}
           Deployed immediately — no PR opened. Check status with
           `kubectl get inferenceservice ${{ parameters.modelName }} -o yaml`.

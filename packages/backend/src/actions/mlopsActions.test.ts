@@ -522,7 +522,7 @@ describe('orchestration:prepare-deploy-manifest', () => {
     const workspacePath = await fs.mkdtemp(
       path.join(os.tmpdir(), 'mlops-actions-test-'),
     );
-    const fileName = 'infra/inference-services/fraud-detection/3.yaml';
+    const fileName = 'infra/environments/dev/inference-services/mlops-team/fraud-detection/3.yaml';
     const fetchMock = mockFetchResponses([
       {
         ok: true,
@@ -564,7 +564,7 @@ describe('orchestration:prepare-deploy-manifest', () => {
     const workspacePath = await fs.mkdtemp(
       path.join(os.tmpdir(), 'mlops-actions-test-'),
     );
-    const fileName = 'infra/inference-services/fraud-detection/4.yaml';
+    const fileName = 'infra/environments/dev/inference-services/mlops-team/fraud-detection/4.yaml';
     const fetchMock = mockFetchResponses([
       {
         ok: true,
@@ -608,7 +608,7 @@ describe('orchestration:prepare-llm-deploy-manifest', () => {
     const workspacePath = await fs.mkdtemp(
       path.join(os.tmpdir(), 'mlops-actions-test-'),
     );
-    const fileName = 'infra/inference-services/llama-3-8b/llm.yaml';
+    const fileName = 'infra/environments/dev/inference-services/llmops-team/llama-3-8b/llm.yaml';
     const fetchMock = mockFetchResponses([
       {
         ok: true,
@@ -659,7 +659,7 @@ describe('orchestration:prepare-llm-deploy-manifest', () => {
     const workspacePath = await fs.mkdtemp(
       path.join(os.tmpdir(), 'mlops-actions-test-'),
     );
-    const fileName = 'infra/inference-services/llama-3-8b/llm.yaml';
+    const fileName = 'infra/environments/dev/inference-services/llmops-team/llama-3-8b/llm.yaml';
     const fetchMock = mockFetchResponses([
       {
         ok: true,

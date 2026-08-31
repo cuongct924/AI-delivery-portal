@@ -408,7 +408,7 @@ def prepare_deploy_manifest(
     # Lazy: KServeAdapter.__init__ eagerly calls load_kube_config(), which
     # would crash startup wherever no kubeconfig exists (CI, before `kind`).
     needs_kserve = request.traffic_strategy != "direct" or request.release_strategy == "instant"
-    kserve_adapter = get_kserve_adapter() if needs_kserve else None
+    kserve_adapter = get_kserve_adapter("mlops-team") if needs_kserve else None
 
     traffic_strategy: IDeployTrafficStrategy
     if request.traffic_strategy == "direct":
@@ -438,7 +438,13 @@ def prepare_deploy_manifest(
         storage_uri=storage_uri,
         canary_traffic_percent=traffic_fields.get("canaryTrafficPercent"),
     )
-    file_name = f"infra/inference-services/{request.model_name}/{request.model_version}.yaml"
+    # Always dev — this Golden Path is mlops-team's, and orchestration-api
+    # never writes anywhere but dev (staging/prod are Kargo-only, see
+    # infra/kargo/README.md).
+    file_name = (
+        f"infra/environments/dev/inference-services/mlops-team/"
+        f"{request.model_name}/{request.model_version}.yaml"
+    )
 
     release_strategy: IReleaseStrategy
     if request.release_strategy == "instant":
