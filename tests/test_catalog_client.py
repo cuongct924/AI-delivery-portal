@@ -20,9 +20,9 @@ def test_discover_mcp_servers_parses_matching_entities() -> None:
         },
         {
             "metadata": {
-                "name": "mlops-observability-mcp",
+                "name": "observability-mcp",
                 "annotations": {
-                    "mcp/endpoint": "http://mlops-observability-server:9001/mcp",
+                    "mcp/endpoint": "http://observability-server:9001/mcp",
                     "mcp/transport": "streamable-http",
                 },
             }
@@ -38,8 +38,8 @@ def test_discover_mcp_servers_parses_matching_entities() -> None:
             "transport": "streamable-http",
         },
         {
-            "name": "mlops-observability-mcp",
-            "endpoint": "http://mlops-observability-server:9001/mcp",
+            "name": "observability-mcp",
+            "endpoint": "http://observability-server:9001/mcp",
             "transport": "streamable-http",
         },
     ]

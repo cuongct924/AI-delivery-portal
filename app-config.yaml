@@ -202,8 +202,8 @@ mcpChat:
       model: claude-sonnet-5 # model_name in infra/llm-gateways/litellm-config.yaml
   mcpServers:
     # Ports match docker-compose.yml — start both servers first.
-    - id: mlops-observability-mcp
-      name: MLOps Observability MCP Server
+    - id: observability-mcp
+      name: Observability MCP Server
       type: streamable-http
       url: http://localhost:9001/mcp
     - id: golden-paths-mcp

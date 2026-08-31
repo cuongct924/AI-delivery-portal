@@ -35,7 +35,7 @@ from adapters.interfaces import IDeployTrafficStrategy, IReleaseStrategy
 router = APIRouter(tags=["models"])
 
 # Module-level singletons — same convention as
-# agents/mcp-servers/mlops-observability-server/server.py.
+# agents/mcp-servers/observability-server/server.py.
 mlflow_adapter = get_model_registry_adapter()
 argo_adapter = get_workflow_adapter()
 feast_adapter = get_feature_store_adapter()

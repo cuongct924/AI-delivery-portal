@@ -5,7 +5,7 @@ Grafana dashboards.
 
 - `prometheus.yml` — scrape config that **works right away** via
   `docker compose up` (`prometheus` service, UI at `http://localhost:9090`).
-  `agents/mcp-servers/mlops-observability-server/` reads data from here to
+  `agents/mcp-servers/observability-server/` reads data from here to
   answer Claude when asked whether a model is drifting or slow.
 - `grafana/` — **works right away** via `docker compose up` (`grafana`
   service, UI at `http://localhost:3001` — host port 3001, since Backstage's
@@ -30,7 +30,7 @@ Grafana dashboards.
   `Component: orchestration-api` (`examples/entities.yaml`).
 - **Not wired yet, and why**: model-level/KServe inference metrics
   (`model_inference_duration_ms_bucket`, used by
-  `mlops-observability-server`'s `check_model_latency` tool). This is
+  `observability-server`'s `check_model_latency` tool). This is
   **not** because KServe/BentoML don't expose `/metrics` — they do. The
   real blocker is a network gap: this docker-compose `prometheus` container
   and the local `kind` cluster sit on separate Docker networks with no

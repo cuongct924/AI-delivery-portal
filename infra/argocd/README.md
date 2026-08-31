@@ -50,7 +50,7 @@ nối vào Keycloak realm (`infra/keycloak/realm-export.json`) —
 **chưa được cấu hình/verify trong repo này** — tới lúc đó RBAC chưa có
 tác dụng thật.
 
-**Chủ động không làm:** 3 MCP server (`mlops-observability-server`/
+**Chủ động không làm:** 3 MCP server (`observability-server`/
 `golden-paths-server`) — stdio-transport, spawn theo yêu cầu, không phải
 long-running service; deploy dạng `Deployment` sẽ crash-loop (không có
 stdin). Không có Helm chart/ArgoCD Application cho chúng.

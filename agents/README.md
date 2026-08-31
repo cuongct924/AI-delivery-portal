@@ -6,7 +6,7 @@ Central module for AI Agent & MCP (Model Context Protocol).
   over MCP for `orchestration-api` to call. Split by functional domain:
   read-only "health" vs. action. `streamable-http` transport, discovered
   via the Backstage Catalog (`catalog_client.py`), not a hardcoded path.
-  - `mlops-observability-server/` — read-only: MLflow, K8s (mock),
+  - `observability-server/` — read-only: MLflow, K8s (mock),
     Prometheus.
   - `golden-paths-server/` — the 6 LLMOps Lifecycle Golden Path actions,
     thin HTTP clients into `orchestration-api`.

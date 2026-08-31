@@ -10,7 +10,7 @@ if [ -z "$SERVER" ]; then
 fi
 
 case "$SERVER" in
-  observability) DIR="agents/mcp-servers/mlops-observability-server" ;;
+  observability) DIR="agents/mcp-servers/observability-server" ;;
   golden-paths)  DIR="agents/mcp-servers/golden-paths-server" ;;
   *) echo "Unrecognized: $SERVER (only observability|golden-paths are supported)"; exit 1 ;;
 esac

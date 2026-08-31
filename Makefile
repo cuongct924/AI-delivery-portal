@@ -20,7 +20,7 @@ endif
 SERVICE_REQS := requirements-dev.txt \
 	adapters/requirements.txt \
 	services/orchestration-api/requirements.txt \
-	agents/mcp-servers/mlops-observability-server/requirements.txt \
+	agents/mcp-servers/observability-server/requirements.txt \
 	agents/mcp-servers/golden-paths-server/requirements.txt \
 	infra/argo-workflows/training-image/requirements.txt
 
@@ -89,10 +89,10 @@ checkov:
 ## Builds the 4 service images, then Trivy-scans each — needs Docker running.
 trivy:
 	docker build -t orchestration-api:local -f services/orchestration-api/Dockerfile .
-	docker build -t mlops-observability-server:local -f agents/mcp-servers/mlops-observability-server/Dockerfile .
+	docker build -t observability-server:local -f agents/mcp-servers/observability-server/Dockerfile .
 	docker build -t golden-paths-server:local -f agents/mcp-servers/golden-paths-server/Dockerfile .
 	docker build -t training-image:local -f infra/argo-workflows/training-image/Dockerfile .
-	@for img in orchestration-api mlops-observability-server golden-paths-server training-image; do \
+	@for img in orchestration-api observability-server golden-paths-server training-image; do \
 		echo "=== Trivy scan: $$img ==="; \
 		trivy image --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 "$$img:local"; \
 	done
