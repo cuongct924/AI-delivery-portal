@@ -7,21 +7,19 @@ proposed, never auto-executed.
 """
 
 import json
-from typing import Final
+from typing import Final, cast
 
 from auth.keycloak import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from adapters.llm_gateway_adapter import LiteLLMGatewayAdapter
-from adapters.vector_db_adapter import QdrantAdapter
-from adapters.version_registry_adapter import JsonFileVersionRegistryAdapter
+from adapters.factory import get_llm_gateway_adapter, get_registry_adapter, get_vector_store_adapter
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
-llm_gateway_adapter = LiteLLMGatewayAdapter()
-vector_store_adapter = QdrantAdapter()
-registry_adapter = JsonFileVersionRegistryAdapter()
+llm_gateway_adapter = get_llm_gateway_adapter()
+vector_store_adapter = get_vector_store_adapter()
+registry_adapter = get_registry_adapter()
 
 EMBEDDING_MODEL: Final[str] = "voyage-3"
 
@@ -77,7 +75,7 @@ async def send_message(
         context = "\n\n".join(str(hit["payload"]["text"]) for hit in hits)
         system_prompt = f"Context:\n\n{context}\n\n{system_prompt}"
 
-    messages: list[dict] = [
+    messages: list[dict[str, object]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": chat_request.message},
     ]
@@ -104,11 +102,12 @@ async def send_message(
                     "changes live state and needs your explicit confirmation "
                     "before I execute it."
                 )
+                pending_usage = response.get("usage")
                 return ChatResponse(
                     reply=pending_confirmation,
                     persona_version=active_version,
                     rag_index_version=rag_version,
-                    tokens=(response.get("usage") or {}).get("total_tokens", 0),
+                    tokens=pending_usage["total_tokens"] if pending_usage is not None else 0,
                     cost_usd=response.get("response_cost_usd"),
                     tools_used=[],
                     pending_confirmation=pending_confirmation,
@@ -116,7 +115,10 @@ async def send_message(
 
             tool_result = await registry.call_tool(tool_name, tool_args)
             tools_used.append(tool_name)
-            messages.append(message)
+            # cast: message is a TypedDict (ChatCompletionMessage), not
+            # assignable to dict[str, object] by static invariance rules,
+            # even though it's a plain dict at runtime.
+            messages.append(cast(dict[str, object], message))
             messages.append({"role": "tool", "tool_call_id": call["id"], "content": tool_result})
             response = llm_gateway_adapter.chat_completion(
                 model=chat_request.model, messages=messages
@@ -124,8 +126,9 @@ async def send_message(
     else:
         response = llm_gateway_adapter.chat_completion(model=chat_request.model, messages=messages)
 
-    reply = response["choices"][0]["message"]["content"]
-    tokens = (response.get("usage") or {}).get("total_tokens", 0)
+    reply = response["choices"][0]["message"]["content"] or ""
+    usage = response.get("usage")
+    tokens = usage["total_tokens"] if usage is not None else 0
     return ChatResponse(
         reply=reply,
         persona_version=active_version,

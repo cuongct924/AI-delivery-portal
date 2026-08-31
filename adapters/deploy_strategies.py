@@ -5,14 +5,20 @@ worth 4 separate files.
 
 from dataclasses import dataclass
 
-from adapters.interfaces import IDeployTrafficStrategy, IInferenceAdapter, IReleaseStrategy
+from adapters.interfaces import (
+    IDeployTrafficStrategy,
+    IInferenceAdapter,
+    IReleaseStrategy,
+    ReleaseResult,
+    TrafficFields,
+)
 
 
 class DirectStrategy(IDeployTrafficStrategy):
     """100% immediately — Knative Serving already avoids downtime via
     readiness-gated pod replacement, no extra field needed."""
 
-    def render(self) -> dict:
+    def render(self) -> TrafficFields:
         return {}
 
 
@@ -24,7 +30,7 @@ class TrafficSplitStrategy(IDeployTrafficStrategy):
 
     percent: int
 
-    def render(self) -> dict:
+    def render(self) -> TrafficFields:
         return {"canaryTrafficPercent": self.percent}
 
 
@@ -33,7 +39,7 @@ class PRGatedStrategy(IReleaseStrategy):
     still returns manifest_content for the Scaffolder Action to publish as
     a PR, same as before this strategy existed."""
 
-    def release(self, model_name: str, model_version: str, manifest_content: str) -> dict:
+    def release(self, model_name: str, model_version: str, manifest_content: str) -> ReleaseResult:
         del model_name, model_version, manifest_content
         return {"deployed": False}
 
@@ -41,11 +47,13 @@ class PRGatedStrategy(IReleaseStrategy):
 class InstantStrategy(IReleaseStrategy):
     """Calls the inference adapter directly — no Git/PR."""
 
-    def __init__(self, inference_adapter: IInferenceAdapter, traffic_fields: dict | None = None):
+    def __init__(
+        self, inference_adapter: IInferenceAdapter, traffic_fields: TrafficFields | None = None
+    ):
         self.inference_adapter = inference_adapter
-        self.traffic_fields = traffic_fields or {}
+        self.traffic_fields: TrafficFields = traffic_fields or {}
 
-    def release(self, model_name: str, model_version: str, manifest_content: str) -> dict:
+    def release(self, model_name: str, model_version: str, manifest_content: str) -> ReleaseResult:
         del manifest_content  # unused — KServeAdapter renders its own body
         # Canonical MLflow Model Registry URI — same formula routers/models.py
         # already uses to build the Jinja2-rendered manifest's storageUri.

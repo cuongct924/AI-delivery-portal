@@ -5,7 +5,13 @@ import os
 import mlflow
 from mlflow.tracking import MlflowClient
 
-from adapters.interfaces import IModelRegistryAdapter
+from adapters.interfaces import (
+    DatasetLineageEntry,
+    IModelRegistryAdapter,
+    ModelRegistration,
+    ModelSummary,
+    ModelVersionDetails,
+)
 
 
 # TODO: expose via orchestration-api for the `orchestration:register-model`
@@ -20,7 +26,7 @@ class MlflowAdapter(IModelRegistryAdapter):
 
     def register_model(
         self, name: str, artifact_uri: str, dataset_version: str | None = None
-    ) -> dict:
+    ) -> ModelRegistration:
         # No `version` param — MLflow assigns it, auto-incrementing per name.
         result = mlflow.register_model(model_uri=artifact_uri, name=name)
         if dataset_version is not None:
@@ -30,17 +36,17 @@ class MlflowAdapter(IModelRegistryAdapter):
             )
         return {"name": result.name, "version": result.version}
 
-    def list_models(self, project: str | None = None) -> list[dict]:
+    def list_models(self, project: str | None = None) -> list[ModelSummary]:
         return [{"name": m.name} for m in self.client.search_registered_models()]
 
-    def get_model_metrics(self, name: str, version: str) -> dict:
+    def get_model_metrics(self, name: str, version: str) -> dict[str, float]:
         mv = self.client.get_model_version(name=name, version=version)
         if mv.run_id is None:
             raise ValueError(f"Model version {name}:{version} has no associated run_id")
         run = self.client.get_run(mv.run_id)
         return dict(run.data.metrics)
 
-    def get_dataset_lineage(self, name: str, version: str) -> list[dict]:
+    def get_dataset_lineage(self, name: str, version: str) -> list[DatasetLineageEntry]:
         # Reads lineage logged at training time (mlflow.log_input), not a
         # tag set here — a run can log more than one dataset.
         mv = self.client.get_model_version(name=name, version=version)
@@ -55,7 +61,7 @@ class MlflowAdapter(IModelRegistryAdapter):
     def set_model_version_tag(self, name: str, version: str, key: str, value: str) -> None:
         self.client.set_model_version_tag(name, version, key, value)
 
-    def get_model_version_details(self, name: str, version: str) -> dict:
+    def get_model_version_details(self, name: str, version: str) -> ModelVersionDetails:
         mv = self.client.get_model_version(name=name, version=version)
         if mv.run_id is None:
             raise ValueError(f"Model version {name}:{version} has no associated run_id")

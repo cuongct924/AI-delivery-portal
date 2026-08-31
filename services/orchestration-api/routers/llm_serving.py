@@ -19,8 +19,8 @@ from llm_serving.registry import (
 from pydantic import BaseModel
 
 from adapters.deploy_strategies import DirectStrategy, PRGatedStrategy, TrafficSplitStrategy
+from adapters.factory import get_kserve_adapter
 from adapters.interfaces import IDeployTrafficStrategy
-from adapters.kserve_adapter import KServeAdapter
 
 router = APIRouter(tags=["llm-serving"])
 
@@ -59,7 +59,7 @@ def prepare_llm_deploy_manifest(
 
     # Lazy: KServeAdapter.__init__ eagerly calls load_kube_config().
     needs_kserve = request.traffic_strategy != "direct" or request.release_strategy == "instant"
-    kserve_adapter = KServeAdapter() if needs_kserve else None
+    kserve_adapter = get_kserve_adapter() if needs_kserve else None
 
     traffic_strategy: IDeployTrafficStrategy
     if request.traffic_strategy == "direct":

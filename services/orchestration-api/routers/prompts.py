@@ -15,13 +15,12 @@ from evaluations.llm_judge import judge_response
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from adapters.llm_gateway_adapter import LiteLLMGatewayAdapter
-from adapters.version_registry_adapter import JsonFileVersionRegistryAdapter
+from adapters.factory import get_llm_gateway_adapter, get_registry_adapter
 
 router = APIRouter(prefix="/prompts", tags=["prompts"])
 
-llm_gateway_adapter = LiteLLMGatewayAdapter()
-registry_adapter = JsonFileVersionRegistryAdapter()
+llm_gateway_adapter = get_llm_gateway_adapter()
+registry_adapter = get_registry_adapter()
 
 
 class PromptVersion(BaseModel):
@@ -111,8 +110,8 @@ def list_prompts(user: dict = Depends(get_current_user)) -> list[PromptVersion]:
                 id=f"{name}-v{active_version}",
                 name=name,
                 version=active_version,
-                persona=metadata["persona"],
-                content=metadata["content"],
+                persona=str(metadata["persona"]),
+                content=str(metadata["content"]),
             )
         )
     return result
@@ -131,8 +130,8 @@ def get_prompt(prompt_id: str, user: dict = Depends(get_current_user)) -> Prompt
         id=prompt_id,
         name=name,
         version=version,
-        persona=metadata["persona"],
-        content=metadata["content"],
+        persona=str(metadata["persona"]),
+        content=str(metadata["content"]),
     )
 
 

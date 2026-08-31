@@ -10,11 +10,11 @@ from auth.keycloak import get_current_user
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from adapters.argo_adapter import ArgoAdapter
+from adapters.factory import get_workflow_adapter
 
 router = APIRouter(tags=["monitoring"])
 
-argo_adapter = ArgoAdapter()
+argo_adapter = get_workflow_adapter()
 
 MONITOR_DRIFT_TEMPLATE: Final[str] = "monitor-drift-golden-path"
 

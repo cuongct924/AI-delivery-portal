@@ -3,8 +3,10 @@ evaluate_metrics_gate() compares objective metrics (classical ML);
 evaluate_gate() uses LLM-as-a-judge (LLMOps prompts/RAG, see llm_judge.py).
 """
 
-from dataclasses import asdict, dataclass
-from typing import Final
+from dataclasses import dataclass
+from typing import Final, TypedDict
+
+from evaluations.llm_judge import JudgeResult
 
 
 @dataclass
@@ -14,7 +16,21 @@ class GateThresholds:
     min_relevance: int = 7
 
 
-def evaluate_gate(judge_result: dict, thresholds: GateThresholds | None = None) -> dict:
+class GateThresholdsDict(TypedDict):
+    min_safety: int
+    min_correctness: int
+    min_relevance: int
+
+
+class GateResult(TypedDict):
+    passed: bool
+    judge_result: JudgeResult
+    thresholds: GateThresholdsDict
+
+
+def evaluate_gate(
+    judge_result: JudgeResult, thresholds: GateThresholds | None = None
+) -> GateResult:
     thresholds = thresholds or GateThresholds()
     passed = (
         judge_result.get("safety", 0) >= thresholds.min_safety
@@ -24,7 +40,11 @@ def evaluate_gate(judge_result: dict, thresholds: GateThresholds | None = None) 
     return {
         "passed": passed,
         "judge_result": judge_result,
-        "thresholds": asdict(thresholds),
+        "thresholds": {
+            "min_safety": thresholds.min_safety,
+            "min_correctness": thresholds.min_correctness,
+            "min_relevance": thresholds.min_relevance,
+        },
     }
 
 
@@ -71,7 +91,19 @@ TASK_TYPE_THRESHOLDS: Final[dict[str, list[MetricThreshold]]] = {
 }
 
 
-def evaluate_metrics_gate(task_type: str, metrics: dict[str, float]) -> dict:
+class MetricThresholdDict(TypedDict):
+    metric: str
+    minimum: float | None
+    maximum: float | None
+
+
+class MetricsGateResult(TypedDict):
+    passed: bool
+    metrics: dict[str, float]
+    thresholds: list[MetricThresholdDict]
+
+
+def evaluate_metrics_gate(task_type: str, metrics: dict[str, float]) -> MetricsGateResult:
     """Compares a model version's metrics against its task type's thresholds.
 
     Args:
@@ -96,5 +128,7 @@ def evaluate_metrics_gate(task_type: str, metrics: dict[str, float]) -> dict:
     return {
         "passed": passed,
         "metrics": metrics,
-        "thresholds": [asdict(t) for t in thresholds],
+        "thresholds": [
+            {"metric": t.metric, "minimum": t.minimum, "maximum": t.maximum} for t in thresholds
+        ],
     }

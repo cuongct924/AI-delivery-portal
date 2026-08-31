@@ -6,13 +6,16 @@ Client `golden-paths-agent` is provisioned via infra/keycloak/realm-export.json.
 
 import os
 import time
+from typing import Final
 
 import httpx
 
-KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://localhost:8082")
-KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "ai-delivery-portal")
-KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "golden-paths-agent")
-KEYCLOAK_CLIENT_SECRET = os.getenv("KEYCLOAK_CLIENT_SECRET", "golden-paths-agent-dev-secret")
+KEYCLOAK_URL: Final[str] = os.getenv("KEYCLOAK_URL", "http://localhost:8082")
+KEYCLOAK_REALM: Final[str] = os.getenv("KEYCLOAK_REALM", "ai-delivery-portal")
+KEYCLOAK_CLIENT_ID: Final[str] = os.getenv("KEYCLOAK_CLIENT_ID", "golden-paths-agent")
+KEYCLOAK_CLIENT_SECRET: Final[str] = os.getenv(
+    "KEYCLOAK_CLIENT_SECRET", "golden-paths-agent-dev-secret"
+)
 
 _cached_token: str | None = None
 _cached_expiry: float = 0.0

@@ -6,37 +6,39 @@
 """
 
 from pathlib import Path
-from typing import Final
+from typing import Final, cast
 
 import pandas as pd
 from auth.keycloak import get_current_user
 from data_quality.checks import CheckResult
 from data_quality.registry import run_checks
-from evaluations.gate import evaluate_metrics_gate
+from evaluations.gate import MetricsGateResult, evaluate_metrics_gate
 from fastapi import APIRouter, Depends
 from jinja2 import Environment, FileSystemLoader
 from kubernetes.client.exceptions import ApiException
 from pydantic import BaseModel
 
-from adapters.argo_adapter import ArgoAdapter
 from adapters.deploy_strategies import (
     DirectStrategy,
     InstantStrategy,
     PRGatedStrategy,
     TrafficSplitStrategy,
 )
-from adapters.feature_store_adapter import FeastAdapter
+from adapters.factory import (
+    get_feature_store_adapter,
+    get_kserve_adapter,
+    get_model_registry_adapter,
+    get_workflow_adapter,
+)
 from adapters.interfaces import IDeployTrafficStrategy, IReleaseStrategy
-from adapters.kserve_adapter import KServeAdapter
-from adapters.mlflow_adapter import MlflowAdapter
 
 router = APIRouter(tags=["models"])
 
 # Module-level singletons — same convention as
 # agents/mcp-servers/mlops-observability-server/server.py.
-mlflow_adapter = MlflowAdapter()
-argo_adapter = ArgoAdapter()
-feast_adapter = FeastAdapter()
+mlflow_adapter = get_model_registry_adapter()
+argo_adapter = get_workflow_adapter()
+feast_adapter = get_feature_store_adapter()
 
 # One WorkflowTemplate covers both train and fine-tune; mode is a parameter.
 TRAIN_REGISTER_TEMPLATE: Final[str] = "train-register-golden-path"
@@ -262,7 +264,8 @@ def trigger_training(
     if request.base_model_name is not None:
         parameters["base-model-name"] = request.base_model_name
     result = argo_adapter.trigger_workflow(TRAIN_REGISTER_TEMPLATE, parameters)
-    return TriggerTrainingResponse(workflow_name=result["metadata"]["name"])
+    metadata = cast(dict[str, object], result["metadata"])
+    return TriggerTrainingResponse(workflow_name=str(metadata["name"]))
 
 
 @router.get("/trigger-training/{workflow_name}/status", response_model=WorkflowStatusResponse)
@@ -373,7 +376,7 @@ def get_latest_version(name: str, user: dict = Depends(get_current_user)) -> Lat
 @router.post("/policy-check")
 def policy_check(
     request: PolicyCheckRequest, user: dict = Depends(get_current_user)
-) -> dict[str, object]:
+) -> MetricsGateResult:
     # Classical ML has ground-truth metrics — compare directly, no LLM-as-judge.
     details = mlflow_adapter.get_model_version_details(request.model_name, request.model_version)
     task_type = details["tags"].get("task_type")
@@ -405,7 +408,7 @@ def prepare_deploy_manifest(
     # Lazy: KServeAdapter.__init__ eagerly calls load_kube_config(), which
     # would crash startup wherever no kubeconfig exists (CI, before `kind`).
     needs_kserve = request.traffic_strategy != "direct" or request.release_strategy == "instant"
-    kserve_adapter = KServeAdapter() if needs_kserve else None
+    kserve_adapter = get_kserve_adapter() if needs_kserve else None
 
     traffic_strategy: IDeployTrafficStrategy
     if request.traffic_strategy == "direct":

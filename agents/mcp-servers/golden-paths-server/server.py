@@ -4,7 +4,7 @@ logic duplicated here. See README.md for auth requirements.
 """
 
 import os
-from typing import TypedDict
+from typing import Final, TypedDict
 
 import httpx
 from keycloak_client import auth_headers
@@ -12,11 +12,11 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
 mcp = MCPServer("golden-paths-server")
-ORCHESTRATION_API_URL = os.getenv("ORCHESTRATION_API_URL", "http://localhost:8000")
+ORCHESTRATION_API_URL: Final[str] = os.getenv("ORCHESTRATION_API_URL", "http://localhost:8000")
 
-AUTO_EXECUTABLE = ToolAnnotations(read_only_hint=False)
+AUTO_EXECUTABLE: Final = ToolAnnotations(read_only_hint=False)
 # Mutates live state — chat.py's tool loop must confirm before calling.
-NEEDS_CONFIRMATION = ToolAnnotations(read_only_hint=False, destructive_hint=True)
+NEEDS_CONFIRMATION: Final = ToolAnnotations(read_only_hint=False, destructive_hint=True)
 
 
 class EvalCase(TypedDict):

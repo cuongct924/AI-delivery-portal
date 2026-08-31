@@ -8,11 +8,12 @@ infra/vector-dbs/README.md.
 """
 
 import os
+from collections.abc import Mapping, Sequence
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
-from adapters.interfaces import IVectorStoreAdapter
+from adapters.interfaces import IVectorStoreAdapter, SearchHit, UpsertResult
 
 
 class QdrantAdapter(IVectorStoreAdapter):
@@ -33,11 +34,11 @@ class QdrantAdapter(IVectorStoreAdapter):
         self,
         ids: list[str],
         vectors: list[list[float]],
-        payloads: list[dict],
+        payloads: Sequence[Mapping[str, object]],
         collection: str | None = None,
-    ) -> dict:
+    ) -> UpsertResult:
         points = [
-            PointStruct(id=i, vector=v, payload=p)
+            PointStruct(id=i, vector=v, payload=dict(p))
             for i, v, p in zip(ids, vectors, payloads, strict=True)
         ]
         result = self.client.upsert(collection_name=collection or self.collection, points=points)
@@ -45,8 +46,11 @@ class QdrantAdapter(IVectorStoreAdapter):
 
     def search(
         self, query_vector: list[float], top_k: int = 5, collection: str | None = None
-    ) -> list[dict]:
+    ) -> list[SearchHit]:
         hits = self.client.query_points(
             collection_name=collection or self.collection, query=query_vector, limit=top_k
         ).points
-        return [{"id": h.id, "score": h.score, "payload": h.payload} for h in hits]
+        # str(): upsert() takes ids: list[str] — IDs are strings throughout
+        # this interface, even though qdrant-client's ExtendedPointId can
+        # also carry int/UUID at the wire level.
+        return [SearchHit(id=str(h.id), score=h.score, payload=h.payload or {}) for h in hits]

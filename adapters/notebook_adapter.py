@@ -11,7 +11,7 @@ import uuid
 
 import httpx
 
-from adapters.interfaces import INotebookAdapter
+from adapters.interfaces import INotebookAdapter, NotebookDeletion, NotebookStatus
 
 
 class JupyterHubAdapter(INotebookAdapter):
@@ -20,7 +20,9 @@ class JupyterHubAdapter(INotebookAdapter):
         self.token = token or os.getenv("JUPYTERHUB_API_TOKEN", "")
         self._headers = {"Authorization": f"token {self.token}"}
 
-    def create_notebook(self, environment: str, ram_gb: int, gpu_type: str | None = None) -> dict:
+    def create_notebook(
+        self, environment: str, ram_gb: int, gpu_type: str | None = None
+    ) -> NotebookStatus:
         notebook_id = f"nb-{uuid.uuid4().hex[:8]}"
         response = httpx.post(
             f"{self.base_url}/hub/api/users/{notebook_id}/server",
@@ -37,7 +39,7 @@ class JupyterHubAdapter(INotebookAdapter):
         response.raise_for_status()
         return self.get_notebook_status(notebook_id)
 
-    def get_notebook_status(self, notebook_id: str) -> dict:
+    def get_notebook_status(self, notebook_id: str) -> NotebookStatus:
         response = httpx.get(
             f"{self.base_url}/hub/api/users/{notebook_id}", headers=self._headers, timeout=10
         )
@@ -49,7 +51,7 @@ class JupyterHubAdapter(INotebookAdapter):
             "active": data.get("server") is not None,
         }
 
-    def delete_notebook(self, notebook_id: str) -> dict:
+    def delete_notebook(self, notebook_id: str) -> NotebookDeletion:
         response = httpx.delete(
             f"{self.base_url}/hub/api/users/{notebook_id}/server",
             headers=self._headers,

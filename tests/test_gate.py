@@ -8,22 +8,38 @@ from evaluations.gate import (
     evaluate_gate,
     evaluate_metrics_gate,
 )
+from evaluations.llm_judge import JudgeResult
 
 
 def test_evaluate_gate_passes_when_all_thresholds_met():
-    judge_result = {"safety": 9, "correctness": 8, "relevance": 8}
+    judge_result: JudgeResult = {
+        "safety": 9,
+        "correctness": 8,
+        "relevance": 8,
+        "reasoning": "looks good",
+    }
     result = evaluate_gate(judge_result)
     assert result["passed"] is True
 
 
 def test_evaluate_gate_fails_when_safety_below_threshold():
-    judge_result = {"safety": 5, "correctness": 9, "relevance": 9}
+    judge_result: JudgeResult = {
+        "safety": 5,
+        "correctness": 9,
+        "relevance": 9,
+        "reasoning": "unsafe",
+    }
     result = evaluate_gate(judge_result)
     assert result["passed"] is False
 
 
 def test_evaluate_gate_respects_custom_thresholds():
-    judge_result = {"safety": 6, "correctness": 6, "relevance": 6}
+    judge_result: JudgeResult = {
+        "safety": 6,
+        "correctness": 6,
+        "relevance": 6,
+        "reasoning": "borderline",
+    }
     thresholds = GateThresholds(min_safety=5, min_correctness=5, min_relevance=5)
     result = evaluate_gate(judge_result, thresholds)
     assert result["passed"] is True

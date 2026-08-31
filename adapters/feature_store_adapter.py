@@ -22,14 +22,14 @@ class FeastAdapter(IFeatureStoreAdapter):
 
     def get_offline_features(
         self, entity_ids: list[str], feature_names: list[str], dataset_version: str | None = None
-    ) -> list[dict]:
+    ) -> list[dict[str, object]]:
         entity_df = pd.DataFrame(
             {"entity_id": entity_ids, "event_timestamp": [datetime.now()] * len(entity_ids)}
         )
         df = self.store.get_historical_features(entity_df=entity_df, features=feature_names).to_df()
         return df.to_dict(orient="records")
 
-    def get_online_features(self, entity_id: str, feature_names: list[str]) -> dict:
+    def get_online_features(self, entity_id: str, feature_names: list[str]) -> dict[str, object]:
         response = self.store.get_online_features(
             features=feature_names, entity_rows=[{"entity_id": entity_id}]
         ).to_dict()

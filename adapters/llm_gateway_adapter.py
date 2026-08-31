@@ -5,10 +5,12 @@ calling each vendor's SDK directly. Spun up via docker-compose.yml (the
 """
 
 import os
+from collections.abc import Mapping, Sequence
+from typing import cast
 
 import httpx
 
-from adapters.interfaces import ILLMGatewayAdapter
+from adapters.interfaces import ChatCompletionResponse, ILLMGatewayAdapter
 
 
 class LiteLLMGatewayAdapter(ILLMGatewayAdapter):
@@ -16,7 +18,9 @@ class LiteLLMGatewayAdapter(ILLMGatewayAdapter):
         self.base_url = base_url or os.getenv("LITELLM_GATEWAY_URL", "http://localhost:4000")
         self.api_key = api_key or os.getenv("LITELLM_MASTER_KEY", "")
 
-    def chat_completion(self, model: str, messages: list[dict], **kwargs) -> dict:
+    def chat_completion(
+        self, model: str, messages: Sequence[Mapping[str, object]], **kwargs: object
+    ) -> ChatCompletionResponse:
         response = httpx.post(
             f"{self.base_url}/chat/completions",
             headers={"Authorization": f"Bearer {self.api_key}"},
@@ -28,9 +32,9 @@ class LiteLLMGatewayAdapter(ILLMGatewayAdapter):
         # LiteLLM returns per-call cost as a header, not in the JSON body.
         cost_header = response.headers.get("x-litellm-response-cost")
         result["response_cost_usd"] = float(cost_header) if cost_header is not None else None
-        return result
+        return cast(ChatCompletionResponse, result)
 
-    def list_models(self) -> list[dict]:
+    def list_models(self) -> list[dict[str, object]]:
         response = httpx.get(
             f"{self.base_url}/models",
             headers={"Authorization": f"Bearer {self.api_key}"},

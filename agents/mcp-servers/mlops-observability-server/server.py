@@ -4,34 +4,50 @@ agents/mcp-servers/golden-paths-server/ for the write-side domain.
 """
 
 import os
+from typing import Final, TypedDict
 
 import httpx
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
+from adapters.interfaces import ModelSummary
 from adapters.mlflow_adapter import MlflowAdapter
 
 mcp = MCPServer("mlops-observability-server")
 adapter = MlflowAdapter()
-PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://localhost:9090")
+PROMETHEUS_URL: Final[str] = os.getenv("PROMETHEUS_URL", "http://localhost:9090")
 
-READ_ONLY = ToolAnnotations(read_only_hint=True)
+READ_ONLY: Final = ToolAnnotations(read_only_hint=True)
+
+
+class PodStatus(TypedDict):
+    namespace: str
+    pod_name: str
+    status: str
+    note: str
+
+
+class LatencyCheck(TypedDict):
+    model: str
+    p95_latency_ms: float | None
+    threshold_ms: float
+    breached: bool
 
 
 @mcp.tool(annotations=READ_ONLY)
-def list_experiments() -> list[dict]:
+def list_experiments() -> list[ModelSummary]:
     """List models registered in the MLflow Registry."""
     return adapter.list_models()
 
 
 @mcp.tool(annotations=READ_ONLY)
-def get_model_metrics(name: str, version: str) -> dict:
+def get_model_metrics(name: str, version: str) -> dict[str, float]:
     """Get metrics (accuracy, f1, ...) for a specific model version."""
     return adapter.get_model_metrics(name, version)
 
 
 @mcp.tool(annotations=READ_ONLY)
-def check_pod_status(namespace: str, pod_name: str) -> dict:
+def check_pod_status(namespace: str, pod_name: str) -> PodStatus:
     """Check the status of a pod. (mock — not wired to a real cluster yet)"""
     return {
         "namespace": namespace,
@@ -48,7 +64,7 @@ def get_logs(namespace: str, pod_name: str, tail_lines: int = 50) -> str:
 
 
 @mcp.tool(annotations=READ_ONLY)
-def query_metric(promql: str) -> dict:
+def query_metric(promql: str) -> dict[str, object]:
     """Run a PromQL instant query, returning the raw result from Prometheus."""
     response = httpx.get(f"{PROMETHEUS_URL}/api/v1/query", params={"query": promql}, timeout=10)
     response.raise_for_status()
@@ -56,7 +72,7 @@ def query_metric(promql: str) -> dict:
 
 
 @mcp.tool(annotations=READ_ONLY)
-def check_model_latency(model_name: str, threshold_ms: float = 500) -> dict:
+def check_model_latency(model_name: str, threshold_ms: float = 500) -> LatencyCheck:
     """Check whether a model's p95 latency exceeds a threshold (assumes the
     `model_inference_duration_ms` metric is exposed by KServe/BentoML, labeled by model)."""
     promql = (
@@ -64,7 +80,8 @@ def check_model_latency(model_name: str, threshold_ms: float = 500) -> dict:
         f'model_inference_duration_ms_bucket{{model="{model_name}"}}[5m])) by (le))'
     )
     result = query_metric(promql)
-    values = result.get("data", {}).get("result", [])
+    data = result.get("data")
+    values = data.get("result", []) if isinstance(data, dict) else []
     p95 = float(values[0]["value"][1]) if values else None
     return {
         "model": model_name,

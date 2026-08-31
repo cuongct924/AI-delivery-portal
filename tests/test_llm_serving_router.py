@@ -1,7 +1,8 @@
 """services/orchestration-api/routers/llm_serving.py — patches
-`routers.llm_serving.KServeAdapter` and calls the route function directly,
-same pattern as tests/test_models_router.py's prepare_deploy_manifest
-tests. No mlflow stub needed — this router doesn't import the mlflow SDK.
+`routers.llm_serving.get_kserve_adapter` and calls the route function
+directly, same pattern as tests/test_models_router.py's
+prepare_deploy_manifest tests. No mlflow stub needed — this router
+doesn't import the mlflow SDK.
 """
 
 from unittest.mock import patch
@@ -37,9 +38,9 @@ def test_prepare_llm_deploy_manifest_direct_never_touches_kserve() -> None:
         huggingface_model_id="meta-llama/Llama-3.1-8B-Instruct",
         gpu_type="H100",
     )
-    with patch("routers.llm_serving.KServeAdapter") as mock_kserve_cls:
+    with patch("routers.llm_serving.get_kserve_adapter") as mock_get_kserve:
         prepare_llm_deploy_manifest(request)
-    mock_kserve_cls.assert_not_called()
+    mock_get_kserve.assert_not_called()
 
 
 def test_prepare_llm_deploy_manifest_renders_quantization_arg() -> None:
@@ -63,8 +64,8 @@ def test_prepare_llm_deploy_manifest_traffic_split_renders_canary_percent() -> N
         traffic_strategy="canary",
         traffic_percent=10,
     )
-    with patch("routers.llm_serving.KServeAdapter") as mock_kserve_cls:
-        mock_kserve_cls.return_value.get_inference_status.return_value = {"status": {}}
+    with patch("routers.llm_serving.get_kserve_adapter") as mock_get_kserve:
+        mock_get_kserve.return_value.get_inference_status.return_value = {"status": {}}
         response = prepare_llm_deploy_manifest(request)
 
     assert "canaryTrafficPercent: 10" in response.content
@@ -79,8 +80,8 @@ def test_prepare_llm_deploy_manifest_traffic_split_without_prior_deploy_raises()
         traffic_strategy="canary",
         traffic_percent=10,
     )
-    with patch("routers.llm_serving.KServeAdapter") as mock_kserve_cls:
-        mock_kserve_cls.return_value.get_inference_status.side_effect = ApiException(status=404)
+    with patch("routers.llm_serving.get_kserve_adapter") as mock_get_kserve:
+        mock_get_kserve.return_value.get_inference_status.side_effect = ApiException(status=404)
         with pytest.raises(ValueError, match="no prior deploy"):
             prepare_llm_deploy_manifest(request)
 
@@ -92,8 +93,8 @@ def test_prepare_llm_deploy_manifest_traffic_split_requires_percent() -> None:
         gpu_type="H100",
         traffic_strategy="canary",
     )
-    with patch("routers.llm_serving.KServeAdapter") as mock_kserve_cls:
-        mock_kserve_cls.return_value.get_inference_status.return_value = {"status": {}}
+    with patch("routers.llm_serving.get_kserve_adapter") as mock_get_kserve:
+        mock_get_kserve.return_value.get_inference_status.return_value = {"status": {}}
         with pytest.raises(ValueError, match="traffic_percent is required"):
             prepare_llm_deploy_manifest(request)
 
@@ -107,10 +108,10 @@ def test_prepare_llm_deploy_manifest_instant_calls_deploy_llm_model() -> None:
         quantization="fp8",
         release_strategy="instant",
     )
-    with patch("routers.llm_serving.KServeAdapter") as mock_kserve_cls:
+    with patch("routers.llm_serving.get_kserve_adapter") as mock_get_kserve:
         response = prepare_llm_deploy_manifest(request)
 
-    mock_kserve_cls.return_value.deploy_llm_model.assert_called_once_with(
+    mock_get_kserve.return_value.deploy_llm_model.assert_called_once_with(
         "llama-3-8b",
         "1",
         "meta-llama/Llama-3.1-8B-Instruct",
@@ -131,8 +132,8 @@ def test_prepare_llm_deploy_manifest_rejects_incompatible_gpu_quantization() -> 
         quantization="fp8",
     )
     with (
-        patch("routers.llm_serving.KServeAdapter") as mock_kserve_cls,
+        patch("routers.llm_serving.get_kserve_adapter") as mock_get_kserve,
         pytest.raises(ValueError, match="A100 does not support"),
     ):
         prepare_llm_deploy_manifest(request)
-    mock_kserve_cls.assert_not_called()
+    mock_get_kserve.assert_not_called()

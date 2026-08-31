@@ -6,45 +6,75 @@ touching code that already depends on the interface.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping, Sequence
+from typing import NotRequired, TypedDict
+
+
+class ModelRegistration(TypedDict):
+    name: str
+    version: str
+
+
+class ModelSummary(TypedDict):
+    name: str
+
+
+class DatasetLineageEntry(TypedDict):
+    name: str
+    digest: str
+    source: str
+
+
+class ModelVersionDetails(TypedDict):
+    version: str
+    run_id: str
+    tags: dict[str, str]
+    metrics: dict[str, float]
+    status: str
 
 
 class IModelRegistryAdapter(ABC):
     @abstractmethod
-    def register_model(self, name: str, artifact_uri: str) -> dict: ...
+    def register_model(self, name: str, artifact_uri: str) -> ModelRegistration: ...
 
     @abstractmethod
-    def list_models(self, project: str | None = None) -> list[dict]: ...
+    def list_models(self, project: str | None = None) -> list[ModelSummary]: ...
 
     @abstractmethod
-    def get_model_metrics(self, name: str, version: str) -> dict: ...
+    def get_model_metrics(self, name: str, version: str) -> dict[str, float]: ...
 
     @abstractmethod
-    def get_dataset_lineage(self, name: str, version: str) -> list[dict]: ...
+    def get_dataset_lineage(self, name: str, version: str) -> list[DatasetLineageEntry]: ...
 
     @abstractmethod
     def set_model_version_tag(self, name: str, version: str, key: str, value: str) -> None: ...
 
     @abstractmethod
-    def get_model_version_details(self, name: str, version: str) -> dict: ...
+    def get_model_version_details(self, name: str, version: str) -> ModelVersionDetails: ...
 
 
 class IVersionRegistryAdapter(ABC):
     """Tracks versions of an artifact that isn't a trained model (prompt
     text, RAG index pointer) and which one is currently active — the
     LLMOps equivalent of IModelRegistryAdapter's "model version", without
-    assuming an MLflow-loadable artifact exists."""
+    assuming an MLflow-loadable artifact exists.
+
+    `metadata`/return shape is intentionally `dict[str, object]`, not a
+    TypedDict — it's polymorphic per `kind` ("prompt" vs "rag-index" carry
+    different fields), so no single fixed key set exists to declare.
+    """
 
     @abstractmethod
-    def register_version(self, kind: str, name: str, metadata: dict) -> str: ...
+    def register_version(self, kind: str, name: str, metadata: Mapping[str, object]) -> str: ...
 
     @abstractmethod
     def list_names(self, kind: str) -> list[str]: ...
 
     @abstractmethod
-    def get_version(self, kind: str, name: str, version: str) -> dict: ...
+    def get_version(self, kind: str, name: str, version: str) -> dict[str, object]: ...
 
     @abstractmethod
-    def list_versions(self, kind: str, name: str) -> dict[str, dict]: ...
+    def list_versions(self, kind: str, name: str) -> dict[str, dict[str, object]]: ...
 
     @abstractmethod
     def get_active_version(self, kind: str, name: str) -> str | None: ...
@@ -54,16 +84,29 @@ class IVersionRegistryAdapter(ABC):
 
 
 class IInferenceAdapter(ABC):
+    """`deploy_model`/`get_inference_status` return `dict[str, object]`, not
+    a TypedDict — they pass through the Kubernetes/KServe API's raw
+    InferenceService resource, whose shape is large and versioned by
+    Kubernetes itself, not by this codebase."""
+
     @abstractmethod
     def deploy_model(
-        self, name: str, version: str, model_uri: str, traffic_fields: dict | None = None
-    ) -> dict: ...
+        self,
+        name: str,
+        version: str,
+        model_uri: str,
+        traffic_fields: Mapping[str, object] | None = None,
+    ) -> dict[str, object]: ...
 
     @abstractmethod
-    def get_inference_status(self, name: str) -> dict: ...
+    def get_inference_status(self, name: str) -> dict[str, object]: ...
 
     @abstractmethod
-    def predict(self, name: str, payload: dict) -> dict: ...
+    def predict(self, name: str, payload: dict[str, object]) -> dict[str, object]: ...
+
+
+class TrafficFields(TypedDict, total=False):
+    canaryTrafficPercent: int
 
 
 class IDeployTrafficStrategy(ABC):
@@ -76,9 +119,13 @@ class IDeployTrafficStrategy(ABC):
     """
 
     @abstractmethod
-    def render(self) -> dict:
+    def render(self) -> TrafficFields:
         """Fields to merge into the InferenceService's spec.predictor
         block — {} for Direct, {"canaryTrafficPercent": N} for TrafficSplit."""
+
+
+class ReleaseResult(TypedDict):
+    deployed: bool
 
 
 class IReleaseStrategy(ABC):
@@ -86,18 +133,39 @@ class IReleaseStrategy(ABC):
     Instant (calls the inference adapter directly, no Git/PR)."""
 
     @abstractmethod
-    def release(self, model_name: str, model_version: str, manifest_content: str) -> dict:
+    def release(self, model_name: str, model_version: str, manifest_content: str) -> ReleaseResult:
         """Performs the release action. PRGatedStrategy is a no-op — the
         caller still publishes manifest_content as a PR itself. Instant
         actually deploys and returns {"deployed": True}."""
 
 
+class WorkflowStatus(TypedDict):
+    name: str
+    phase: str | None
+    message: str | None
+
+
 class IWorkflowAdapter(ABC):
-    @abstractmethod
-    def trigger_workflow(self, template_name: str, parameters: dict) -> dict: ...
+    """`trigger_workflow` returns `dict[str, object]`, not a TypedDict — it
+    passes through the Argo Server API's raw workflow resource."""
 
     @abstractmethod
-    def get_workflow_status(self, workflow_name: str) -> dict: ...
+    def trigger_workflow(
+        self, template_name: str, parameters: dict[str, str]
+    ) -> dict[str, object]: ...
+
+    @abstractmethod
+    def get_workflow_status(self, workflow_name: str) -> WorkflowStatus: ...
+
+
+class UpsertResult(TypedDict):
+    status: str
+
+
+class SearchHit(TypedDict):
+    id: str
+    score: float
+    payload: dict[str, object]
 
 
 class IVectorStoreAdapter(ABC):
@@ -106,45 +174,101 @@ class IVectorStoreAdapter(ABC):
         self,
         ids: list[str],
         vectors: list[list[float]],
-        payloads: list[dict],
+        payloads: Sequence[Mapping[str, object]],
         collection: str | None = None,
-    ) -> dict: ...
+    ) -> UpsertResult: ...
 
     @abstractmethod
     def search(
         self, query_vector: list[float], top_k: int = 5, collection: str | None = None
-    ) -> list[dict]: ...
+    ) -> list[SearchHit]: ...
+
+
+class ToolCallFunction(TypedDict):
+    name: str
+    arguments: str
+
+
+class ToolCall(TypedDict):
+    id: str
+    type: str
+    function: ToolCallFunction
+
+
+class ChatCompletionMessage(TypedDict):
+    role: str
+    content: str | None
+    tool_calls: NotRequired[list[ToolCall]]
+
+
+class ChatCompletionChoice(TypedDict):
+    message: ChatCompletionMessage
+    finish_reason: str | None
+
+
+class ChatCompletionUsage(TypedDict):
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+
+class ChatCompletionResponse(TypedDict):
+    id: str
+    model: str
+    choices: list[ChatCompletionChoice]
+    usage: NotRequired[ChatCompletionUsage]
+    # Injected by LiteLLMGatewayAdapter from a response header — None when
+    # the model has no cost entry configured in litellm-config.yaml.
+    response_cost_usd: NotRequired[float | None]
 
 
 class ILLMGatewayAdapter(ABC):
     @abstractmethod
-    def chat_completion(self, model: str, messages: list[dict], **kwargs) -> dict: ...
+    def chat_completion(
+        self, model: str, messages: Sequence[Mapping[str, object]], **kwargs: object
+    ) -> ChatCompletionResponse: ...
 
     @abstractmethod
-    def list_models(self) -> list[dict]: ...
+    def list_models(self) -> list[dict[str, object]]: ...
 
     @abstractmethod
     def embed(self, model: str, input_texts: list[str]) -> list[list[float]]: ...
 
 
 class IFeatureStoreAdapter(ABC):
+    """Feature columns are named by the caller's `feature_names` — the
+    returned rows are genuinely dynamic-key, not a fixed TypedDict shape."""
+
     @abstractmethod
     def get_offline_features(
         self, entity_ids: list[str], feature_names: list[str], dataset_version: str | None = None
-    ) -> list[dict]: ...
+    ) -> list[dict[str, object]]: ...
 
     @abstractmethod
-    def get_online_features(self, entity_id: str, feature_names: list[str]) -> dict: ...
+    def get_online_features(
+        self, entity_id: str, feature_names: list[str]
+    ) -> dict[str, object]: ...
+
+
+class NotebookStatus(TypedDict):
+    notebook_id: str
+    url: str | None
+    active: bool
+
+
+class NotebookDeletion(TypedDict):
+    notebook_id: str
+    deleted: bool
 
 
 class INotebookAdapter(ABC):
     @abstractmethod
     def create_notebook(
         self, environment: str, ram_gb: int, gpu_type: str | None = None
-    ) -> dict: ...
+    ) -> NotebookStatus: ...
 
     @abstractmethod
-    def get_notebook_status(self, notebook_id: str) -> dict: ...
+    def get_notebook_status(self, notebook_id: str) -> NotebookStatus: ...
 
     @abstractmethod
-    def delete_notebook(self, notebook_id: str) -> dict: ...
+    def delete_notebook(self, notebook_id: str) -> NotebookDeletion: ...

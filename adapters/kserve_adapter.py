@@ -5,16 +5,17 @@ custom resource (serving.kserve.io/v1beta1). Requires a kubeconfig pointing
 at a real cluster.
 """
 
-from typing import cast
+from collections.abc import Mapping
+from typing import Final, cast
 
 from kubernetes import client, config
 from kubernetes.client.exceptions import ApiException
 
 from adapters.interfaces import IInferenceAdapter
 
-GROUP = "serving.kserve.io"
-VERSION = "v1beta1"
-PLURAL = "inferenceservices"
+GROUP: Final[str] = "serving.kserve.io"
+VERSION: Final[str] = "v1beta1"
+PLURAL: Final[str] = "inferenceservices"
 
 
 class KServeAdapter(IInferenceAdapter):
@@ -24,8 +25,12 @@ class KServeAdapter(IInferenceAdapter):
         self.api = client.CustomObjectsApi()
 
     def deploy_model(
-        self, name: str, version: str, model_uri: str, traffic_fields: dict | None = None
-    ) -> dict:
+        self,
+        name: str,
+        version: str,
+        model_uri: str,
+        traffic_fields: Mapping[str, object] | None = None,
+    ) -> dict[str, object]:
         """Creates the InferenceService, or patches it if a version was
         already deployed under this name (patch first — the common case
         for adapters/deploy_strategies.py's TrafficSplitStrategy, which by
@@ -55,7 +60,7 @@ class KServeAdapter(IInferenceAdapter):
                 GROUP, VERSION, self.namespace, PLURAL, body
             )
         # cast: only non-dict when async_req=True, which we never pass.
-        return cast(dict, result)
+        return cast(dict[str, object], result)
 
     def deploy_llm_model(
         self,
@@ -66,8 +71,8 @@ class KServeAdapter(IInferenceAdapter):
         gpu_count: int,
         vllm_quantization: str | None,
         max_context_length: int,
-        traffic_fields: dict | None = None,
-    ) -> dict:
+        traffic_fields: Mapping[str, object] | None = None,
+    ) -> dict[str, object]:
         """Same patch-first/create-on-404 shape as deploy_model(), for a
         self-hosted LLM instead of an MLflow-registered artifact —
         modelFormat "huggingface" (KServe's own vLLM-backed runtime,
@@ -120,17 +125,17 @@ class KServeAdapter(IInferenceAdapter):
                 GROUP, VERSION, self.namespace, PLURAL, body
             )
         # cast: only non-dict when async_req=True, which we never pass.
-        return cast(dict, result)
+        return cast(dict[str, object], result)
 
-    def get_inference_status(self, name: str) -> dict:
+    def get_inference_status(self, name: str) -> dict[str, object]:
         return cast(
-            dict,
+            dict[str, object],
             self.api.get_namespaced_custom_object_status(
                 GROUP, VERSION, self.namespace, PLURAL, name
             ),
         )
 
-    def predict(self, name: str, payload: dict) -> dict:
+    def predict(self, name: str, payload: dict[str, object]) -> dict[str, object]:
         raise NotImplementedError(
             "Call the InferenceService's HTTP endpoint directly "
             "(get the URL from get_inference_status) instead of going through this adapter"

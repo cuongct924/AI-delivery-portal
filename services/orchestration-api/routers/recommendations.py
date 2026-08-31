@@ -8,7 +8,7 @@ register→gate→deploy doesn't care which Golden Path produced the model.
 """
 
 from pathlib import Path
-from typing import Final
+from typing import Final, cast
 
 import pandas as pd
 from auth.keycloak import get_current_user
@@ -17,11 +17,11 @@ from data_quality.registry import run_rec_checks
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from adapters.argo_adapter import ArgoAdapter
+from adapters.factory import get_workflow_adapter
 
 router = APIRouter(tags=["recommendations"])
 
-argo_adapter = ArgoAdapter()
+argo_adapter = get_workflow_adapter()
 
 REC_TRAIN_REGISTER_TEMPLATE: Final[str] = "rec-train-register-golden-path"
 
@@ -93,7 +93,8 @@ def trigger_rec_training(
     if request.item_text_column is not None:
         parameters["item-text-column"] = request.item_text_column
     result = argo_adapter.trigger_workflow(REC_TRAIN_REGISTER_TEMPLATE, parameters)
-    return TriggerRecTrainingResponse(workflow_name=result["metadata"]["name"])
+    metadata = cast(dict[str, object], result["metadata"])
+    return TriggerRecTrainingResponse(workflow_name=str(metadata["name"]))
 
 
 @router.post("/rec-datasets/validate", response_model=list[CheckResultResponse])

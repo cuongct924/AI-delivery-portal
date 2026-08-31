@@ -503,11 +503,11 @@ def test_prepare_deploy_manifest_renders_registry_uri_into_template() -> None:
 
 def test_prepare_deploy_manifest_direct_never_touches_kserve() -> None:
     # deployStrategy=direct + releaseStrategy=pr-gated (the defaults) never
-    # need a kubeconfig — KServeAdapter must not even be constructed.
+    # need a kubeconfig — get_kserve_adapter() must not even be called.
     request = PrepareDeployRequest(model_name="fraud-detection", model_version="3")
-    with patch("routers.models.KServeAdapter") as mock_kserve_cls:
+    with patch("routers.models.get_kserve_adapter") as mock_get_kserve:
         prepare_deploy_manifest(request)
-    mock_kserve_cls.assert_not_called()
+    mock_get_kserve.assert_not_called()
 
 
 def test_prepare_deploy_manifest_traffic_split_renders_canary_percent() -> None:
@@ -517,8 +517,8 @@ def test_prepare_deploy_manifest_traffic_split_renders_canary_percent() -> None:
         traffic_strategy="canary",
         traffic_percent=10,
     )
-    with patch("routers.models.KServeAdapter") as mock_kserve_cls:
-        mock_kserve_cls.return_value.get_inference_status.return_value = {"status": {}}
+    with patch("routers.models.get_kserve_adapter") as mock_get_kserve:
+        mock_get_kserve.return_value.get_inference_status.return_value = {"status": {}}
         response = prepare_deploy_manifest(request)
 
     assert "canaryTrafficPercent: 10" in response.content
@@ -532,8 +532,8 @@ def test_prepare_deploy_manifest_traffic_split_without_prior_deploy_raises() -> 
         traffic_strategy="canary",
         traffic_percent=10,
     )
-    with patch("routers.models.KServeAdapter") as mock_kserve_cls:
-        mock_kserve_cls.return_value.get_inference_status.side_effect = ApiException(status=404)
+    with patch("routers.models.get_kserve_adapter") as mock_get_kserve:
+        mock_get_kserve.return_value.get_inference_status.side_effect = ApiException(status=404)
         with pytest.raises(ValueError, match="no prior deploy"):
             prepare_deploy_manifest(request)
 
@@ -542,8 +542,8 @@ def test_prepare_deploy_manifest_traffic_split_requires_percent() -> None:
     request = PrepareDeployRequest(
         model_name="fraud-detection", model_version="4", traffic_strategy="canary"
     )
-    with patch("routers.models.KServeAdapter") as mock_kserve_cls:
-        mock_kserve_cls.return_value.get_inference_status.return_value = {"status": {}}
+    with patch("routers.models.get_kserve_adapter") as mock_get_kserve:
+        mock_get_kserve.return_value.get_inference_status.return_value = {"status": {}}
         with pytest.raises(ValueError, match="traffic_percent is required"):
             prepare_deploy_manifest(request)
 
@@ -552,8 +552,8 @@ def test_prepare_deploy_manifest_instant_deploys_without_a_pr() -> None:
     request = PrepareDeployRequest(
         model_name="fraud-detection", model_version="5", release_strategy="instant"
     )
-    with patch("routers.models.KServeAdapter") as mock_kserve_cls:
-        mock_adapter = mock_kserve_cls.return_value
+    with patch("routers.models.get_kserve_adapter") as mock_get_kserve:
+        mock_adapter = mock_get_kserve.return_value
         response = prepare_deploy_manifest(request)
 
     mock_adapter.deploy_model.assert_called_once_with(

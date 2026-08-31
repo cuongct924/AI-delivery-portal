@@ -5,10 +5,17 @@ defined in infra/argo-workflows/, and tracks status to report back via Portal/Ag
 """
 
 import os
+from typing import TypedDict
 
 import httpx
 
-from adapters.interfaces import IWorkflowAdapter
+from adapters.interfaces import IWorkflowAdapter, WorkflowStatus
+
+
+class WorkflowSummary(TypedDict):
+    name: str | None
+    phase: str | None
+    startedAt: str | None
 
 
 # TODO: expose via orchestration-api for the `orchestration:trigger-training`
@@ -18,7 +25,7 @@ class ArgoAdapter(IWorkflowAdapter):
         self.base_url = base_url or os.getenv("ARGO_SERVER_URL", "http://localhost:2746")
         self.namespace = namespace
 
-    def trigger_workflow(self, template_name: str, parameters: dict) -> dict:
+    def trigger_workflow(self, template_name: str, parameters: dict[str, str]) -> dict[str, object]:
         payload = {
             "resourceKind": "WorkflowTemplate",
             "resourceName": template_name,
@@ -32,7 +39,7 @@ class ArgoAdapter(IWorkflowAdapter):
         response.raise_for_status()
         return response.json()
 
-    def get_workflow_status(self, workflow_name: str) -> dict:
+    def get_workflow_status(self, workflow_name: str) -> WorkflowStatus:
         response = httpx.get(
             f"{self.base_url}/api/v1/workflows/{self.namespace}/{workflow_name}",
             timeout=10,
@@ -47,8 +54,8 @@ class ArgoAdapter(IWorkflowAdapter):
         }
 
     def create_cron_workflow(
-        self, name: str, schedule: str, workflow_template_name: str, parameters: dict
-    ) -> dict:
+        self, name: str, schedule: str, workflow_template_name: str, parameters: dict[str, str]
+    ) -> dict[str, object]:
         """Creates (or replaces) a CronWorkflow — same CRD family as
         WorkflowTemplate, no new infra. Used by "Setup Model Monitoring" to
         register a periodic drift-check job; `name` is deterministic (1
@@ -90,7 +97,7 @@ class ArgoAdapter(IWorkflowAdapter):
         response.raise_for_status()
         return response.json()
 
-    def list_workflows(self) -> list[dict]:
+    def list_workflows(self) -> list[WorkflowSummary]:
         # Convenience method, not part of IWorkflowAdapter — same precedent
         # as QdrantAdapter.ensure_collection() in vector_db_adapter.py.
         response = httpx.get(

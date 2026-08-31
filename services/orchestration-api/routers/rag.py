@@ -18,15 +18,13 @@ from evaluations.llm_judge import judge_response
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from adapters.llm_gateway_adapter import LiteLLMGatewayAdapter
-from adapters.vector_db_adapter import QdrantAdapter
-from adapters.version_registry_adapter import JsonFileVersionRegistryAdapter
+from adapters.factory import get_llm_gateway_adapter, get_registry_adapter, get_vector_store_adapter
 
 router = APIRouter(prefix="/rag", tags=["rag"])
 
-llm_gateway_adapter = LiteLLMGatewayAdapter()
-vector_store_adapter = QdrantAdapter()
-registry_adapter = JsonFileVersionRegistryAdapter()
+llm_gateway_adapter = get_llm_gateway_adapter()
+vector_store_adapter = get_vector_store_adapter()
+registry_adapter = get_registry_adapter()
 
 EMBEDDING_MODEL: Final[str] = "voyage-3"
 

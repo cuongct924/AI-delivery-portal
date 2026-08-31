@@ -6,9 +6,21 @@ See docs/llmops-lifecycle-plan.md mục 8 Q2.
 import json
 import os
 import threading
+from collections.abc import Mapping
 from pathlib import Path
+from typing import TypedDict
 
 from adapters.interfaces import IVersionRegistryAdapter
+
+
+class _NameEntry(TypedDict):
+    versions: dict[str, dict[str, object]]
+    active_version: str | None
+
+
+# {kind: {name: _NameEntry}} — e.g. {"prompt": {"mlops": {"versions": {...},
+# "active_version": "1"}}}
+type _RegistryData = dict[str, dict[str, _NameEntry]]
 
 
 class JsonFileVersionRegistryAdapter(IVersionRegistryAdapter):
@@ -16,7 +28,7 @@ class JsonFileVersionRegistryAdapter(IVersionRegistryAdapter):
         self.path = Path(path or os.getenv("LLMOPS_REGISTRY_PATH", ".state/llmops-registry.json"))
         self._lock = threading.Lock()
 
-    def register_version(self, kind: str, name: str, metadata: dict) -> str:
+    def register_version(self, kind: str, name: str, metadata: Mapping[str, object]) -> str:
         with self._lock:
             data = self._read()
             entry = data.setdefault(kind, {}).setdefault(
@@ -24,7 +36,7 @@ class JsonFileVersionRegistryAdapter(IVersionRegistryAdapter):
             )
             # Same incrementing-int-string shape MLflow uses for versions.
             version = str(len(entry["versions"]) + 1)
-            entry["versions"][version] = metadata
+            entry["versions"][version] = dict(metadata)
             self._write(data)
             return version
 
@@ -33,7 +45,7 @@ class JsonFileVersionRegistryAdapter(IVersionRegistryAdapter):
             data = self._read()
             return list(data.get(kind, {}))
 
-    def get_version(self, kind: str, name: str, version: str) -> dict:
+    def get_version(self, kind: str, name: str, version: str) -> dict[str, object]:
         with self._lock:
             data = self._read()
             try:
@@ -41,15 +53,19 @@ class JsonFileVersionRegistryAdapter(IVersionRegistryAdapter):
             except KeyError as exc:
                 raise ValueError(f"{kind}/{name} has no version {version!r}") from exc
 
-    def list_versions(self, kind: str, name: str) -> dict[str, dict]:
+    def list_versions(self, kind: str, name: str) -> dict[str, dict[str, object]]:
         with self._lock:
             data = self._read()
-            return data.get(kind, {}).get(name, {}).get("versions", {})
+            return data.get(kind, {}).get(name, {"versions": {}, "active_version": None})[
+                "versions"
+            ]
 
     def get_active_version(self, kind: str, name: str) -> str | None:
         with self._lock:
             data = self._read()
-            return data.get(kind, {}).get(name, {}).get("active_version")
+            return data.get(kind, {}).get(name, {"versions": {}, "active_version": None})[
+                "active_version"
+            ]
 
     def set_active_version(self, kind: str, name: str, version: str) -> None:
         with self._lock:
@@ -63,11 +79,11 @@ class JsonFileVersionRegistryAdapter(IVersionRegistryAdapter):
             entry["active_version"] = version
             self._write(data)
 
-    def _read(self) -> dict:
+    def _read(self) -> _RegistryData:
         if not self.path.exists():
             return {}
         return json.loads(self.path.read_text())
 
-    def _write(self, data: dict) -> None:
+    def _write(self, data: _RegistryData) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(data, indent=2))
