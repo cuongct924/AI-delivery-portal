@@ -81,7 +81,8 @@ metadata:
   name: mlops-observability-mcp
   description: >
     Read-only MCP tools: list_experiments, get_model_metrics,
-    check_pod_status (mock), get_logs (mock), query_metric, check_model_latency.
+    check_pod_status (mock), get_logs (mock), query_metric, check_model_latency,
+    get_promotion_status (mock).
   annotations:
     mcp/endpoint: http://mlops-observability-server:9001/mcp
     mcp/transport: streamable-http
