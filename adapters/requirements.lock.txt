@@ -245,7 +245,7 @@ portalocker==3.2.0
     # via qdrant-client
 prettytable==3.18.0
     # via skops
-prometheus-client==0.24.1
+prometheus-client==0.26.0
     # via feast
 propcache==0.5.2
     # via
