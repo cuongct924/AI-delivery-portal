@@ -172,7 +172,7 @@ deprecation==2.1.0
     # via evidently
 dictdiffer==0.10.0
     # via dvc-data
-dill==0.3.9
+dill==0.4.1
     # via
     #   datasets
     #   feast
