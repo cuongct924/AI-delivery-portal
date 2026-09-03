@@ -181,7 +181,7 @@ mlflow-skinny==3.15.1
     # via mlflow
 mlflow-tracing==3.15.1
     # via mlflow
-mmh3==5.2.1
+mmh3==5.3.0
     # via feast
 multidict==6.7.1
     # via
